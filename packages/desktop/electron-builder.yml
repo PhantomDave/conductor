@@ -1,0 +1,52 @@
+appId: dev.conductor.desktop
+productName: Conductor
+executableName: conductor
+copyright: Copyright © Conductor contributors
+
+directories:
+  output: out
+  buildResources: build
+
+files:
+  - dist/main.js
+  - package.json
+
+# The compiled core sidecar binary and the built UI bundle are produced by
+# separate build steps (packages/core's `build:sidecar`, packages/ui's
+# `build`) and copied in here rather than bundled by esbuild, since one is
+# a native executable and the other is a folder of static assets.
+extraResources:
+  - from: ../core/dist-bin
+    to: sidecar
+  - from: ../ui/dist
+    to: ui-dist
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+  icon: build/icon.png
+
+win:
+  target:
+    - nsis
+  icon: build/icon.png
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development
+  icon: build/icon.png
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+# electron-updater reads this to know where to look for update manifests -
+# matches the repo releases are published to.
+publish:
+  provider: github
+  owner: PhantomDave
+  repo: conductor

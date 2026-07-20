@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+.env.*.local
+
+# Conductor runtime data
+.conductor/data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Personal/live Conductor configs (never commit a real project's config -
+# only .conductor.example.yml is meant to be tracked)
+/.conductor.yml
+!/.conductor.example.yml
+
+# Stray local artifact from testing example-file compilation against a
+# real project - not part of the tracked tree
+/packages/farsight/
+
+# Electron desktop app build artifacts
+packages/desktop/dist/
+packages/desktop/out/
+packages/core/dist-bin/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Test coverage
+coverage/
+
+# Vite
+.vite/
+*.local

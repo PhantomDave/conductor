@@ -1,0 +1,48 @@
+name: Release
+
+# Builds and publishes the Conductor desktop app for macOS, Windows and
+# Linux whenever a version tag is pushed. Each runner compiles the core
+# sidecar natively for its own OS (no cross-compilation), packages it with
+# Electron, and publishes the installers + auto-update metadata to the
+# GitHub Release for the tag.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build UI
+        run: bun run --cwd packages/ui build
+
+      - name: Compile core sidecar binary
+        run: bun run --cwd packages/core build:sidecar
+
+      - name: Bundle Electron main process
+        run: bun run --cwd packages/desktop build:main
+
+      - name: Package & publish (electron-builder)
+        run: bunx electron-builder --publish always
+        working-directory: packages/desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,30 @@
+version: "1"
+
+name: "Conductor Example"
+description: "Example config demonstrating a simple full-stack dev setup"
+author: "your-github-handle"
+keywords: [example, demo]
+tags: [nodejs]
+
+env_secrets:
+  - API_TOKEN
+
+global_env:
+  LOG_LEVEL: info
+
+profiles:
+  dev:
+    description: "Local development"
+    env:
+      NODE_ENV: development
+    commands:
+      - id: echo-hello
+        name: "Hello World"
+        run: "echo 'Hello from Conductor!' && sleep 2 && echo 'Done.'"
+        shell: true
+
+      - id: echo-world
+        name: "Second Task"
+        run: "echo 'Running second task...'"
+        shell: true
+        deps: [echo-hello]

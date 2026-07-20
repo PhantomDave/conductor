@@ -1,0 +1,22 @@
+{
+  "name": "@conductor/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Conductor CLI — run and manage your dev workflows",
+  "type": "module",
+  "bin": {
+    "conductor": "./bin/conductor.ts"
+  },
+  "scripts": {
+    "dev": "bun run bin/conductor.ts",
+    "link": "bun link",
+    "build": "bun build ./bin/conductor.ts --outdir dist --target bun",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@conductor/core": "workspace:*",
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.1"
+  }
+}
