@@ -5,6 +5,22 @@ import { createServer } from "node:net";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+// AppImage extracts to a fresh mountpoint under /tmp on every launch, so
+// chrome-sandbox can never keep the setuid-root (4755) ownership Chromium's
+// sandbox requires - it fails fatally on most modern kernels that restrict
+// unprivileged user namespaces (Ubuntu 24.04+, Fedora, etc.). Conductor
+// only ever renders its own bundled UI (no remote/untrusted content), so
+// disabling the sandbox here is a safe, standard workaround for Electron
+// apps distributed as AppImage. --disable-dev-shm-usage is added for the
+// same reason it's paired with --no-sandbox in containerized/CI setups:
+// some restricted environments give Chromium a /dev/shm it can't actually
+// use, and this makes it fall back to a regular temp file instead of
+// crashing. Must be set before app is ready.
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("no-sandbox");
+  app.commandLine.appendSwitch("disable-dev-shm-usage");
+}
+
 let sidecar: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 
