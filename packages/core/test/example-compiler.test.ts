@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import {
   findExampleFiles,
   compileExampleFile,
@@ -27,7 +27,7 @@ describe("findExampleFiles", () => {
     writeFileSync(join(dir, "service-a", "README.md"), "not an example");
 
     const matches = findExampleFiles(dir);
-    const targets = matches.map((m) => m.targetPath.replace(`${dir}/`, "")).sort();
+    const targets = matches.map((m) => relative(dir, m.targetPath).split("\\").join("/")).sort();
 
     expect(targets).toEqual([
       ".env",
