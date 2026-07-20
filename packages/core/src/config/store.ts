@@ -74,6 +74,22 @@ export class ConfigStore {
     this.persist();
   }
 
+  getDefaultShell(): string | undefined {
+    return this.config.default_shell;
+  }
+
+  /**
+   * Updates `default_shell` (the binary used for `shell: true` commands
+   * and command-type healthchecks), persisting it and re-resolving every
+   * command's env so `${CONDUCTOR_SHELL}`/spawn calls pick it up
+   * immediately. Pass `undefined` to fall back to the OS default again.
+   */
+  setDefaultShell(shell: string | undefined): void {
+    this.config = validateConfig({ ...this.config, default_shell: shell });
+    this.rebuildQueues();
+    this.persist();
+  }
+
   private persist(): void {
     saveConfig(this.filePath, this.config);
   }

@@ -68,6 +68,10 @@ export const ConductorConfigSchema = z.object({
   // it can be referenced when building other paths (e.g. a sibling repo
   // checkout: `${BASE_PATH}/../my-app`).
   base_path: z.string().default("."),
+  // Overrides the shell used for `shell: true` commands and command-type
+  // healthchecks (a binary path, e.g. "/bin/zsh" or "C:\\...\\pwsh.exe").
+  // Falls back to $SHELL/%COMSPEC% when unset - see executor/shell.ts.
+  default_shell: z.string().optional(),
   global_env: z.record(z.string(), z.string()).default({}),
   profiles: z.record(z.string(), ProfileSchema),
 });

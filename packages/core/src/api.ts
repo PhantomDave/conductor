@@ -11,6 +11,7 @@ import type { LogBroadcaster } from "./logs/broadcaster";
 import type { LogHandler } from "./executor/wrapper";
 import { HealthcheckSchema } from "./config/schema";
 import { ConfigError } from "./config/loader";
+import { listAvailableShells } from "./executor/shell";
 
 export interface ApiDependencies {
   logger: ConductorLogger;
@@ -134,6 +135,33 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       deps.store.setBasePath(parsed.data.base_path);
       deps.queries.insertAuditEntry("set-base-path", parsed.data.base_path);
       return { base_path: parsed.data.base_path, resolved: deps.store.getResolvedBasePath() };
+    } catch (err) {
+      return handleConfigError(err, reply);
+    }
+  });
+
+  // --- Default shell (used for `shell: true` commands & healthchecks) ---
+
+  app.get("/api/shells", async () => {
+    return {
+      available: listAvailableShells(),
+      default_shell: deps.store.getDefaultShell() ?? null,
+    };
+  });
+
+  app.put<{ Body: { default_shell: string | null } }>("/api/shells", async (request, reply) => {
+    const parsed = z
+      .object({ default_shell: z.string().min(1).nullable() })
+      .safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: parsed.error.issues[0]?.message ?? "Invalid default_shell" });
+    }
+    try {
+      deps.store.setDefaultShell(parsed.data.default_shell ?? undefined);
+      deps.queries.insertAuditEntry("set-default-shell", parsed.data.default_shell ?? "(default)");
+      return { default_shell: deps.store.getDefaultShell() ?? null };
     } catch (err) {
       return handleConfigError(err, reply);
     }

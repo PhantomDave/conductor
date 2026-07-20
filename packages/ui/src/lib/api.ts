@@ -217,6 +217,31 @@ export async function updateBasePath(basePath: string): Promise<BasePathInfo> {
   return parseJsonOrThrow(res, "Failed to update base path");
 }
 
+export interface ShellOption {
+  path: string;
+  name: string;
+}
+
+export interface ShellsInfo {
+  available: ShellOption[];
+  default_shell: string | null;
+}
+
+export async function fetchShells(): Promise<ShellsInfo> {
+  const res = await fetch(`${API_BASE}/shells`);
+  return parseJsonOrThrow(res, "Failed to fetch shells");
+}
+
+/** Pass `null` to clear the override and fall back to the OS default again. */
+export async function updateDefaultShell(shell: string | null): Promise<ShellsInfo> {
+  const res = await fetch(`${API_BASE}/shells`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ default_shell: shell }),
+  });
+  return parseJsonOrThrow(res, "Failed to update default shell");
+}
+
 export interface ConductorConfigInfo {
   version: string;
   name?: string;

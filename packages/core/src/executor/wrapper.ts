@@ -130,7 +130,7 @@ export class ProcessWrapper {
 
     let cmd: string[];
     if (this.commandConfig.shell) {
-      const { bin, flag } = resolveShell();
+      const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
       cmd = [bin, flag, this.commandConfig.run];
     } else {
       cmd = this.commandConfig.run.split(" ");

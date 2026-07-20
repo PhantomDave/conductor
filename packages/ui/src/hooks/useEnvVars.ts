@@ -7,6 +7,8 @@ import {
   importEnvVars,
   fetchBasePath,
   updateBasePath,
+  fetchShells,
+  updateDefaultShell,
   compileConfigExamples,
   importConfig,
 } from "../lib/api";
@@ -57,6 +59,31 @@ export function useUpdateBasePath() {
       notifications.show({
         color: "red",
         title: "Failed to update base path",
+        message: error.message,
+      });
+    },
+  });
+}
+
+export function useShells() {
+  return useQuery({
+    queryKey: ["shells"],
+    queryFn: fetchShells,
+  });
+}
+
+export function useUpdateDefaultShell() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateDefaultShell,
+    onSuccess: () => {
+      notifications.show({ color: "green", message: "Default shell updated" });
+      queryClient.invalidateQueries({ queryKey: ["shells"] });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to update default shell",
         message: error.message,
       });
     },
@@ -136,9 +163,10 @@ export function useImportConfig() {
         message: `Imported "${config.name ?? "config"}" - ${Object.keys(config.profiles).length} profile(s)`,
       });
       // Everything the imported config could have changed - profiles,
-      // commands, base_path - needs a fresh fetch.
+      // commands, base_path, default_shell - needs a fresh fetch.
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
       queryClient.invalidateQueries({ queryKey: ["base-path"] });
+      queryClient.invalidateQueries({ queryKey: ["shells"] });
     },
     onError: (error: Error) => {
       notifications.show({

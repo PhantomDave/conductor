@@ -43,9 +43,9 @@ async function checkHttp(url: string): Promise<boolean> {
  * `cwd` set to BASE_PATH (if present in env) so a relative check command
  * behaves the same as a relative command `run`/`cwd`.
  */
-async function checkCommand(command: string, cwd?: string): Promise<boolean> {
+async function checkCommand(command: string, cwd?: string, configuredShell?: string): Promise<boolean> {
   try {
-    const { bin, flag } = resolveShell();
+    const { bin, flag } = resolveShell(configuredShell);
     const proc = Bun.spawn({
       cmd: [bin, flag, command],
       cwd,
@@ -74,7 +74,7 @@ async function runProbe(
       if (!healthcheck.command) throw new HealthcheckError("healthcheck.command is required");
       const cwd =
         env.BASE_PATH && isAbsolute(env.BASE_PATH) ? resolvePath(env.BASE_PATH) : undefined;
-      return checkCommand(interpolateString(healthcheck.command, env), cwd);
+      return checkCommand(interpolateString(healthcheck.command, env), cwd, env.CONDUCTOR_SHELL);
     }
     case "none":
     default:

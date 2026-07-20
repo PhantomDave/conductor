@@ -29,6 +29,7 @@ import {
   IconFileSymlink,
   IconAlertTriangle,
   IconFileImport,
+  IconTerminal2,
 } from "@tabler/icons-react";
 import { useDisclosure } from "@mantine/hooks";
 import { useProfiles } from "../hooks/useProfiles";
@@ -39,6 +40,8 @@ import {
   useImportEnvVars,
   useBasePath,
   useUpdateBasePath,
+  useShells,
+  useUpdateDefaultShell,
   useCompileConfigExamples,
   useImportConfig,
 } from "../hooks/useEnvVars";
@@ -186,6 +189,81 @@ function BasePathCard() {
           <Text size="xs" c="dimmed">
             Resolves to <Code>{data.resolved}</Code>
           </Text>
+        )}
+      </Stack>
+    </Card>
+  );
+}
+
+function ShellCard() {
+  const { data, isLoading } = useShells();
+  const update = useUpdateDefaultShell();
+  // "__system__" = no override (fall back to $SHELL/%COMSPEC%), "__custom__"
+  // = user-typed path not in the detected list, anything else = a detected
+  // shell's path.
+  const [selection, setSelection] = useState<string | null>(null);
+  const [customPath, setCustomPath] = useState("");
+
+  useEffect(() => {
+    if (!data) return;
+    if (!data.default_shell) {
+      setSelection("__system__");
+    } else if (data.available.some((s) => s.path === data.default_shell)) {
+      setSelection(data.default_shell);
+    } else {
+      setSelection("__custom__");
+      setCustomPath(data.default_shell);
+    }
+  }, [data]);
+
+  const options = [
+    { value: "__system__", label: "System default (auto-detect)" },
+    ...(data?.available.map((s) => ({ value: s.path, label: `${s.name} — ${s.path}` })) ?? []),
+    { value: "__custom__", label: "Custom path..." },
+  ];
+
+  const pending =
+    selection === "__custom__" ? customPath.trim() || null : selection === "__system__" ? null : selection;
+  const dirty = data && pending !== (data.default_shell ?? null);
+
+  return (
+    <Card withBorder padding="md">
+      <Stack gap="xs">
+        <Group gap={6}>
+          <IconTerminal2 size={18} />
+          <Title order={4}>Default shell</Title>
+        </Group>
+        <Text size="sm" c="dimmed">
+          The shell used to run every <Code>shell: true</Code> command and command-type healthcheck.
+          Detected automatically from shells installed on this machine - pick one below, or leave it
+          on the system default to keep following whatever <Code>$SHELL</Code>/<Code>%COMSPEC%</Code>{" "}
+          already points to.
+        </Text>
+        {isLoading ? (
+          <Text c="dimmed" size="sm">
+            Detecting installed shells...
+          </Text>
+        ) : (
+          <Stack gap="xs">
+            <Select
+              data={options}
+              value={selection}
+              onChange={(v) => setSelection(v)}
+              allowDeselect={false}
+            />
+            {selection === "__custom__" && (
+              <TextInput
+                placeholder="/path/to/shell"
+                value={customPath}
+                onChange={(e) => setCustomPath(e.currentTarget.value)}
+              />
+            )}
+            <Group justify="flex-end">
+              <Button disabled={!dirty} loading={update.isPending} onClick={() => update.mutate(pending)}>
+                Save
+              </Button>
+            </Group>
+          </Stack>
         )}
       </Stack>
     </Card>
@@ -492,6 +570,7 @@ export function EnvironmentManager() {
 
       <ImportConfigCard />
       <BasePathCard />
+      <ShellCard />
       <ConfigCompilerCard profileNames={profileNames} />
 
       <Tabs defaultValue="global">

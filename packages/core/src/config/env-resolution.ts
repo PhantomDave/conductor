@@ -31,6 +31,7 @@ function baseLayers(params: BuildEnvParams): Array<Record<string, string> | unde
   return [
     process.env as Record<string, string>,
     { BASE_PATH: resolveBasePath(configFilePath, config.base_path) },
+    config.default_shell ? { CONDUCTOR_SHELL: config.default_shell } : undefined,
     config.global_env,
     dbGlobalEnv,
     profile?.env,
