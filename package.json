@@ -5,7 +5,12 @@
   "type": "module",
   "description": "Universal task runner & dashboard for developers",
   "license": "MIT",
-  "author": "davestools",
+  "author": "PhantomDave",
+  "homepage": "https://github.com/PhantomDave/conductor",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PhantomDave/conductor.git"
+  },
   "workspaces": [
     "packages/*"
   ],

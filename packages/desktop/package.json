@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "description": "Conductor desktop app: an Electron shell around the core API + web dashboard",
+  "homepage": "https://github.com/PhantomDave/conductor",
+  "author": "PhantomDave",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PhantomDave/conductor.git"
+  },
   "main": "dist/main.js",
   "scripts": {
     "build:main": "esbuild src/main.ts --bundle --platform=node --format=cjs --outfile=dist/main.js --external:electron",
