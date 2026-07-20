@@ -98,7 +98,16 @@ async function startSidecar(): Promise<number> {
       ...process.env,
       CONDUCTOR_PORT: String(port),
       CONDUCTOR_UI_DIST: uiDistPath,
-      NODE_ENV: "production",
+      // Tell the sidecar's logger to skip pino-pretty (see pino.ts - its
+      // worker-thread module resolution crashes inside this single-file
+      // executable). Deliberately NOT NODE_ENV: env-resolution.ts's
+      // baseLayers() inherits the sidecar's own process.env as the base
+      // layer for every command Conductor spawns, so setting NODE_ENV
+      // here used to leak "production" into every managed dev process -
+      // breaking dev-mode tooling (e.g. Next.js's JSX runtime selection)
+      // for anything launched through the desktop app, even though the
+      // exact same command worked fine run locally.
+      CONDUCTOR_LOG_JSON: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

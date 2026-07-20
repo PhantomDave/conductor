@@ -25,7 +25,17 @@ export function createLogger(options: LoggerOptions = {}) {
     },
   };
 
-  if (process.env.NODE_ENV !== "production") {
+  // CONDUCTOR_LOG_JSON is a dedicated opt-out for pino-pretty, safe to set
+  // on the sidecar's own process without side effects elsewhere. NODE_ENV
+  // is kept as a secondary trigger for anyone running the core server
+  // directly in a production-like environment - but nothing in Conductor
+  // itself should set NODE_ENV just to influence this logger, since
+  // env-resolution.ts's baseLayers() inherits the server's own process.env
+  // as the base layer for every managed command's environment.
+  const wantsJsonLogs =
+    process.env.CONDUCTOR_LOG_JSON === "1" || process.env.NODE_ENV === "production";
+
+  if (!wantsJsonLogs) {
     try {
       // pino-pretty's transport runs in a worker thread that resolves
       // the module from disk - this fails inside a single-file compiled
