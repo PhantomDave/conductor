@@ -115,7 +115,6 @@ export class SpawnQueue {
     await this.startOne(commandId, onLog);
   }
 
-
   async stopAll(): Promise<void> {
     const stops = [...this.wrappers.values()].map((w) => w.stop());
     await Promise.all(stops);

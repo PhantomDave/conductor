@@ -171,7 +171,9 @@ export class ConductorQueries {
   }
 
   listAllEnvVars(): EnvVarRow[] {
-    return this.db.prepare(`SELECT * FROM env_vars ORDER BY scope ASC, profile ASC, key ASC`).all() as EnvVarRow[];
+    return this.db
+      .prepare(`SELECT * FROM env_vars ORDER BY scope ASC, profile ASC, key ASC`)
+      .all() as EnvVarRow[];
   }
 
   upsertEnvVar(input: {

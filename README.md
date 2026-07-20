@@ -156,14 +156,14 @@ conductor/
 
 ## Tech Stack
 
-| Layer         | Tech                                                                      |
-| ------------- | -------------------------------------------------------------------------- |
-| Runtime       | [Bun](https://bun.sh)                                                     |
-| Config        | YAML + [Zod](https://zod.dev)                                             |
-| Database      | SQLite (`bun:sqlite`)                                                     |
-| HTTP API      | [Fastify](https://fastify.dev)                                            |
+| Layer         | Tech                                                                     |
+| ------------- | ------------------------------------------------------------------------ |
+| Runtime       | [Bun](https://bun.sh)                                                    |
+| Config        | YAML + [Zod](https://zod.dev)                                            |
+| Database      | SQLite (`bun:sqlite`)                                                    |
+| HTTP API      | [Fastify](https://fastify.dev)                                           |
 | CLI           | [Commander](https://github.com/tj/commander.js)                          |
-| Frontend      | React 19 + [Vite](https://vitejs.dev)                                     |
+| Frontend      | React 19 + [Vite](https://vitejs.dev)                                    |
 | UI Components | [Mantine](https://mantine.dev)                                           |
 | Charts        | [Recharts](https://recharts.org) / Mantine Charts                        |
 | Logging       | [Pino](https://getpino.io)                                               |

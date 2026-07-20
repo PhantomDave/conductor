@@ -56,7 +56,12 @@ export function Sidebar() {
             active={isSelected(p)}
             label={p.commandName ?? p.commandId}
             description={`${p.profile} · pid ${p.pid}`}
-            leftSection={<IconCircleFilled size={10} color={`var(--mantine-color-${STATUS_COLOR[p.status]}-6)`} />}
+            leftSection={
+              <IconCircleFilled
+                size={10}
+                color={`var(--mantine-color-${STATUS_COLOR[p.status]}-6)`}
+              />
+            }
             onClick={() => selectProcess(p)}
           />
         ))}

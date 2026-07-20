@@ -14,7 +14,8 @@ export default function App() {
   // frozen snapshot) so pid/status/logs stay correct across a restart.
   const selectedProcess = selectedProcessKey
     ? processes?.find(
-        (p) => p.profile === selectedProcessKey.profile && p.commandId === selectedProcessKey.commandId,
+        (p) =>
+          p.profile === selectedProcessKey.profile && p.commandId === selectedProcessKey.commandId,
       )
     : undefined;
 

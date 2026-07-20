@@ -30,6 +30,8 @@ export const useUiStore = create<UiState>((set) => ({
   setView: (view) => set({ view, selectedProcessKey: null }),
   selectProcess: (process) =>
     set({
-      selectedProcessKey: process ? { profile: process.profile, commandId: process.commandId } : null,
+      selectedProcessKey: process
+        ? { profile: process.profile, commandId: process.commandId }
+        : null,
     }),
 }));

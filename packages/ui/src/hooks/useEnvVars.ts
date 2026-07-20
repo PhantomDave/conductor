@@ -28,7 +28,11 @@ export function useCompileConfigExamples() {
       }
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to compile config files", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to compile config files",
+        message: error.message,
+      });
     },
   });
 }
@@ -49,7 +53,11 @@ export function useUpdateBasePath() {
       queryClient.invalidateQueries({ queryKey: ["base-path"] });
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to update base path", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to update base path",
+        message: error.message,
+      });
     },
   });
 }
@@ -90,7 +98,11 @@ export function useDeleteEnvVar() {
       invalidate();
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to delete env var", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to delete env var",
+        message: error.message,
+      });
     },
   });
 }
@@ -104,7 +116,11 @@ export function useImportEnvVars() {
       invalidate();
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to import env vars", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to import env vars",
+        message: error.message,
+      });
     },
   });
 }

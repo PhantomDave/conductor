@@ -1,6 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
-import { createProfile, deleteProfile, createCommand, updateCommand, deleteCommand, type CommandInput } from "../lib/api";
+import {
+  createProfile,
+  deleteProfile,
+  createCommand,
+  updateCommand,
+  deleteCommand,
+  type CommandInput,
+} from "../lib/api";
 
 function useInvalidateProfiles() {
   const queryClient = useQueryClient();
@@ -17,7 +24,11 @@ export function useCreateProfile() {
       invalidate();
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to create profile", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to create profile",
+        message: error.message,
+      });
     },
   });
 }
@@ -31,7 +42,11 @@ export function useDeleteProfile() {
       invalidate();
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to delete profile", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to delete profile",
+        message: error.message,
+      });
     },
   });
 }
@@ -39,13 +54,18 @@ export function useDeleteProfile() {
 export function useCreateCommand() {
   const invalidate = useInvalidateProfiles();
   return useMutation({
-    mutationFn: ({ profile, input }: { profile: string; input: CommandInput }) => createCommand(profile, input),
+    mutationFn: ({ profile, input }: { profile: string; input: CommandInput }) =>
+      createCommand(profile, input),
     onSuccess: (command) => {
       notifications.show({ color: "green", message: `Created command "${command.name}"` });
       invalidate();
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to create command", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to create command",
+        message: error.message,
+      });
     },
   });
 }
@@ -67,7 +87,11 @@ export function useUpdateCommand() {
       invalidate();
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to update command", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to update command",
+        message: error.message,
+      });
     },
   });
 }
@@ -82,7 +106,11 @@ export function useDeleteCommand() {
       invalidate();
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to delete command", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to delete command",
+        message: error.message,
+      });
     },
   });
 }

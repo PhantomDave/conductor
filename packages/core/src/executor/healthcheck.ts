@@ -70,7 +70,8 @@ async function runProbe(
       return checkHttp(interpolateString(healthcheck.url, env));
     case "command": {
       if (!healthcheck.command) throw new HealthcheckError("healthcheck.command is required");
-      const cwd = env.BASE_PATH && isAbsolute(env.BASE_PATH) ? resolvePath(env.BASE_PATH) : undefined;
+      const cwd =
+        env.BASE_PATH && isAbsolute(env.BASE_PATH) ? resolvePath(env.BASE_PATH) : undefined;
       return checkCommand(interpolateString(healthcheck.command, env), cwd);
     }
     case "none":

@@ -64,10 +64,10 @@ function BasePathCard() {
         </Group>
         <Text size="sm" c="dimmed">
           Where the target application is installed on disk. Relative <Code>cwd</Code> values on
-          commands (and relative healthcheck commands) resolve against this path instead of
-          wherever the Conductor server happens to be running from. It's also injected into every
-          command as <Code>{"${BASE_PATH}"}</Code>, so you can build other paths from it - e.g. a
-          sibling checkout at <Code>{"${BASE_PATH}/../my-app"}</Code>.
+          commands (and relative healthcheck commands) resolve against this path instead of wherever
+          the Conductor server happens to be running from. It's also injected into every command as{" "}
+          <Code>{"${BASE_PATH}"}</Code>, so you can build other paths from it - e.g. a sibling
+          checkout at <Code>{"${BASE_PATH}/../my-app"}</Code>.
         </Text>
         {isLoading ? (
           <Text c="dimmed" size="sm">
@@ -107,10 +107,7 @@ function ConfigCompilerCard({ profileNames }: { profileNames: string[] }) {
   const [report, setReport] = useState<CompileReport | null>(null);
 
   const run = () => {
-    compile.mutate(
-      { profile: profile ?? undefined, force },
-      { onSuccess: setReport },
-    );
+    compile.mutate({ profile: profile ?? undefined, force }, { onSuccess: setReport });
   };
 
   return (
@@ -121,12 +118,16 @@ function ConfigCompilerCard({ profileNames }: { profileNames: string[] }) {
           <Title order={4}>Config files</Title>
         </Group>
         <Text size="sm" c="dimmed">
-          Scans <Code>base_path</Code> for <Code>.env.example</Code> / <Code>appsettings.example.json</Code>
-          -style files and creates the real file next to each one, with any <Code>{"${VAR}"}</Code> tokens
-          filled in from this profile's resolved environment. Existing files are never overwritten unless
-          "Overwrite existing" is checked, so it's always safe to re-run - including automatically, every
-          time you run a profile. This also runs automatically before starting a profile, so a fresh
-          checkout with new services just works with no extra setup step.
+          Scans <Code>base_path</Code> for <Code>.env.example</Code> /{" "}
+          <Code>appsettings.example.json</Code>
+          -style files and creates the real file next to each one, with any <Code>
+            {"${VAR}"}
+          </Code>{" "}
+          tokens filled in from this profile's resolved environment. Existing files are never
+          overwritten unless "Overwrite existing" is checked, so it's always safe to re-run -
+          including automatically, every time you run a profile. This also runs automatically before
+          starting a profile, so a fresh checkout with new services just works with no extra setup
+          step.
         </Text>
         <Group align="flex-end">
           <Select
@@ -238,7 +239,13 @@ function EnvVarTable({ scope, profile }: { scope: "global" | "profile"; profile?
   const submitAdd = () => {
     if (!form.key.trim()) return;
     upsert.mutate(
-      { scope, profile: profile ?? null, key: form.key.trim(), value: form.value, secret: form.secret },
+      {
+        scope,
+        profile: profile ?? null,
+        key: form.key.trim(),
+        value: form.value,
+        secret: form.secret,
+      },
       { onSuccess: () => addHandlers.close() },
     );
     setForm({ key: "", value: "", secret: false });
@@ -248,7 +255,12 @@ function EnvVarTable({ scope, profile }: { scope: "global" | "profile"; profile?
     if (!importText.trim()) return;
     importVars.mutate(
       { scope, profile: profile ?? null, text: importText },
-      { onSuccess: () => { importHandlers.close(); setImportText(""); } },
+      {
+        onSuccess: () => {
+          importHandlers.close();
+          setImportText("");
+        },
+      },
     );
   };
 
@@ -257,7 +269,12 @@ function EnvVarTable({ scope, profile }: { scope: "global" | "profile"; profile?
   return (
     <Stack gap="sm">
       <Group justify="flex-end">
-        <Button size="xs" variant="light" leftSection={<IconUpload size={14} />} onClick={importHandlers.open}>
+        <Button
+          size="xs"
+          variant="light"
+          leftSection={<IconUpload size={14} />}
+          onClick={importHandlers.open}
+        >
           Import .env
         </Button>
         <Button size="xs" leftSection={<IconPlus size={14} />} onClick={addHandlers.open}>

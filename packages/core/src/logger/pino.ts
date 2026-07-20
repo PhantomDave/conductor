@@ -33,7 +33,10 @@ export function createLogger(options: LoggerOptions = {}) {
       // plain structured logging instead of crashing on startup.
       return pino({
         level,
-        transport: { target: "pino-pretty", options: { colorize: true, translateTime: "HH:MM:ss" } },
+        transport: {
+          target: "pino-pretty",
+          options: { colorize: true, translateTime: "HH:MM:ss" },
+        },
         hooks,
       });
     } catch {

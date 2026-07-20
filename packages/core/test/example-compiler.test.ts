@@ -53,10 +53,7 @@ describe("compileExampleFile", () => {
     const targetPath = join(dir, ".env");
     writeFileSync(examplePath, "API_KEY=${API_KEY}\nSTATIC=unchanged\n");
 
-    const result = compileExampleFile(
-      { examplePath, targetPath },
-      { API_KEY: "secret-123" },
-    );
+    const result = compileExampleFile({ examplePath, targetPath }, { API_KEY: "secret-123" });
 
     expect(result.action).toBe("created");
     expect(result.missingVars).toEqual([]);
@@ -95,10 +92,7 @@ describe("compileConfigExamples", () => {
   test("scans a whole tree and summarizes created/skipped/missing vars", () => {
     mkdirSync(join(dir, "backend"), { recursive: true });
     writeFileSync(join(dir, ".env.example"), "BASE_URL=${BASE_URL}\n");
-    writeFileSync(
-      join(dir, "backend", "appsettings.example.json"),
-      '{"Token": "${API_TOKEN}"}',
-    );
+    writeFileSync(join(dir, "backend", "appsettings.example.json"), '{"Token": "${API_TOKEN}"}');
     // Already exists - should be skipped.
     writeFileSync(join(dir, "backend", "appsettings.json"), '{"Token": "keep-me"}');
 

@@ -178,18 +178,15 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     },
   );
 
-  app.delete<{ Params: { profile: string } }>(
-    "/api/profiles/:profile",
-    async (request, reply) => {
-      try {
-        deps.store.removeProfile(request.params.profile);
-        deps.queries.insertAuditEntry("remove-profile", request.params.profile);
-        return { removed: true };
-      } catch (err) {
-        return handleConfigError(err, reply);
-      }
-    },
-  );
+  app.delete<{ Params: { profile: string } }>("/api/profiles/:profile", async (request, reply) => {
+    try {
+      deps.store.removeProfile(request.params.profile);
+      deps.queries.insertAuditEntry("remove-profile", request.params.profile);
+      return { removed: true };
+    } catch (err) {
+      return handleConfigError(err, reply);
+    }
+  });
 
   app.post<{ Params: { profile: string }; Body: unknown }>(
     "/api/profiles/:profile/commands",
@@ -377,7 +374,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       const { scope, profile } = request.query;
       if (scope) {
         return {
-          vars: deps.queries.listEnvVars(scope, scope === "profile" ? profile ?? null : null),
+          vars: deps.queries.listEnvVars(scope, scope === "profile" ? (profile ?? null) : null),
         };
       }
       return { vars: deps.queries.listAllEnvVars() };
@@ -398,7 +395,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
 
     const row = deps.queries.upsertEnvVar({
       scope,
-      profile: scope === "profile" ? profile ?? null : null,
+      profile: scope === "profile" ? (profile ?? null) : null,
       key,
       value,
       isSecret: secret ?? looksSecret(key),
@@ -428,7 +425,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     const imported = entries.map((entry) =>
       deps.queries.upsertEnvVar({
         scope,
-        profile: scope === "profile" ? profile ?? null : null,
+        profile: scope === "profile" ? (profile ?? null) : null,
         key: entry.key,
         value: entry.value,
         isSecret: secret ?? looksSecret(entry.key),

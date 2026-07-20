@@ -71,7 +71,9 @@ export function ProcessBoard() {
                       restartCommand.variables?.commandId === p.commandId &&
                       restartCommand.variables?.profile === p.profile
                     }
-                    onClick={() => restartCommand.mutate({ profile: p.profile, commandId: p.commandId })}
+                    onClick={() =>
+                      restartCommand.mutate({ profile: p.profile, commandId: p.commandId })
+                    }
                   >
                     Restart
                   </Button>

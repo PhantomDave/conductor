@@ -99,7 +99,11 @@ export async function deleteProfile(profile: string): Promise<void> {
   await parseJsonOrThrow(res, `Failed to delete profile "${profile}"`);
 }
 
-export type CommandInput = Partial<Omit<CommandInfo, "id">> & { id?: string; name: string; run: string };
+export type CommandInput = Partial<Omit<CommandInfo, "id">> & {
+  id?: string;
+  name: string;
+  run: string;
+};
 
 export async function createCommand(profile: string, input: CommandInput): Promise<CommandInfo> {
   const res = await fetch(`${API_BASE}/profiles/${profile}/commands`, {
@@ -141,7 +145,10 @@ export async function executeCommand(profile: string, commandId: string): Promis
   await parseJsonOrThrow(res, `Failed to execute "${commandId}"`);
 }
 
-export async function restartCommand(profile: string, commandId: string): Promise<ProcessInfo | undefined> {
+export async function restartCommand(
+  profile: string,
+  commandId: string,
+): Promise<ProcessInfo | undefined> {
   const res = await fetch(`${API_BASE}/commands/${commandId}/restart`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -239,7 +246,10 @@ export async function compileConfigExamples(input: {
   return parseJsonOrThrow(res, "Failed to compile config files");
 }
 
-export async function fetchEnvVars(scope: "global" | "profile", profile?: string): Promise<EnvVarRow[]> {
+export async function fetchEnvVars(
+  scope: "global" | "profile",
+  profile?: string,
+): Promise<EnvVarRow[]> {
   const query = new URLSearchParams({ scope });
   if (profile) query.set("profile", profile);
   const res = await fetch(`${API_BASE}/env?${query.toString()}`);

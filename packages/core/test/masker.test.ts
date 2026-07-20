@@ -26,9 +26,7 @@ describe("interpolateEnv", () => {
 describe("interpolateString", () => {
   test("resolves ${VAR} references against the given env map (e.g. for cwd/healthcheck fields)", () => {
     const env = { APP_DIR: "../app" };
-    expect(interpolateString("${APP_DIR}/backend/Api", env)).toBe(
-      "../app/backend/Api",
-    );
+    expect(interpolateString("${APP_DIR}/backend/Api", env)).toBe("../app/backend/Api");
   });
 
   test("falls back to process.env for vars missing from the given map", () => {

@@ -1,6 +1,23 @@
 import { useState } from "react";
-import { Accordion, Badge, Button, Group, Stack, Text, Card, ActionIcon, TextInput, Modal } from "@mantine/core";
-import { IconPlayerPlay, IconPlayerStop, IconPlus, IconPencil, IconTrash } from "@tabler/icons-react";
+import {
+  Accordion,
+  Badge,
+  Button,
+  Group,
+  Stack,
+  Text,
+  Card,
+  ActionIcon,
+  TextInput,
+  Modal,
+} from "@mantine/core";
+import {
+  IconPlayerPlay,
+  IconPlayerStop,
+  IconPlus,
+  IconPencil,
+  IconTrash,
+} from "@tabler/icons-react";
 import { useDisclosure } from "@mantine/hooks";
 import { useProfiles } from "../hooks/useProfiles";
 import { useExecuteCommand, useRunProfile, useStopProfile } from "../hooks/useProcessActions";
@@ -16,7 +33,10 @@ export function CommandLibrary() {
   const deleteCommand = useDeleteCommand();
   const createProfile = useCreateProfile();
 
-  const [formState, setFormState] = useState<{ profile: string; editing?: CommandInfo | null } | null>(null);
+  const [formState, setFormState] = useState<{
+    profile: string;
+    editing?: CommandInfo | null;
+  } | null>(null);
   const [profileModalOpen, profileModalHandlers] = useDisclosure(false);
   const [newProfileName, setNewProfileName] = useState("");
 
@@ -41,7 +61,12 @@ export function CommandLibrary() {
   return (
     <Stack gap="sm">
       <Group justify="flex-end">
-        <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={profileModalHandlers.open}>
+        <Button
+          size="xs"
+          variant="light"
+          leftSection={<IconPlus size={14} />}
+          onClick={profileModalHandlers.open}
+        >
           New profile
         </Button>
       </Group>
@@ -125,8 +150,13 @@ export function CommandLibrary() {
                           size="xs"
                           variant="light"
                           leftSection={<IconPlayerPlay size={14} />}
-                          loading={executeCommand.isPending && executeCommand.variables?.commandId === command.id}
-                          onClick={() => executeCommand.mutate({ profile: profileName, commandId: command.id })}
+                          loading={
+                            executeCommand.isPending &&
+                            executeCommand.variables?.commandId === command.id
+                          }
+                          onClick={() =>
+                            executeCommand.mutate({ profile: profileName, commandId: command.id })
+                          }
                         >
                           Run
                         </Button>
@@ -139,8 +169,13 @@ export function CommandLibrary() {
                         <ActionIcon
                           variant="subtle"
                           color="red"
-                          loading={deleteCommand.isPending && deleteCommand.variables?.commandId === command.id}
-                          onClick={() => deleteCommand.mutate({ profile: profileName, commandId: command.id })}
+                          loading={
+                            deleteCommand.isPending &&
+                            deleteCommand.variables?.commandId === command.id
+                          }
+                          onClick={() =>
+                            deleteCommand.mutate({ profile: profileName, commandId: command.id })
+                          }
                         >
                           <IconTrash size={14} />
                         </ActionIcon>

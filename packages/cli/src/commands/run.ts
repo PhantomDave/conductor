@@ -1,5 +1,11 @@
 import pc from "picocolors";
-import { SpawnQueue, buildCommandEnv, buildProfileEnv, compileConfigExamples, type LogEntry } from "@conductor/core";
+import {
+  SpawnQueue,
+  buildCommandEnv,
+  buildProfileEnv,
+  compileConfigExamples,
+  type LogEntry,
+} from "@conductor/core";
 import { requireConfig } from "../config-context";
 
 export function registerRunCommand(program: import("commander").Command) {
@@ -22,7 +28,9 @@ export function registerRunCommand(program: import("commander").Command) {
       const env = buildProfileEnv({ configFilePath: configPath, config, profile: selected });
       const report = compileConfigExamples(env.BASE_PATH ?? process.cwd(), env);
       if (report.created > 0) {
-        console.log(pc.dim(`Compiled ${report.created} config file(s) from their .example templates.`));
+        console.log(
+          pc.dim(`Compiled ${report.created} config file(s) from their .example templates.`),
+        );
       }
       if (report.missingVars.length > 0) {
         console.log(

@@ -4,12 +4,8 @@ import { validateConfig } from "../src/config/loader";
 
 describe("resolveBasePath", () => {
   test("resolves a relative base_path against the config file's directory", () => {
-    expect(resolveBasePath("/home/dave/project/.conductor.yml", ".")).toBe(
-      "/home/dave/project",
-    );
-    expect(resolveBasePath("/home/dave/project/.conductor.yml", "../app")).toBe(
-      "/home/dave/app",
-    );
+    expect(resolveBasePath("/home/dave/project/.conductor.yml", ".")).toBe("/home/dave/project");
+    expect(resolveBasePath("/home/dave/project/.conductor.yml", "../app")).toBe("/home/dave/app");
   });
 
   test("passes through an already-absolute base_path unchanged", () => {

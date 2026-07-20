@@ -35,7 +35,13 @@ const DEFAULT_HEALTHCHECK: HealthcheckInfo = {
   retries: 10,
 };
 
-export function CommandForm({ opened, onClose, profile, existingCommands, editing }: CommandFormProps) {
+export function CommandForm({
+  opened,
+  onClose,
+  profile,
+  existingCommands,
+  editing,
+}: CommandFormProps) {
   const createCommand = useCreateCommand();
   const updateCommand = useUpdateCommand();
   const isEditing = Boolean(editing);
@@ -64,7 +70,9 @@ export function CommandForm({ opened, onClose, profile, existingCommands, editin
       setReadonly(editing.readonly);
       setStopSignal(editing.stop_signal || "SIGTERM");
       setStopTimeoutMs(editing.stop_timeout_ms ?? 5000);
-      setEnvOverrides(Object.entries(editing.env_overrides ?? {}).map(([key, value]) => ({ key, value })));
+      setEnvOverrides(
+        Object.entries(editing.env_overrides ?? {}).map(([key, value]) => ({ key, value })),
+      );
       setHealthcheck(editing.healthcheck ?? DEFAULT_HEALTHCHECK);
     } else {
       setName("");
@@ -81,7 +89,9 @@ export function CommandForm({ opened, onClose, profile, existingCommands, editin
     }
   }, [opened, editing]);
 
-  const depOptions = existingCommands.filter((c) => c.id !== editing?.id).map((c) => ({ value: c.id, label: c.name }));
+  const depOptions = existingCommands
+    .filter((c) => c.id !== editing?.id)
+    .map((c) => ({ value: c.id, label: c.name }));
 
   const submit = () => {
     if (!name.trim() || !run.trim()) return;
@@ -109,7 +119,10 @@ export function CommandForm({ opened, onClose, profile, existingCommands, editin
     };
 
     if (isEditing && editing) {
-      updateCommand.mutate({ profile, commandId: editing.id, patch: input }, { onSuccess: onClose });
+      updateCommand.mutate(
+        { profile, commandId: editing.id, patch: input },
+        { onSuccess: onClose },
+      );
     } else {
       createCommand.mutate({ profile, input }, { onSuccess: onClose });
     }
@@ -118,9 +131,20 @@ export function CommandForm({ opened, onClose, profile, existingCommands, editin
   const isPending = createCommand.isPending || updateCommand.isPending;
 
   return (
-    <Modal opened={opened} onClose={onClose} title={isEditing ? "Edit command" : "New command"} size="lg">
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={isEditing ? "Edit command" : "New command"}
+      size="lg"
+    >
       <Stack>
-        <TextInput label="Name" placeholder="web-server" value={name} onChange={(e) => setName(e.currentTarget.value)} required />
+        <TextInput
+          label="Name"
+          placeholder="web-server"
+          value={name}
+          onChange={(e) => setName(e.currentTarget.value)}
+          required
+        />
         <Textarea
           label="Command"
           placeholder="bun run start"
@@ -131,8 +155,17 @@ export function CommandForm({ opened, onClose, profile, existingCommands, editin
           required
         />
         <Group grow>
-          <TextInput label="Working directory" value={cwd} onChange={(e) => setCwd(e.currentTarget.value)} />
-          <Switch label="Run through shell" checked={shell} onChange={(e) => setShell(e.currentTarget.checked)} mt="xl" />
+          <TextInput
+            label="Working directory"
+            value={cwd}
+            onChange={(e) => setCwd(e.currentTarget.value)}
+          />
+          <Switch
+            label="Run through shell"
+            checked={shell}
+            onChange={(e) => setShell(e.currentTarget.checked)}
+            mt="xl"
+          />
         </Group>
 
         <MultiSelect
@@ -158,10 +191,19 @@ export function CommandForm({ opened, onClose, profile, existingCommands, editin
             value={stopSignal}
             onChange={(v) => setStopSignal(v ?? "SIGTERM")}
           />
-          <NumberInput label="Stop timeout (ms)" value={stopTimeoutMs} onChange={(v) => setStopTimeoutMs(Number(v) || 0)} min={0} />
+          <NumberInput
+            label="Stop timeout (ms)"
+            value={stopTimeoutMs}
+            onChange={(v) => setStopTimeoutMs(Number(v) || 0)}
+            min={0}
+          />
         </Group>
 
-        <Switch label="Read-only (cannot be started/stopped from the UI)" checked={readonly} onChange={(e) => setReadonly(e.currentTarget.checked)} />
+        <Switch
+          label="Read-only (cannot be started/stopped from the UI)"
+          checked={readonly}
+          onChange={(e) => setReadonly(e.currentTarget.checked)}
+        />
 
         <Divider label="Environment overrides" labelPosition="left" />
         <Stack gap="xs">
@@ -171,7 +213,9 @@ export function CommandForm({ opened, onClose, profile, existingCommands, editin
                 placeholder="KEY"
                 value={entry.key}
                 onChange={(e) =>
-                  setEnvOverrides((prev) => prev.map((p, i) => (i === idx ? { ...p, key: e.currentTarget.value } : p)))
+                  setEnvOverrides((prev) =>
+                    prev.map((p, i) => (i === idx ? { ...p, key: e.currentTarget.value } : p)),
+                  )
                 }
                 flex={1}
               />
@@ -179,11 +223,17 @@ export function CommandForm({ opened, onClose, profile, existingCommands, editin
                 placeholder="value"
                 value={entry.value}
                 onChange={(e) =>
-                  setEnvOverrides((prev) => prev.map((p, i) => (i === idx ? { ...p, value: e.currentTarget.value } : p)))
+                  setEnvOverrides((prev) =>
+                    prev.map((p, i) => (i === idx ? { ...p, value: e.currentTarget.value } : p)),
+                  )
                 }
                 flex={1}
               />
-              <ActionIcon color="red" variant="subtle" onClick={() => setEnvOverrides((prev) => prev.filter((_, i) => i !== idx))}>
+              <ActionIcon
+                color="red"
+                variant="subtle"
+                onClick={() => setEnvOverrides((prev) => prev.filter((_, i) => i !== idx))}
+              >
                 <IconTrash size={14} />
               </ActionIcon>
             </Group>
@@ -211,7 +261,9 @@ export function CommandForm({ opened, onClose, profile, existingCommands, editin
             { value: "command", label: "Shell command exits 0" },
           ]}
           value={healthcheck.type}
-          onChange={(v) => setHealthcheck((prev) => ({ ...prev, type: (v as HealthcheckInfo["type"]) ?? "none" }))}
+          onChange={(v) =>
+            setHealthcheck((prev) => ({ ...prev, type: (v as HealthcheckInfo["type"]) ?? "none" }))
+          }
         />
         {healthcheck.type === "port" && (
           <NumberInput
@@ -233,7 +285,9 @@ export function CommandForm({ opened, onClose, profile, existingCommands, editin
             label="Command"
             placeholder="curl -f http://localhost:3000/health"
             value={healthcheck.command ?? ""}
-            onChange={(e) => setHealthcheck((prev) => ({ ...prev, command: e.currentTarget.value }))}
+            onChange={(e) =>
+              setHealthcheck((prev) => ({ ...prev, command: e.currentTarget.value }))
+            }
           />
         )}
         {healthcheck.type !== "none" && (
