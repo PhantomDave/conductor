@@ -53,7 +53,15 @@ nsis:
 
 # electron-updater reads this to know where to look for update manifests -
 # matches the repo releases are published to.
+#
+# The release workflow runs after *you* publish a GitHub Release (tag with
+# no "v" prefix, e.g. "0.1.0"), so electron-builder must attach its
+# artifacts to that already-published release rather than defaulting to
+# creating a brand new draft release (its default behavior), and must not
+# assume tags are "v"-prefixed.
 publish:
   provider: github
   owner: PhantomDave
   repo: conductor
+  vPrefixedTagName: false
+  releaseType: release
