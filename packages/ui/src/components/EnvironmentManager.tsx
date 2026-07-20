@@ -223,7 +223,11 @@ function ShellCard() {
   ];
 
   const pending =
-    selection === "__custom__" ? customPath.trim() || null : selection === "__system__" ? null : selection;
+    selection === "__custom__"
+      ? customPath.trim() || null
+      : selection === "__system__"
+        ? null
+        : selection;
   const dirty = data && pending !== (data.default_shell ?? null);
 
   return (
@@ -236,8 +240,8 @@ function ShellCard() {
         <Text size="sm" c="dimmed">
           The shell used to run every <Code>shell: true</Code> command and command-type healthcheck.
           Detected automatically from shells installed on this machine - pick one below, or leave it
-          on the system default to keep following whatever <Code>$SHELL</Code>/<Code>%COMSPEC%</Code>{" "}
-          already points to.
+          on the system default to keep following whatever <Code>$SHELL</Code>/
+          <Code>%COMSPEC%</Code> already points to.
         </Text>
         {isLoading ? (
           <Text c="dimmed" size="sm">
@@ -259,7 +263,11 @@ function ShellCard() {
               />
             )}
             <Group justify="flex-end">
-              <Button disabled={!dirty} loading={update.isPending} onClick={() => update.mutate(pending)}>
+              <Button
+                disabled={!dirty}
+                loading={update.isPending}
+                onClick={() => update.mutate(pending)}
+              >
                 Save
               </Button>
             </Group>

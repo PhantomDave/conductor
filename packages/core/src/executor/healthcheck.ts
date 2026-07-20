@@ -43,7 +43,11 @@ async function checkHttp(url: string): Promise<boolean> {
  * `cwd` set to BASE_PATH (if present in env) so a relative check command
  * behaves the same as a relative command `run`/`cwd`.
  */
-async function checkCommand(command: string, cwd?: string, configuredShell?: string): Promise<boolean> {
+async function checkCommand(
+  command: string,
+  cwd?: string,
+  configuredShell?: string,
+): Promise<boolean> {
   try {
     const { bin, flag } = resolveShell(configuredShell);
     const proc = Bun.spawn({
