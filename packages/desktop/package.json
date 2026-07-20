@@ -4,7 +4,10 @@
   "private": true,
   "description": "Conductor desktop app: an Electron shell around the core API + web dashboard",
   "homepage": "https://github.com/PhantomDave/conductor",
-  "author": "PhantomDave",
+  "author": {
+    "name": "PhantomDave",
+    "email": "davide.rodo@pdave.dev"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",

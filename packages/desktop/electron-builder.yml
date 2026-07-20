@@ -3,6 +3,13 @@ productName: Conductor
 executableName: conductor
 copyright: Copyright © Conductor contributors
 
+# electron-builder's default artifact filename falls back to package.json's
+# "name" for some targets (e.g. .deb), which is the scoped npm name
+# "@conductor/desktop" - the literal "@" segment then gets treated as a
+# subdirectory that doesn't exist, failing the build. Pin every target's
+# output name to productName instead.
+artifactName: "${productName}-${version}-${arch}.${ext}"
+
 directories:
   output: out
   buildResources: build

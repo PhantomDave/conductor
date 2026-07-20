@@ -1,15 +1,23 @@
 name: Release
 
 # Builds and publishes the Conductor desktop app for macOS, Windows and
-# Linux whenever a version tag is pushed. Each runner compiles the core
-# sidecar natively for its own OS (no cross-compilation), packages it with
-# Electron, and publishes the installers + auto-update metadata to the
-# GitHub Release for the tag.
+# Linux whenever a GitHub Release is published. Each runner compiles the
+# core sidecar natively for its own OS (no cross-compilation), packages it
+# with Electron, and uploads the installers + auto-update metadata to that
+# same release.
+#
+# Note: this intentionally does NOT also trigger on tag push. Publishing a
+# release through the GitHub UI on a new tag fires both a tag-push event
+# and a release-published event, so listening to both would run this
+# workflow twice for the same release.
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build & publish (e.g. v0.1.0)"
+        required: true
 
 permissions:
   contents: write
@@ -23,6 +31,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2

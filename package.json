@@ -5,7 +5,10 @@
   "type": "module",
   "description": "Universal task runner & dashboard for developers",
   "license": "MIT",
-  "author": "PhantomDave",
+  "author": {
+    "name": "PhantomDave",
+    "email": "davide.rodo@pdave.dev"
+  },
   "homepage": "https://github.com/PhantomDave/conductor",
   "repository": {
     "type": "git",
