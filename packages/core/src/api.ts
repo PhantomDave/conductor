@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { existsSync } from "node:fs";
 import { z } from "zod";
+import yaml from "js-yaml";
 import type { ConductorLogger } from "./logger/pino";
 import type { ConductorQueries } from "./db/queries";
 import type { ConfigStore } from "./config/store";
@@ -159,6 +160,34 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       `${profile ?? "__global__"} (created ${report.created}, skipped ${report.skipped}, errors ${report.errors})`,
     );
     return report;
+  });
+
+  // --- Config import (whole .conductor.yml, e.g. a shared template) -----
+
+  const ConfigImportSchema = z.object({
+    yaml: z.string().min(1),
+  });
+
+  app.post<{ Body: unknown }>("/api/config/import", async (request, reply) => {
+    const parsed = ConfigImportSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+    }
+    let raw: unknown;
+    try {
+      raw = yaml.load(parsed.data.yaml);
+    } catch (err) {
+      return reply.status(400).send({ error: `Failed to parse YAML: ${(err as Error).message}` });
+    }
+    try {
+      const config = deps.store.importConfig(raw);
+      deps.queries.insertAuditEntry("import-config", config.name ?? "(unnamed)");
+      return { config };
+    } catch (err) {
+      return handleConfigError(err, reply);
+    }
   });
 
   // --- Profiles & commands (write, persisted to .conductor.yml) ---------

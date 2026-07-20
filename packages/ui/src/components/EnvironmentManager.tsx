@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Tabs,
   Stack,
@@ -28,6 +28,7 @@ import {
   IconFolder,
   IconFileSymlink,
   IconAlertTriangle,
+  IconFileImport,
 } from "@tabler/icons-react";
 import { useDisclosure } from "@mantine/hooks";
 import { useProfiles } from "../hooks/useProfiles";
@@ -39,8 +40,99 @@ import {
   useBasePath,
   useUpdateBasePath,
   useCompileConfigExamples,
+  useImportConfig,
 } from "../hooks/useEnvVars";
 import type { EnvVarRow, CompileReport } from "../lib/api";
+
+function ImportConfigCard() {
+  const importConfig = useImportConfig();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<{ file: File; text: string } | null>(null);
+  const [confirmOpen, confirmHandlers] = useDisclosure(false);
+
+  const onFileSelected = async (file: File | undefined) => {
+    if (!file) return;
+    const text = await file.text();
+    setPending({ file, text });
+    confirmHandlers.open();
+  };
+
+  const confirmImport = () => {
+    if (!pending) return;
+    importConfig.mutate(pending.text, {
+      onSuccess: () => {
+        confirmHandlers.close();
+        setPending(null);
+      },
+    });
+  };
+
+  return (
+    <Card withBorder padding="md">
+      <Stack gap="xs">
+        <Group gap={6}>
+          <IconFileImport size={18} />
+          <Title order={4}>Import config</Title>
+        </Group>
+        <Text size="sm" c="dimmed">
+          Import a <Code>.conductor.yml</Code> file - e.g. one shared by a teammate, or a project
+          template - to auto-fill profiles, commands and base path instead of recreating them by
+          hand.{" "}
+          <Text span fw={600}>
+            This replaces the entire current config.
+          </Text>
+        </Text>
+        <Group>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".yml,.yaml"
+            style={{ display: "none" }}
+            onChange={(e) => onFileSelected(e.currentTarget.files?.[0])}
+          />
+          <Button
+            size="xs"
+            variant="light"
+            leftSection={<IconUpload size={14} />}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Choose .conductor.yml
+          </Button>
+        </Group>
+      </Stack>
+
+      <Modal
+        opened={confirmOpen}
+        onClose={() => {
+          confirmHandlers.close();
+          setPending(null);
+        }}
+        title="Replace current config?"
+      >
+        <Stack>
+          <Alert color="yellow" variant="light" icon={<IconAlertTriangle size={16} />}>
+            Importing <Code>{pending?.file.name}</Code> replaces every profile and command currently
+            configured here. Environment variables stored in Conductor's database are not affected.
+          </Alert>
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={() => {
+                confirmHandlers.close();
+                setPending(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button color="yellow" loading={importConfig.isPending} onClick={confirmImport}>
+              Import & replace
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </Card>
+  );
+}
 
 function BasePathCard() {
   const { data, isLoading } = useBasePath();
@@ -398,6 +490,7 @@ export function EnvironmentManager() {
         </Text>
       </div>
 
+      <ImportConfigCard />
       <BasePathCard />
       <ConfigCompilerCard profileNames={profileNames} />
 

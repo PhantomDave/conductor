@@ -116,6 +116,22 @@ export class ConfigStore {
     return compileConfigExamples(this.getResolvedBasePath(), env, opts);
   }
 
+  /**
+   * Replaces the entire live config from an imported `.conductor.yml`
+   * (or any object matching the schema) - e.g. a teammate's file, or one
+   * downloaded from a shared template - instead of manually recreating
+   * every profile/command through the UI. Validates before touching
+   * anything on disk, so a malformed import leaves the current config
+   * untouched and surfaces a readable error instead of silently
+   * corrupting the file.
+   */
+  importConfig(raw: unknown): ConductorConfig {
+    this.config = validateConfig(raw);
+    this.rebuildQueues();
+    this.persist();
+    return this.config;
+  }
+
   addProfile(name: string, input: { description?: string }): ProfileConfig {
     if (this.config.profiles[name]) {
       throw new ConfigError(`Profile "${name}" already exists`);

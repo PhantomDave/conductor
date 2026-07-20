@@ -8,6 +8,7 @@ import {
   fetchBasePath,
   updateBasePath,
   compileConfigExamples,
+  importConfig,
 } from "../lib/api";
 
 export function useCompileConfigExamples() {
@@ -119,6 +120,30 @@ export function useImportEnvVars() {
       notifications.show({
         color: "red",
         title: "Failed to import env vars",
+        message: error.message,
+      });
+    },
+  });
+}
+
+export function useImportConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: importConfig,
+    onSuccess: (config) => {
+      notifications.show({
+        color: "green",
+        message: `Imported "${config.name ?? "config"}" - ${Object.keys(config.profiles).length} profile(s)`,
+      });
+      // Everything the imported config could have changed - profiles,
+      // commands, base_path - needs a fresh fetch.
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["base-path"] });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to import config",
         message: error.message,
       });
     },

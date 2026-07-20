@@ -217,6 +217,30 @@ export async function updateBasePath(basePath: string): Promise<BasePathInfo> {
   return parseJsonOrThrow(res, "Failed to update base path");
 }
 
+export interface ConductorConfigInfo {
+  version: string;
+  name?: string;
+  description?: string;
+  base_path: string;
+  profiles: Record<string, ProfileInfo>;
+}
+
+/**
+ * Replaces the entire config (profiles, commands, base_path, ...) from a
+ * `.conductor.yml` file's raw text - e.g. one shared by a teammate or
+ * downloaded as a project template - instead of recreating everything
+ * by hand through the UI.
+ */
+export async function importConfig(yamlText: string): Promise<ConductorConfigInfo> {
+  const res = await fetch(`${API_BASE}/config/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ yaml: yamlText }),
+  });
+  const data = await parseJsonOrThrow(res, "Failed to import config");
+  return data.config;
+}
+
 export interface CompileResult {
   examplePath: string;
   targetPath: string;
