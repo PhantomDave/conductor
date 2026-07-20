@@ -2,6 +2,7 @@ import { connect } from "node:net";
 import { resolve as resolvePath, isAbsolute } from "node:path";
 import type { HealthcheckConfig } from "../config/schema";
 import { interpolateString } from "../env/masker";
+import { resolveShell } from "./shell";
 
 export class HealthcheckError extends Error {}
 
@@ -44,8 +45,9 @@ async function checkHttp(url: string): Promise<boolean> {
  */
 async function checkCommand(command: string, cwd?: string): Promise<boolean> {
   try {
+    const { bin, flag } = resolveShell();
     const proc = Bun.spawn({
-      cmd: ["sh", "-c", command],
+      cmd: [bin, flag, command],
       cwd,
       stdout: "ignore",
       stderr: "ignore",

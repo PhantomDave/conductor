@@ -2,6 +2,7 @@ import { spawn, type Subprocess } from "bun";
 import { resolve as resolvePath, isAbsolute } from "node:path";
 import type { CommandConfig } from "../config/schema";
 import { interpolateString } from "../env/masker";
+import { resolveShell } from "./shell";
 
 export type ProcessStatus = "starting" | "running" | "stopping" | "stopped" | "failed";
 
@@ -127,10 +128,16 @@ export class ProcessWrapper {
       ? interpolatedCwd
       : resolvePath(this.env.BASE_PATH ?? process.cwd(), interpolatedCwd);
 
+    let cmd: string[];
+    if (this.commandConfig.shell) {
+      const { bin, flag } = resolveShell();
+      cmd = [bin, flag, this.commandConfig.run];
+    } else {
+      cmd = this.commandConfig.run.split(" ");
+    }
+
     const subprocess = spawn({
-      cmd: this.commandConfig.shell
-        ? ["sh", "-c", this.commandConfig.run]
-        : this.commandConfig.run.split(" "),
+      cmd,
       cwd,
       env: this.env,
       stdout: "pipe",
