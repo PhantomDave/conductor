@@ -215,15 +215,13 @@ export class ProcessWrapper {
         });
         // Give the stop command the same deadline as the overall stop timeout.
         // If it hangs, we fall through and SIGKILL the main process anyway.
-        let timerId: ReturnType<typeof setTimeout> | undefined;
-        await Promise.race([
+        await new Promise<void>((resolve) => {
+          const timerId = setTimeout(resolve, timeoutMs);
           stopProc.exited.then(() => {
             clearTimeout(timerId);
-          }),
-          new Promise<void>((resolve) => {
-            timerId = setTimeout(resolve, timeoutMs);
-          }),
-        ]);
+            resolve();
+          });
+        });
       } catch (err) {
         // If the stop command itself fails, log and fall through to the SIGKILL path.
         this.emitLog(
@@ -235,16 +233,13 @@ export class ProcessWrapper {
       subprocess.kill(this.commandConfig.stop_signal as NodeJS.Signals);
     }
 
-    let exitTimerId: ReturnType<typeof setTimeout> | undefined;
-    const exitedInTime = await Promise.race([
+    const exitedInTime = await new Promise<boolean>((resolve) => {
+      const timerId = setTimeout(() => resolve(false), timeoutMs);
       subprocess.exited.then(() => {
-        clearTimeout(exitTimerId);
-        return true;
-      }),
-      new Promise<boolean>((resolve) => {
-        exitTimerId = setTimeout(() => resolve(false), timeoutMs);
-      }),
-    ]);
+        clearTimeout(timerId);
+        resolve(true);
+      });
+    });
 
     if (!exitedInTime) {
       subprocess.kill("SIGKILL");
