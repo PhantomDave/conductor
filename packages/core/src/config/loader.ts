@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 import { ConductorConfigSchema, type ConductorConfig } from "./schema";
 
 export class ConfigError extends Error {}
