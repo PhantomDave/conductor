@@ -192,8 +192,10 @@ export class ProcessWrapper {
   }
 
   /**
-   * Gracefully stops the process: sends stop_signal, waits up to
-   * stop_timeout_ms, then force-kills with SIGKILL.
+   * Gracefully stops the process: if `stop_command` is configured, runs
+   * that command first (giving the process a chance to shut down cleanly).
+   * Otherwise sends stop_signal directly. In both cases, if the process
+   * has not exited within stop_timeout_ms, it is force-killed with SIGKILL.
    */
   async stop(): Promise<void> {
     if (!this.process || this.process.status !== "running") return;
@@ -202,7 +204,18 @@ export class ProcessWrapper {
     const { subprocess } = this.process;
     const timeoutMs = this.commandConfig.stop_timeout_ms;
 
-    subprocess.kill(this.commandConfig.stop_signal as NodeJS.Signals);
+    if (this.commandConfig.stop_command) {
+      const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
+      const stopProc = spawn({
+        cmd: [bin, flag, this.commandConfig.stop_command],
+        env: this.env,
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      await stopProc.exited;
+    } else {
+      subprocess.kill(this.commandConfig.stop_signal as NodeJS.Signals);
+    }
 
     const exitedInTime = await Promise.race([
       subprocess.exited.then(() => true),

@@ -22,6 +22,7 @@ profiles:
         name: "Hello World"
         run: "echo 'Hello from Conductor!' && sleep 2 && echo 'Done.'"
         shell: true
+        # stop_command: "echo 'Custom shutdown logic here'"  # optional: run this instead of sending stop_signal
 
       - id: echo-world
         name: "Second Task"
