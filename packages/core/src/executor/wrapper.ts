@@ -223,25 +223,21 @@ export class ProcessWrapper {
         });
         // Give the stop command the same deadline as the overall stop timeout.
         // If it hangs, kill it and fall through to the SIGKILL path for the main process.
-        let stopExitCode: number | null = null;
-        const stopCompleted = await new Promise<boolean>((resolve) => {
-          const timerId = setTimeout(() => resolve(false), timeoutMs);
-          void stopProc.exited
-            .then((code) => {
-              stopExitCode = code;
-              resolve(true);
-            })
-            .finally(() => clearTimeout(timerId));
-        });
-        if (!stopCompleted) {
+        const stopResult = await Promise.race([
+          stopProc.exited.then((code) => ({ timedOut: false as const, code })),
+          new Promise<{ timedOut: true }>((resolve) =>
+            setTimeout(() => resolve({ timedOut: true }), timeoutMs),
+          ),
+        ]);
+        if (stopResult.timedOut) {
           this.emitLog(`stop_command timed out after ${timeoutMs}ms`, "stderr");
           try {
             stopProc.kill("SIGKILL");
           } catch {
             // Best-effort: the stop process may have already exited.
           }
-        } else if (stopExitCode !== 0) {
-          this.emitLog(`stop_command exited with code ${stopExitCode}`, "stderr");
+        } else if (stopResult.code !== 0) {
+          this.emitLog(`stop_command exited with code ${stopResult.code}`, "stderr");
         }
       } catch (err) {
         // If the stop command itself fails, log and fall through to the SIGKILL path.
@@ -264,10 +260,10 @@ export class ProcessWrapper {
       return;
     }
 
-    const exitedInTime = await new Promise<boolean>((resolve) => {
-      const timerId = setTimeout(() => resolve(false), remainingMs);
-      void subprocess.exited.then(() => resolve(true)).finally(() => clearTimeout(timerId));
-    });
+    const exitedInTime = await Promise.race([
+      subprocess.exited.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), remainingMs)),
+    ]);
 
     if (!exitedInTime) {
       subprocess.kill("SIGKILL");
