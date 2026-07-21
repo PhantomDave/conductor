@@ -3,7 +3,7 @@ import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { existsSync } from "node:fs";
 import { z } from "zod";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 import type { ConductorLogger } from "./logger/pino";
 import type { ConductorQueries } from "./db/queries";
 import type { ConfigStore } from "./config/store";
