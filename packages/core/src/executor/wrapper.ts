@@ -218,10 +218,9 @@ export class ProcessWrapper {
         // If it hangs, kill it and fall through to the SIGKILL path for the main process.
         const stopCompleted = await new Promise<boolean>((resolve) => {
           const timerId = setTimeout(() => resolve(false), timeoutMs);
-          stopProc.exited.then(() => {
-            clearTimeout(timerId);
-            resolve(true);
-          });
+          void stopProc.exited
+            .then(() => resolve(true))
+            .finally(() => clearTimeout(timerId));
         });
         if (!stopCompleted) {
           try {
@@ -243,12 +242,19 @@ export class ProcessWrapper {
 
     // Use only the remaining time budget so total shutdown stays within stop_timeout_ms.
     const remainingMs = Math.max(0, timeoutMs - (Date.now() - startedAt));
+
+    // If the budget is exhausted (e.g. stop_command consumed all of it), SIGKILL immediately.
+    if (remainingMs === 0) {
+      subprocess.kill("SIGKILL");
+      await subprocess.exited;
+      return;
+    }
+
     const exitedInTime = await new Promise<boolean>((resolve) => {
       const timerId = setTimeout(() => resolve(false), remainingMs);
-      subprocess.exited.then(() => {
-        clearTimeout(timerId);
-        resolve(true);
-      });
+      void subprocess.exited
+        .then(() => resolve(true))
+        .finally(() => clearTimeout(timerId));
     });
 
     if (!exitedInTime) {
