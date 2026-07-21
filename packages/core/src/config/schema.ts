@@ -32,7 +32,7 @@ export const CommandSchema = z.object({
   readonly: z.boolean().default(false),
   stop_signal: z.string().default("SIGTERM"),
   stop_timeout_ms: z.number().int().positive().default(30_000),
-  stop_command: z.string().optional(),
+  stop_command: z.string().min(1).optional(),
   healthcheck: HealthcheckSchema.optional(),
 });
 

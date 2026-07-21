@@ -208,26 +208,40 @@ export class ProcessWrapper {
     if (this.commandConfig.stop_command) {
       try {
         const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
+        // Resolve cwd the same way the main process does so that relative
+        // stop commands (e.g. `docker-compose stop`) run from the correct dir.
+        const interpolatedCwd = interpolateString(this.commandConfig.cwd, this.env);
+        const cwd = isAbsolute(interpolatedCwd)
+          ? interpolatedCwd
+          : resolvePath(this.env.BASE_PATH ?? process.cwd(), interpolatedCwd);
         const stopProc = spawn({
           cmd: [bin, flag, this.commandConfig.stop_command],
+          cwd,
           env: this.env,
           stdout: "inherit",
           stderr: "inherit",
         });
         // Give the stop command the same deadline as the overall stop timeout.
         // If it hangs, kill it and fall through to the SIGKILL path for the main process.
+        let stopExitCode: number | null = null;
         const stopCompleted = await new Promise<boolean>((resolve) => {
           const timerId = setTimeout(() => resolve(false), timeoutMs);
           void stopProc.exited
-            .then(() => resolve(true))
+            .then((code) => {
+              stopExitCode = code;
+              resolve(true);
+            })
             .finally(() => clearTimeout(timerId));
         });
         if (!stopCompleted) {
+          this.emitLog(`stop_command timed out after ${timeoutMs}ms`, "stderr");
           try {
             stopProc.kill("SIGKILL");
           } catch {
             // Best-effort: the stop process may have already exited.
           }
+        } else if (stopExitCode !== 0) {
+          this.emitLog(`stop_command exited with code ${stopExitCode}`, "stderr");
         }
       } catch (err) {
         // If the stop command itself fails, log and fall through to the SIGKILL path.
@@ -252,9 +266,7 @@ export class ProcessWrapper {
 
     const exitedInTime = await new Promise<boolean>((resolve) => {
       const timerId = setTimeout(() => resolve(false), remainingMs);
-      void subprocess.exited
-        .then(() => resolve(true))
-        .finally(() => clearTimeout(timerId));
+      void subprocess.exited.then(() => resolve(true)).finally(() => clearTimeout(timerId));
     });
 
     if (!exitedInTime) {
