@@ -205,14 +205,23 @@ export class ProcessWrapper {
     const timeoutMs = this.commandConfig.stop_timeout_ms;
 
     if (this.commandConfig.stop_command) {
-      const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
-      const stopProc = spawn({
-        cmd: [bin, flag, this.commandConfig.stop_command],
-        env: this.env,
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-      await stopProc.exited;
+      try {
+        const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
+        const stopProc = spawn({
+          cmd: [bin, flag, this.commandConfig.stop_command],
+          env: this.env,
+          stdout: "inherit",
+          stderr: "inherit",
+        });
+        // Give the stop command the same deadline as the overall stop timeout.
+        // If it hangs, we fall through and SIGKILL the main process anyway.
+        await Promise.race([
+          stopProc.exited,
+          new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+        ]);
+      } catch {
+        // If the stop command itself fails, fall through to the SIGKILL path.
+      }
     } else {
       subprocess.kill(this.commandConfig.stop_signal as NodeJS.Signals);
     }
