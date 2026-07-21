@@ -55,6 +55,7 @@ export function CommandForm({
   const [readonly, setReadonly] = useState(false);
   const [stopSignal, setStopSignal] = useState("SIGTERM");
   const [stopTimeoutMs, setStopTimeoutMs] = useState(5000);
+  const [stopCommand, setStopCommand] = useState("");
   const [envOverrides, setEnvOverrides] = useState<Array<{ key: string; value: string }>>([]);
   const [healthcheck, setHealthcheck] = useState<HealthcheckInfo>(DEFAULT_HEALTHCHECK);
 
@@ -70,6 +71,7 @@ export function CommandForm({
       setReadonly(editing.readonly);
       setStopSignal(editing.stop_signal || "SIGTERM");
       setStopTimeoutMs(editing.stop_timeout_ms ?? 5000);
+      setStopCommand(editing.stop_command ?? "");
       setEnvOverrides(
         Object.entries(editing.env_overrides ?? {}).map(([key, value]) => ({ key, value })),
       );
@@ -84,6 +86,7 @@ export function CommandForm({
       setReadonly(false);
       setStopSignal("SIGTERM");
       setStopTimeoutMs(5000);
+      setStopCommand("");
       setEnvOverrides([]);
       setHealthcheck(DEFAULT_HEALTHCHECK);
     }
@@ -115,6 +118,7 @@ export function CommandForm({
       readonly,
       stop_signal: stopSignal,
       stop_timeout_ms: stopTimeoutMs,
+      stop_command: stopCommand.trim() || undefined,
       healthcheck: healthcheck.type === "none" ? undefined : healthcheck,
     };
 
@@ -198,6 +202,15 @@ export function CommandForm({
             min={0}
           />
         </Group>
+        <Textarea
+          label="Stop command (optional)"
+          description="Run this command before sending the stop signal. If omitted, the signal is sent directly."
+          placeholder="docker compose stop web"
+          value={stopCommand}
+          onChange={(e) => setStopCommand(e.currentTarget.value)}
+          autosize
+          minRows={1}
+        />
 
         <Switch
           label="Read-only (cannot be started/stopped from the UI)"

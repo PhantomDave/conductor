@@ -34,6 +34,7 @@ export interface CommandInfo {
   readonly: boolean;
   stop_signal: string;
   stop_timeout_ms: number;
+  stop_command?: string;
   healthcheck?: HealthcheckInfo;
 }
 

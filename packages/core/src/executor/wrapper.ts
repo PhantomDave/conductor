@@ -129,11 +129,17 @@ export class ProcessWrapper {
       : resolvePath(this.env.BASE_PATH ?? process.cwd(), interpolatedCwd);
 
     let cmd: string[];
-    if (this.commandConfig.shell) {
+    // A command containing newlines is always multi-statement and must run
+    // through a shell regardless of the explicit `shell` setting, because
+    // there is no way to exec multiple commands in a single process otherwise.
+    const useShell = this.commandConfig.shell || this.commandConfig.run.includes("\n");
+    if (useShell) {
       const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
       cmd = [bin, flag, this.commandConfig.run];
     } else {
-      cmd = this.commandConfig.run.split(" ");
+      // Split on any run of whitespace so leading/trailing spaces and tabs
+      // don't produce empty tokens.
+      cmd = this.commandConfig.run.trim().split(/\s+/);
     }
 
     const subprocess = spawn({
