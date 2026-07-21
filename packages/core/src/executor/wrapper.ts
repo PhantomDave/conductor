@@ -192,8 +192,10 @@ export class ProcessWrapper {
   }
 
   /**
-   * Gracefully stops the process: sends stop_signal, waits up to
-   * stop_timeout_ms, then force-kills with SIGKILL.
+   * Gracefully stops the process: if `stop_command` is configured, runs
+   * that command first (giving the process a chance to shut down cleanly).
+   * Otherwise sends stop_signal directly. In both cases, if the process
+   * has not exited within stop_timeout_ms, it is force-killed with SIGKILL.
    */
   async stop(): Promise<void> {
     if (!this.process || this.process.status !== "running") return;
@@ -201,12 +203,66 @@ export class ProcessWrapper {
     this.process.status = "stopping";
     const { subprocess } = this.process;
     const timeoutMs = this.commandConfig.stop_timeout_ms;
+    const startedAt = Date.now();
 
-    subprocess.kill(this.commandConfig.stop_signal as NodeJS.Signals);
+    if (this.commandConfig.stop_command) {
+      try {
+        const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
+        // Resolve cwd the same way the main process does so that relative
+        // stop commands (e.g. `docker-compose stop`) run from the correct dir.
+        const interpolatedCwd = interpolateString(this.commandConfig.cwd, this.env);
+        const cwd = isAbsolute(interpolatedCwd)
+          ? interpolatedCwd
+          : resolvePath(this.env.BASE_PATH ?? process.cwd(), interpolatedCwd);
+        const stopProc = spawn({
+          cmd: [bin, flag, this.commandConfig.stop_command],
+          cwd,
+          env: this.env,
+          stdout: "inherit",
+          stderr: "inherit",
+        });
+        // Give the stop command the same deadline as the overall stop timeout.
+        // If it hangs, kill it and fall through to the SIGKILL path for the main process.
+        const stopResult = await Promise.race([
+          stopProc.exited.then((code) => ({ timedOut: false as const, code })),
+          new Promise<{ timedOut: true }>((resolve) =>
+            setTimeout(() => resolve({ timedOut: true }), timeoutMs),
+          ),
+        ]);
+        if (stopResult.timedOut) {
+          this.emitLog(`stop_command timed out after ${timeoutMs}ms`, "stderr");
+          try {
+            stopProc.kill("SIGKILL");
+          } catch {
+            // Best-effort: the stop process may have already exited.
+          }
+        } else if (stopResult.code !== 0) {
+          this.emitLog(`stop_command exited with code ${stopResult.code}`, "stderr");
+        }
+      } catch (err) {
+        // If the stop command itself fails, log and fall through to the SIGKILL path.
+        this.emitLog(
+          `stop_command failed: ${err instanceof Error ? err.message : String(err)}`,
+          "stderr",
+        );
+      }
+    } else {
+      subprocess.kill(this.commandConfig.stop_signal as NodeJS.Signals);
+    }
+
+    // Use only the remaining time budget so total shutdown stays within stop_timeout_ms.
+    const remainingMs = Math.max(0, timeoutMs - (Date.now() - startedAt));
+
+    // If the budget is exhausted (e.g. stop_command consumed all of it), SIGKILL immediately.
+    if (remainingMs === 0) {
+      subprocess.kill("SIGKILL");
+      await subprocess.exited;
+      return;
+    }
 
     const exitedInTime = await Promise.race([
       subprocess.exited.then(() => true),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeoutMs)),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), remainingMs)),
     ]);
 
     if (!exitedInTime) {

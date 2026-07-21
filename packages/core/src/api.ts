@@ -34,6 +34,7 @@ const CommandInputSchema = z.object({
   readonly: z.boolean().optional(),
   stop_signal: z.string().optional(),
   stop_timeout_ms: z.number().optional(),
+  stop_command: z.string().min(1).optional(),
   healthcheck: HealthcheckSchema.optional(),
 });
 
