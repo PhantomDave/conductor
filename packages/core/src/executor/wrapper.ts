@@ -203,6 +203,7 @@ export class ProcessWrapper {
     this.process.status = "stopping";
     const { subprocess } = this.process;
     const timeoutMs = this.commandConfig.stop_timeout_ms;
+    const startedAt = Date.now();
 
     if (this.commandConfig.stop_command) {
       try {
@@ -214,14 +215,21 @@ export class ProcessWrapper {
           stderr: "inherit",
         });
         // Give the stop command the same deadline as the overall stop timeout.
-        // If it hangs, we fall through and SIGKILL the main process anyway.
-        await new Promise<void>((resolve) => {
-          const timerId = setTimeout(resolve, timeoutMs);
+        // If it hangs, kill it and fall through to the SIGKILL path for the main process.
+        const stopCompleted = await new Promise<boolean>((resolve) => {
+          const timerId = setTimeout(() => resolve(false), timeoutMs);
           stopProc.exited.then(() => {
             clearTimeout(timerId);
-            resolve();
+            resolve(true);
           });
         });
+        if (!stopCompleted) {
+          try {
+            stopProc.kill("SIGKILL");
+          } catch {
+            // Best-effort: the stop process may have already exited.
+          }
+        }
       } catch (err) {
         // If the stop command itself fails, log and fall through to the SIGKILL path.
         this.emitLog(
@@ -233,8 +241,10 @@ export class ProcessWrapper {
       subprocess.kill(this.commandConfig.stop_signal as NodeJS.Signals);
     }
 
+    // Use only the remaining time budget so total shutdown stays within stop_timeout_ms.
+    const remainingMs = Math.max(0, timeoutMs - (Date.now() - startedAt));
     const exitedInTime = await new Promise<boolean>((resolve) => {
-      const timerId = setTimeout(() => resolve(false), timeoutMs);
+      const timerId = setTimeout(() => resolve(false), remainingMs);
       subprocess.exited.then(() => {
         clearTimeout(timerId);
         resolve(true);
