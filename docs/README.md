@@ -13,6 +13,7 @@ Welcome to Conductor! This folder contains guides, examples, and references for 
 ## Documentation Index
 
 ### Guides
+
 - [Examples & Common Patterns](./guides/README.md) — Real-world configurations
   - [Example 1: Full-Stack App](./guides/examples/01-basic-fullstack.md)
   - [Example 2: Microservices](./guides/examples/02-microservices.md)
@@ -21,6 +22,7 @@ Welcome to Conductor! This folder contains guides, examples, and references for 
 - [Troubleshooting Guide](./TROUBLESHOOTING.md) (coming soon)
 
 ### API Reference
+
 - [HTTP API](./API.md) (coming soon)
 - [CLI Commands](./CLI.md) (coming soon)
 
@@ -44,7 +46,7 @@ Services start in order. Dependents wait for dependencies to be healthy:
   run: postgres
 - id: api
   run: node server.js
-  deps: [db]    # api only starts after db is healthy
+  deps: [db] # api only starts after db is healthy
 ```
 
 ### Health Checks
@@ -66,15 +68,15 @@ Verify services are actually ready before starting dependents:
 
 ## Common Tasks
 
-| Task | Command |
-|------|---------|
-| Start everything | `conductor run dev` |
-| Tail all logs | `conductor logs --follow` |
-| Check what's running | `conductor ps` |
-| Restart one service | `conductor restart api` |
-| Stop everything | `conductor stop all` |
-| View config | `conductor config` |
-| Validate config | `conductor config validate` |
+| Task                 | Command                     |
+| -------------------- | --------------------------- |
+| Start everything     | `conductor run dev`         |
+| Tail all logs        | `conductor logs --follow`   |
+| Check what's running | `conductor ps`              |
+| Restart one service  | `conductor restart api`     |
+| Stop everything      | `conductor stop all`        |
+| View config          | `conductor config`          |
+| Validate config      | `conductor config validate` |
 
 ## Troubleshooting
 

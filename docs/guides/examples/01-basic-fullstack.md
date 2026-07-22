@@ -1,6 +1,7 @@
 # Example 1: Basic Full-Stack Application
 
 This example shows a typical Node.js full-stack application with:
+
 - PostgreSQL database
 - Express API server
 - React frontend
@@ -94,6 +95,7 @@ conductor ps
 3. **Frontend starts third** — Only after the API is healthy, Conductor starts the frontend and waits for the root URL to respond
 
 If any step fails:
+
 - If postgres fails, the API and web never start
 - If the API fails to become healthy, the web never starts
 - If the web fails, you'll see an error but postgres and api stay running (for debugging)
@@ -101,12 +103,15 @@ If any step fails:
 ## Tips
 
 **Want to restart just the API?**
+
 ```bash
 conductor restart api
 ```
+
 The database and frontend stay running. When the API restarts, Conductor waits for its health check again.
 
 **Want to see what went wrong?**
+
 ```bash
 conductor logs --follow   # tail all services
 conductor logs api        # just the API
@@ -114,12 +119,14 @@ conductor logs api        # just the API
 
 **Want to kill a stuck service?**
 The `stop` command sends SIGTERM and waits 5 seconds; if the process doesn't exit, Conductor sends SIGKILL:
+
 ```bash
 conductor stop api
 ```
 
-**Custom database?** 
+**Custom database?**
 Change the `run` command and health check type. For example, with MySQL:
+
 ```yaml
 - id: mysql
   run: docker-compose up mysql
@@ -130,10 +137,11 @@ Change the `run` command and health check type. For example, with MySQL:
 
 **Remote database?**
 Use the `command` health check to verify connectivity:
+
 ```yaml
 - id: external-db
   name: "External PostgreSQL"
-  run: echo "waiting for external DB"  # fire-and-forget
+  run: echo "waiting for external DB" # fire-and-forget
   healthcheck:
     type: command
     command: "pg_isready -h db.example.com -p 5432"

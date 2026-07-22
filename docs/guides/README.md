@@ -7,6 +7,7 @@ This folder contains practical examples and guides for using Conductor in variou
 ### [Example 1: Basic Full-Stack Application](./examples/01-basic-fullstack.md)
 
 A simple 3-tier application:
+
 - PostgreSQL database
 - Express API server
 - React frontend
@@ -14,6 +15,7 @@ A simple 3-tier application:
 **Good for:** Learning the basics, simple projects, portfolios
 
 **Key concepts:**
+
 - Dependency declaration (`deps`)
 - Health checks (port, HTTP, command)
 - Process lifecycle (start, health, stop)
@@ -23,6 +25,7 @@ A simple 3-tier application:
 ### [Example 2: Microservices with Docker Compose](./examples/02-microservices.md)
 
 A realistic microservices platform:
+
 - Message broker & cache (infrastructure)
 - Multiple microservices with interdependencies
 - API Gateway as orchestration point
@@ -30,6 +33,7 @@ A realistic microservices platform:
 **Good for:** Modern architectures, production-like setups, Docker workflows
 
 **Key concepts:**
+
 - Complex dependency graphs
 - Docker Compose integration
 - Custom stop commands
@@ -47,35 +51,36 @@ A realistic microservices platform:
 
 - id: service-b
   run: ./start-b.sh
-  deps: [service-a]  # B only starts after A is healthy
+  deps: [service-a] # B only starts after A is healthy
 
 - id: service-c
   run: ./start-c.sh
-  deps: [service-a, service-b]  # C waits for both A and B
+  deps: [service-a, service-b] # C waits for both A and B
 ```
 
 ### Health Checks
 
 Choose the right type for your service:
 
-| Type | Good For | Example |
-|------|----------|---------|
-| `port` | TCP services, databases | PostgreSQL, Redis, MongoDB |
-| `http` | Web servers, APIs | Express, FastAPI, Go servers |
+| Type      | Good For                   | Example                           |
+| --------- | -------------------------- | --------------------------------- |
+| `port`    | TCP services, databases    | PostgreSQL, Redis, MongoDB        |
+| `http`    | Web servers, APIs          | Express, FastAPI, Go servers      |
 | `command` | Anything with a shell test | Custom scripts, docker exec, curl |
-| `none` | Fire-and-forget scripts | Migrations, setup jobs |
+| `none`    | Fire-and-forget scripts    | Migrations, setup jobs            |
 
 ### Graceful Shutdown
 
 ```yaml
 - id: api
   run: npm run dev
-  stop_signal: SIGTERM         # or SIGINT, SIGKILL, etc.
-  stop_timeout_ms: 5000        # wait 5 seconds
-  stop_command: npm run stop   # optional: run cleanup script first
+  stop_signal: SIGTERM # or SIGINT, SIGKILL, etc.
+  stop_timeout_ms: 5000 # wait 5 seconds
+  stop_command: npm run stop # optional: run cleanup script first
 ```
 
 The sequence is:
+
 1. Run `stop_command` if configured (with the same timeout budget)
 2. Send `stop_signal` to the process
 3. Wait up to `stop_timeout_ms`
@@ -105,6 +110,7 @@ conductor logs api web         # multiple services
 ### Environment Variables
 
 Define at the profile level:
+
 ```yaml
 profiles:
   dev:
@@ -113,15 +119,16 @@ profiles:
       DEBUG: "myapp:*"
     commands:
       - id: app
-        run: npm run dev  # inherits NODE_ENV and DEBUG
+        run: npm run dev # inherits NODE_ENV and DEBUG
 ```
 
 Or override per-command:
+
 ```yaml
 - id: app
   run: npm run dev
   env_overrides:
-    NODE_ENV: staging  # overrides profile-level NODE_ENV
+    NODE_ENV: staging # overrides profile-level NODE_ENV
 ```
 
 ### Fire-and-Forget Scripts
@@ -133,7 +140,7 @@ Some services should run once and exit (e.g., database migrations):
   name: "Database Migration"
   run: npm run migrate
   healthcheck:
-    type: none  # don't wait for anything; exit is success
+    type: none # don't wait for anything; exit is success
 ```
 
 Exit code 0 = success (dependent services start)
@@ -187,6 +194,7 @@ conductor ps
 ```
 
 Status meanings:
+
 - **running** — process spawned, health unknown or not yet checked
 - **healthy** — health check passed
 - **stopped** — exited gracefully (code 0)
@@ -195,11 +203,13 @@ Status meanings:
 ### Why Won't My Service Start?
 
 1. Check if a dependency failed:
+
    ```bash
    conductor ps
    ```
 
 2. View logs to see the error:
+
    ```bash
    conductor logs --follow
    ```
@@ -219,12 +229,13 @@ If a health check times out, increase timeout or check manually:
   healthcheck:
     type: http
     url: "http://localhost:3001/health"
-    timeout_ms: 60000  # give it 60 seconds to be ready
-    interval_ms: 1000  # check every 1 second
-    retries: 60        # retry 60 times
+    timeout_ms: 60000 # give it 60 seconds to be ready
+    interval_ms: 1000 # check every 1 second
+    retries: 60 # retry 60 times
 ```
 
 Or test the endpoint yourself:
+
 ```bash
 curl http://localhost:3001/health
 ```

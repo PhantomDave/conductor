@@ -181,6 +181,7 @@ mongo ──┘
 ```
 
 This shows the order services start:
+
 1. **Layer 0** (no deps): redis, rabbitmq, postgres, mongo
 2. **Layer 1** (infra ready): auth-service, api-service, worker-service
 3. **Layer 2** (services ready): gateway
@@ -198,6 +199,7 @@ If your `docker-compose.yml` uses profiles, you can start a subset:
 ```
 
 Then:
+
 ```bash
 conductor run dev      # runs all
 conductor run core     # just the infrastructure
@@ -216,6 +218,7 @@ docker-compose down -v
 ## Troubleshooting
 
 **Health check keeps failing?**
+
 ```bash
 conductor logs rabbitmq    # see why it's not healthy
 docker-compose ps          # verify it's actually running
@@ -223,6 +226,7 @@ docker-compose logs rabbitmq  # see service logs
 ```
 
 **Dependent service stuck?**
+
 ```bash
 # Force kill it (sends SIGKILL immediately after 5 seconds)
 conductor stop api-service
@@ -233,7 +237,8 @@ conductor restart api-service
 
 **Want faster startup/shutdown?**
 Edit `.conductor.yml` and change `stop_timeout_ms`:
+
 ```yaml
 - id: my-service
-  stop_timeout_ms: 2000    # 2 seconds instead of 5
+  stop_timeout_ms: 2000 # 2 seconds instead of 5
 ```

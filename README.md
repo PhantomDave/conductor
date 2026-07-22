@@ -116,17 +116,18 @@ commands:
   - id: api
     name: "API Server"
     run: npm run dev
-    deps: [postgres]        # waits for postgres to be healthy
+    deps: [postgres] # waits for postgres to be healthy
     cwd: ./api
 
   - id: web
     name: "Frontend"
     run: npm run dev
-    deps: [api]             # waits for api to be healthy
+    deps: [api] # waits for api to be healthy
     cwd: ./web
 ```
 
 **Key behaviors:**
+
 - Services with unmet dependencies won't start — they'll error immediately
 - Exit code 0 counts as success (even for fire-and-forget scripts)
 - Services are polled every 100ms; if a dependency fails, dependents fail too
@@ -141,10 +142,10 @@ By default, Conductor waits for a process to spawn. Use `healthcheck` to wait fo
   name: "PostgreSQL"
   run: docker-compose up postgres
   healthcheck:
-    type: port          # wait for port 5432 to accept connections
+    type: port # wait for port 5432 to accept connections
     port: 5432
-    interval_ms: 1000   # probe every 1 second
-    retries: 30         # try for ~30 seconds
+    interval_ms: 1000 # probe every 1 second
+    retries: 30 # try for ~30 seconds
     timeout_ms: 30000
 
 - id: api
@@ -152,19 +153,21 @@ By default, Conductor waits for a process to spawn. Use `healthcheck` to wait fo
   run: npm run dev
   deps: [db]
   healthcheck:
-    type: http          # wait for HTTP 2xx/3xx response
+    type: http # wait for HTTP 2xx/3xx response
     url: "http://localhost:3000/health"
     interval_ms: 500
     retries: 30
 ```
 
 **Health check types:**
+
 - `port` — TCP connection succeeds
 - `http` — HTTP endpoint responds with status < 500
 - `command` — shell command exits with code 0
 - `none` (default) — just wait for process to spawn
 
 **Status display** (`conductor ps` and the dashboard):
+
 - **Running** — process is active
 - **Healthy** — process has passed its health check
 - **Stopped** — process exited gracefully (code 0)
@@ -181,8 +184,8 @@ By default, Conductor sends `SIGTERM` and waits 5 seconds for graceful shutdown:
 ```yaml
 - id: api
   run: npm run dev
-  stop_signal: SIGTERM       # default
-  stop_timeout_ms: 5000      # wait 5 seconds, then force-kill
+  stop_signal: SIGTERM # default
+  stop_timeout_ms: 5000 # wait 5 seconds, then force-kill
 ```
 
 If the process doesn't exit in time, Conductor sends `SIGKILL` to force termination.
@@ -194,7 +197,7 @@ For complex services (e.g., Docker Compose), use `stop_command`:
 ```yaml
 - id: services
   run: docker-compose up
-  stop_command: docker-compose down   # runs this to shut down cleanly
+  stop_command: docker-compose down # runs this to shut down cleanly
   stop_timeout_ms: 5000
 ```
 
