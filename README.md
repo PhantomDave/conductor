@@ -27,7 +27,8 @@ conductor run dev
 ```
 
 - ✅ Works with **any tech stack** — Node.js, .NET, Python, Docker, whatever you run
-- ✅ **Dependency-aware** — start services in the right order automatically
+- ✅ **Dependency-aware** — start services in the right order, waits for health checks to pass
+- ✅ **Smart process management** — distinguishes between running and healthy; graceful stop with SIGKILL fallback
 - ✅ **Live dashboard** — logs, CPU/memory, process status in your browser
 - ✅ **Secret-safe** — sensitive env vars are masked in logs by default
 - ✅ **Cross-platform** — Linux, macOS, and Windows, all first-class
@@ -94,6 +95,110 @@ Then:
 conductor run dev          # starts db → api → web, in order
 conductor logs --follow    # tail everything in real-time
 conductor ps                # see what's running
+```
+
+---
+
+## Dependency Management & Health Checks
+
+Conductor ensures services start in the correct order and only when their dependencies are ready:
+
+### Dependency Resolution
+
+Use the `deps` field to declare which services must start before a command runs:
+
+```yaml
+commands:
+  - id: postgres
+    name: "PostgreSQL Database"
+    run: docker-compose up -d postgres
+
+  - id: api
+    name: "API Server"
+    run: npm run dev
+    deps: [postgres] # waits for postgres to be healthy
+    cwd: ./api
+
+  - id: web
+    name: "Frontend"
+    run: npm run dev
+    deps: [api] # waits for api to be healthy
+    cwd: ./web
+```
+
+**Key behaviors:**
+
+- Services with unmet dependencies won't start — they'll error immediately
+- Exit code 0 counts as success (even for fire-and-forget scripts)
+- Services are polled every 100ms; if a dependency fails, dependents fail too
+- If a dependency never becomes ready within 60 seconds, the start fails
+
+### Health Checks
+
+By default, Conductor waits for a process to spawn. Use `healthcheck` to wait for actual readiness:
+
+```yaml
+- id: db
+  name: "PostgreSQL"
+  run: docker-compose up postgres
+  healthcheck:
+    type: port # wait for port 5432 to accept connections
+    port: 5432
+    interval_ms: 1000 # probe every 1 second
+    retries: 30 # try for ~30 seconds
+    timeout_ms: 30000
+
+- id: api
+  name: "API Server"
+  run: npm run dev
+  deps: [db]
+  healthcheck:
+    type: http # wait for HTTP 2xx/3xx response
+    url: "http://localhost:3000/health"
+    interval_ms: 500
+    retries: 30
+```
+
+**Health check types:**
+
+- `port` — TCP connection succeeds
+- `http` — HTTP endpoint responds with status < 500
+- `command` — shell command exits with code 0
+- `none` (default) — just wait for process to spawn
+
+**Status display** (`conductor ps` and the dashboard):
+
+- **Running** — process is active
+- **Healthy** — process has passed its health check
+- **Stopped** — process exited gracefully (code 0)
+- **Failed** — process exited with error (code ≠ 0)
+
+---
+
+## Process Lifecycle
+
+### Graceful Shutdown
+
+By default, Conductor sends `SIGTERM` and waits 5 seconds for graceful shutdown:
+
+```yaml
+- id: api
+  run: npm run dev
+  stop_signal: SIGTERM # default
+  stop_timeout_ms: 5000 # wait 5 seconds, then force-kill
+```
+
+If the process doesn't exit in time, Conductor sends `SIGKILL` to force termination.
+
+### Custom Stop Commands
+
+For complex services (e.g., Docker Compose), use `stop_command`:
+
+```yaml
+- id: services
+  run: docker-compose up
+  stop_command: docker-compose down # runs this to shut down cleanly
+  stop_timeout_ms: 5000
 ```
 
 ---

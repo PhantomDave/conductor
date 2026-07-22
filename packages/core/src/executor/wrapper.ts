@@ -5,12 +5,14 @@ import { interpolateString } from "../env/masker";
 import { resolveShell } from "./shell";
 
 export type ProcessStatus = "starting" | "running" | "stopping" | "stopped" | "failed";
+export type HealthStatus = "unknown" | "healthy" | "unhealthy";
 
 export interface ManagedProcess {
   commandId: string;
   profile: string;
   pid: number;
   status: ProcessStatus;
+  health: HealthStatus;
   startedAt: Date;
   endedAt?: Date;
   exitCode?: number;
@@ -27,6 +29,7 @@ export interface ProcessSnapshot {
   profile: string;
   pid: number;
   status: ProcessStatus;
+  health: HealthStatus;
   startedAt: string;
   endedAt?: string;
   exitCode?: number;
@@ -88,6 +91,10 @@ export class ProcessWrapper {
     return this.process?.status ?? "stopped";
   }
 
+  get health(): HealthStatus {
+    return this.process?.health ?? "unknown";
+  }
+
   get pid(): number | undefined {
     return this.process?.pid;
   }
@@ -105,6 +112,7 @@ export class ProcessWrapper {
       profile: this.process.profile,
       pid: this.process.pid,
       status: this.process.status,
+      health: this.process.health,
       startedAt: this.process.startedAt.toISOString(),
       endedAt: this.process.endedAt?.toISOString(),
       exitCode: this.process.exitCode,
@@ -155,6 +163,7 @@ export class ProcessWrapper {
       profile: this.profile,
       pid: subprocess.pid,
       status: "running",
+      health: "unknown",
       startedAt: new Date(),
       subprocess,
     };

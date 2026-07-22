@@ -29,6 +29,77 @@ export class SpawnQueue {
   }
 
   /**
+   * Checks if a dependency is ready: either still running,
+   * or completed successfully (exit code 0). Throws if the dependency
+   * failed (exit code !== 0).
+   */
+  private isDependencyReady(depId: string): boolean {
+    const wrapper = this.wrappers.get(depId);
+    if (!wrapper) return false;
+
+    const status = wrapper.status;
+    // Still running - good
+    if (status === "running") {
+      return true;
+    }
+    // Stopped gracefully (exit code 0) - success
+    if (status === "stopped") {
+      return true;
+    }
+    // Failed or stopping - not ready
+    return false;
+  }
+
+  /**
+   * Waits for a dependency to become ready: either still running,
+   * or complete with exit code 0. Throws if the dependency fails.
+   */
+  private async waitForDependency(depId: string): Promise<void> {
+    const wrapper = this.wrappers.get(depId);
+    if (!wrapper) return;
+
+    // Poll every 100ms until the dependency is ready or failed
+    const startTime = Date.now();
+    const maxWaitMs = 60000; // 60 second timeout for dependencies
+
+    while (Date.now() - startTime < maxWaitMs) {
+      const status = wrapper.status;
+
+      // Still running - good
+      if (status === "running") {
+        return;
+      }
+
+      // Stopped successfully - good
+      if (status === "stopped") {
+        return;
+      }
+
+      // Failed - throw
+      if (status === "failed") {
+        throw new Error(
+          `Dependency "${depId}" failed with exit code ${wrapper.getSnapshot()?.exitCode ?? "?"}`,
+        );
+      }
+
+      // Still starting or stopping - wait a bit more
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    throw new Error(`Dependency "${depId}" did not become ready within ${maxWaitMs}ms`);
+  }
+
+  /**
+   * Marks a wrapper as healthy after successful healthcheck.
+   */
+  private markHealthy(wrapper: ProcessWrapper): void {
+    const internal = wrapper as any;
+    if (internal.process) {
+      internal.process.health = "healthy";
+    }
+  }
+
+  /**
    * Returns commands ordered so that dependencies always start before
    * the commands that depend on them. Throws on circular dependencies.
    */
@@ -76,9 +147,10 @@ export class SpawnQueue {
       const env = this.resolveEnv(cmd);
       const wrapper = new ProcessWrapper(cmd, this.profile, env);
       if (onLog) wrapper.onLog(onLog);
-      this.wrappers.set(cmd.id, wrapper);
+      (this.wrappers as any).set(cmd.id, wrapper);
       await wrapper.start();
       await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env);
+      this.markHealthy(wrapper);
     }
   }
 
@@ -91,16 +163,20 @@ export class SpawnQueue {
     // Dependencies are started (and awaited-healthy) first so a single
     // command can be launched without manually starting its whole chain.
     for (const depId of cmd.deps) {
-      if (this.wrappers.get(depId)?.status === "running") continue;
-      await this.startOne(depId, onLog);
+      if (!this.isDependencyReady(depId)) {
+        await this.startOne(depId, onLog);
+      }
+      // Wait for the dependency to reach a stable state (running or stopped successfully)
+      await this.waitForDependency(depId);
     }
 
     const env = this.resolveEnv(cmd);
     const wrapper = new ProcessWrapper(cmd, this.profile, env);
     if (onLog) wrapper.onLog(onLog);
-    this.wrappers.set(cmd.id, wrapper);
+    (this.wrappers as any).set(cmd.id, wrapper);
     await wrapper.start();
     await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env);
+    this.markHealthy(wrapper);
   }
 
   /**
@@ -121,7 +197,7 @@ export class SpawnQueue {
   }
 
   async stopOne(commandId: string): Promise<void> {
-    const wrapper = this.wrappers.get(commandId);
+    const wrapper = (this.wrappers as any).get(commandId);
     if (wrapper) await wrapper.stop();
   }
 
