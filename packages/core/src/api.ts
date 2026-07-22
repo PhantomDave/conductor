@@ -12,6 +12,7 @@ import type { LogHandler } from "./executor/wrapper";
 import { HealthcheckSchema } from "./config/schema";
 import { ConfigError } from "./config/loader";
 import { listAvailableShells } from "./executor/shell";
+import { parseDockerCompose } from "./docker-compose/parser";
 
 export interface ApiDependencies {
   logger: ConductorLogger;
@@ -219,6 +220,46 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     }
   });
 
+  // --- Config export (download .conductor.yml) ----------------------------
+
+  app.get("/api/config/export", async () => {
+    const config = deps.store.getConfig();
+    const yamlText = yaml.dump(config, {
+      indent: 2,
+      lineWidth: 100,
+      noRefs: true,
+    });
+    deps.queries.insertAuditEntry("export-config", config.name ?? "(unnamed)");
+    return { yaml: yamlText };
+  });
+
+  // --- docker compose parsing and extraction --------------------------------
+
+  const DockerComposeParseSchema = z.object({
+    yaml: z.string().min(1),
+  });
+
+  app.post<{ Body: unknown }>("/api/docker compose/parse", async (request, reply) => {
+    const parsed = DockerComposeParseSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+    }
+
+    try {
+      const raw = yaml.load(parsed.data.yaml);
+      const commands = parseDockerCompose(raw);
+      deps.queries.insertAuditEntry(
+        "parse-docker compose",
+        `${commands.length} service(s) found`,
+      );
+      return { commands };
+    } catch (err) {
+      return reply.status(400).send({ error: `Failed to parse YAML: ${(err as Error).message}` });
+    }
+  });
+
   // --- Profiles & commands (write, persisted to .conductor.yml) ---------
 
   app.post<{ Body: { name: string; description?: string } }>(
@@ -301,6 +342,62 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
           `${request.params.profile}/${request.params.id}`,
         );
         return { removed: true };
+      } catch (err) {
+        return handleConfigError(err, reply);
+      }
+    },
+  );
+
+  // --- Command duplicate ---------------------------------------------------
+
+  app.post<{ Params: { profile: string; id: string }; Body: unknown }>(
+    "/api/profiles/:profile/commands/:id/duplicate",
+    async (request, reply) => {
+      const body = z.object({ targetProfile: z.string().min(1) }).safeParse(request.body);
+      if (!body.success) {
+        return reply
+          .status(400)
+          .send({ error: body.error.issues[0]?.message ?? "Invalid request" });
+      }
+      try {
+        const command = deps.store.duplicateCommand(
+          request.params.profile,
+          request.params.id,
+          body.data.targetProfile,
+        );
+        deps.queries.insertAuditEntry(
+          "duplicate-command",
+          `${request.params.profile}/${request.params.id} -> ${body.data.targetProfile}/${command.id}`,
+        );
+        return { command };
+      } catch (err) {
+        return handleConfigError(err, reply);
+      }
+    },
+  );
+
+  // --- Command move --------------------------------------------------------
+
+  app.post<{ Params: { profile: string; id: string }; Body: unknown }>(
+    "/api/profiles/:profile/commands/:id/move",
+    async (request, reply) => {
+      const body = z.object({ targetProfile: z.string().min(1) }).safeParse(request.body);
+      if (!body.success) {
+        return reply
+          .status(400)
+          .send({ error: body.error.issues[0]?.message ?? "Invalid request" });
+      }
+      try {
+        const command = deps.store.moveCommand(
+          request.params.profile,
+          request.params.id,
+          body.data.targetProfile,
+        );
+        deps.queries.insertAuditEntry(
+          "move-command",
+          `${request.params.profile}/${request.params.id} -> ${body.data.targetProfile}`,
+        );
+        return { command };
       } catch (err) {
         return handleConfigError(err, reply);
       }

@@ -22,57 +22,57 @@ profiles:
       # Core infrastructure: message broker and cache
       - id: redis
         name: "Redis Cache"
-        run: docker-compose up -d redis
+        run: docker compose up -d redis
         healthcheck:
           type: command
-          command: "docker-compose exec -T redis redis-cli ping | grep -q PONG"
+          command: "docker compose exec -T redis redis-cli ping | grep -q PONG"
           interval_ms: 1000
           timeout_ms: 30000
           retries: 30
-        stop_command: docker-compose stop redis
+        stop_command: docker compose stop redis
         stop_timeout_ms: 5000
 
       - id: rabbitmq
         name: "RabbitMQ Message Broker"
-        run: docker-compose up -d rabbitmq
+        run: docker compose up -d rabbitmq
         healthcheck:
           type: port
           port: 5672
           interval_ms: 1000
           timeout_ms: 30000
           retries: 30
-        stop_command: docker-compose stop rabbitmq
+        stop_command: docker compose stop rabbitmq
         stop_timeout_ms: 5000
 
       # Database services (can start in parallel, no deps)
       - id: postgres
         name: "PostgreSQL Database"
-        run: docker-compose up -d postgres
+        run: docker compose up -d postgres
         healthcheck:
           type: command
-          command: "docker-compose exec -T postgres pg_isready -U postgres"
+          command: "docker compose exec -T postgres pg_isready -U postgres"
           interval_ms: 1000
           timeout_ms: 30000
           retries: 30
-        stop_command: docker-compose stop postgres
+        stop_command: docker compose stop postgres
         stop_timeout_ms: 5000
 
       - id: mongo
         name: "MongoDB"
-        run: docker-compose up -d mongo
+        run: docker compose up -d mongo
         healthcheck:
           type: port
           port: 27017
           interval_ms: 1000
           timeout_ms: 30000
           retries: 30
-        stop_command: docker-compose stop mongo
+        stop_command: docker compose stop mongo
         stop_timeout_ms: 5000
 
       # Microservices (all depend on infrastructure)
       - id: auth-service
         name: "Auth Service"
-        run: docker-compose up -d auth-service
+        run: docker compose up -d auth-service
         deps: [redis, rabbitmq, postgres]
         healthcheck:
           type: http
@@ -80,12 +80,12 @@ profiles:
           interval_ms: 500
           timeout_ms: 30000
           retries: 30
-        stop_command: docker-compose stop auth-service
+        stop_command: docker compose stop auth-service
         stop_timeout_ms: 5000
 
       - id: api-service
         name: "API Service"
-        run: docker-compose up -d api-service
+        run: docker compose up -d api-service
         deps: [redis, rabbitmq, postgres, auth-service]
         healthcheck:
           type: http
@@ -93,26 +93,26 @@ profiles:
           interval_ms: 500
           timeout_ms: 30000
           retries: 30
-        stop_command: docker-compose stop api-service
+        stop_command: docker compose stop api-service
         stop_timeout_ms: 5000
 
       - id: worker-service
         name: "Background Worker"
-        run: docker-compose up -d worker-service
+        run: docker compose up -d worker-service
         deps: [redis, rabbitmq, mongo]
         healthcheck:
           type: command
-          command: "docker-compose exec -T worker-service curl -s http://localhost:3003/health || false"
+          command: "docker compose exec -T worker-service curl -s http://localhost:3003/health || false"
           interval_ms: 500
           timeout_ms: 30000
           retries: 30
-        stop_command: docker-compose stop worker-service
+        stop_command: docker compose stop worker-service
         stop_timeout_ms: 5000
 
       # API Gateway (depends on all services)
       - id: gateway
         name: "API Gateway"
-        run: docker-compose up -d gateway
+        run: docker compose up -d gateway
         deps: [auth-service, api-service, worker-service]
         healthcheck:
           type: http
@@ -120,7 +120,7 @@ profiles:
           interval_ms: 500
           timeout_ms: 30000
           retries: 30
-        stop_command: docker-compose stop gateway
+        stop_command: docker compose stop gateway
         stop_timeout_ms: 5000
 ```
 
@@ -129,7 +129,7 @@ profiles:
 ```
 project/
 ├── .conductor.yml
-├── docker-compose.yml
+├── docker compose.yml
 ├── services/
 │   ├── auth/
 │   │   ├── Dockerfile
@@ -188,13 +188,13 @@ This shows the order services start:
 
 ## Advanced: Custom Compose Profiles
 
-If your `docker-compose.yml` uses profiles, you can start a subset:
+If your `docker compose.yml` uses profiles, you can start a subset:
 
 ```yaml
 - id: core-only
   name: "Run Core Services Only"
-  run: docker-compose --profile core up -d
-  stop_command: docker-compose --profile core down
+  run: docker compose --profile core up -d
+  stop_command: docker compose --profile core down
   stop_timeout_ms: 5000
 ```
 
@@ -211,8 +211,8 @@ conductor run core     # just the infrastructure
 # Stop everything (Conductor waits 5 seconds per service, then SIGKILL)
 conductor stop all
 
-# Stop and remove containers (optional docker-compose cleanup)
-docker-compose down -v
+# Stop and remove containers (optional docker compose cleanup)
+docker compose down -v
 ```
 
 ## Troubleshooting
@@ -221,8 +221,8 @@ docker-compose down -v
 
 ```bash
 conductor logs rabbitmq    # see why it's not healthy
-docker-compose ps          # verify it's actually running
-docker-compose logs rabbitmq  # see service logs
+docker compose ps          # verify it's actually running
+docker compose logs rabbitmq  # see service logs
 ```
 
 **Dependent service stuck?**
