@@ -292,7 +292,7 @@ export function CommandLibrary() {
                             <Menu.Item
                               leftSection={<IconTrash size={14} />}
                               color="red"
-                              loading={
+                              disabled={
                                 deleteCommand.isPending &&
                                 deleteCommand.variables?.commandId === command.id
                               }

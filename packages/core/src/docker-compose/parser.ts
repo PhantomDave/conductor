@@ -79,26 +79,6 @@ function extractDependencies(dependsOn?: Record<string, any> | string[]): string
 }
 
 /**
- * Extracts environment variables (simple extraction, not handling complex interpolation)
- */
-function extractEnvironment(env?: Record<string, string> | string[]): Record<string, string> {
-  if (!env) return {};
-
-  if (Array.isArray(env)) {
-    const result: Record<string, string> = {};
-    for (const entry of env) {
-      const [key, value] = entry.split("=");
-      if (key && value !== undefined) {
-        result[key.trim()] = value.trim();
-      }
-    }
-    return result;
-  }
-
-  return env;
-}
-
-/**
  * Extracts the first exposed port from ports array
  */
 function extractFirstPort(ports?: (string | number)[]): number | undefined {

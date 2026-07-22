@@ -11,7 +11,6 @@ import {
   exportConfig,
   parseDockerCompose,
   type CommandInput,
-  type SuggestedCommand,
 } from "../lib/api";
 
 function useInvalidateProfiles() {
