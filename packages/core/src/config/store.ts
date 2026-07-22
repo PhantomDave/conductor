@@ -249,6 +249,99 @@ export class ConfigStore {
     this.rebuildQueues();
     this.persist();
   }
+
+  duplicateCommand(sourceProfile: string, commandId: string, targetProfile: string): CommandConfig {
+    const source = this.config.profiles[sourceProfile];
+    if (!source) {
+      throw new ConfigError(`Unknown profile "${sourceProfile}"`);
+    }
+
+    const target = this.config.profiles[targetProfile];
+    if (!target) {
+      throw new ConfigError(`Unknown profile "${targetProfile}"`);
+    }
+
+    const existing = source.commands.find((c) => c.id === commandId);
+    if (!existing) {
+      throw new ConfigError(`Unknown command "${commandId}" in profile "${sourceProfile}"`);
+    }
+
+    // Generate a new ID for the duplicate, avoiding collisions
+    let newId = `${existing.id}-copy`;
+    let suffix = 2;
+    while (
+      target.commands.some((c) => c.id === newId) ||
+      source.commands.some((c) => c.id === newId)
+    ) {
+      newId = `${existing.id}-copy-${suffix}`;
+      suffix++;
+    }
+
+    const duplicated = { ...existing, id: newId };
+    const nextTarget: ProfileConfig = {
+      ...target,
+      commands: [...target.commands, duplicated],
+    };
+
+    this.config = validateConfig({
+      ...this.config,
+      profiles: { ...this.config.profiles, [targetProfile]: nextTarget },
+    });
+    this.rebuildQueues();
+    this.persist();
+    return this.config.profiles[targetProfile].commands.find((c) => c.id === newId)!;
+  }
+
+  moveCommand(sourceProfile: string, commandId: string, targetProfile: string): CommandConfig {
+    const source = this.config.profiles[sourceProfile];
+    if (!source) {
+      throw new ConfigError(`Unknown profile "${sourceProfile}"`);
+    }
+
+    const target = this.config.profiles[targetProfile];
+    if (!target) {
+      throw new ConfigError(`Unknown profile "${targetProfile}"`);
+    }
+
+    const existing = source.commands.find((c) => c.id === commandId);
+    if (!existing) {
+      throw new ConfigError(`Unknown command "${commandId}" in profile "${sourceProfile}"`);
+    }
+
+    // Check if other commands in source depend on this command
+    const dependents = source.commands.filter(
+      (c) => c.deps && c.deps.includes(commandId) && c.id !== commandId,
+    );
+    if (dependents.length > 0) {
+      throw new ConfigError(
+        `Cannot move command "${commandId}": other commands depend on it (${dependents.map((c) => c.id).join(", ")})`,
+      );
+    }
+
+    // Remove from source
+    const nextSource: ProfileConfig = {
+      ...source,
+      commands: source.commands.filter((c) => c.id !== commandId),
+    };
+
+    // Add to target
+    const nextTarget: ProfileConfig = {
+      ...target,
+      commands: [...target.commands, existing],
+    };
+
+    this.config = validateConfig({
+      ...this.config,
+      profiles: {
+        ...this.config.profiles,
+        [sourceProfile]: nextSource,
+        [targetProfile]: nextTarget,
+      },
+    });
+    this.rebuildQueues();
+    this.persist();
+    return this.config.profiles[targetProfile].commands.find((c) => c.id === commandId)!;
+  }
 }
 
 function slugify(name: string): string {

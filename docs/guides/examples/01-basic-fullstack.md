@@ -30,7 +30,7 @@ profiles:
       - id: postgres
         name: "PostgreSQL Database"
         description: "Primary application database"
-        run: docker-compose up postgres
+        run: docker compose up postgres
         healthcheck:
           type: port
           port: 5432
@@ -129,7 +129,7 @@ Change the `run` command and health check type. For example, with MySQL:
 
 ```yaml
 - id: mysql
-  run: docker-compose up mysql
+  run: docker compose up mysql
   healthcheck:
     type: port
     port: 3306

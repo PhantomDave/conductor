@@ -60,7 +60,7 @@ profiles:
     commands:
       - id: db
         name: "PostgreSQL"
-        run: docker-compose up postgres
+        run: docker compose up postgres
       - id: server
         name: "API Server"
         run: npm run dev
@@ -234,13 +234,13 @@ profiles:
       - id: postgres
         name: "PostgreSQL"
         description: "Start PostgreSQL container"
-        run: docker-compose up postgres
+        run: docker compose up postgres
         cwd: "."
         shell: true
 
       - id: redis
         name: "Redis"
-        run: docker-compose up redis
+        run: docker compose up redis
 
       - id: api
         name: "API Server"
@@ -676,7 +676,7 @@ conductor/
 │   └── examples/
 ├── examples/
 │   ├── nodejs-fullstack/
-│   ├── docker-compose/
+│   ├── docker compose/
 │   └── monorepo/
 ├── .github/
 │   └── workflows/ (CI/CD)

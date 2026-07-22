@@ -224,7 +224,7 @@ export class ProcessWrapper {
       try {
         const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
         // Resolve cwd the same way the main process does so that relative
-        // stop commands (e.g. `docker-compose stop`) run from the correct dir.
+        // stop commands (e.g. `docker compose stop`) run from the correct dir.
         const interpolatedCwd = interpolateString(this.commandConfig.cwd, this.env);
         const cwd = isAbsolute(interpolatedCwd)
           ? interpolatedCwd

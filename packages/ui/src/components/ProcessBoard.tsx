@@ -11,6 +11,12 @@ const STATUS_COLOR: Record<string, string> = {
   failed: "red",
 };
 
+const HEALTH_COLOR: Record<string, string> = {
+  healthy: "green",
+  unhealthy: "red",
+  unknown: "gray",
+};
+
 export function ProcessBoard() {
   const { data: processes, isLoading, error } = useProcesses();
   const stopProcess = useStopProcess();
@@ -40,6 +46,7 @@ export function ProcessBoard() {
           <Table.Th>Profile</Table.Th>
           <Table.Th>PID</Table.Th>
           <Table.Th>Status</Table.Th>
+          <Table.Th>Health</Table.Th>
           <Table.Th>CPU %</Table.Th>
           <Table.Th>Memory</Table.Th>
           <Table.Th />
@@ -55,6 +62,9 @@ export function ProcessBoard() {
               <Table.Td>{p.pid}</Table.Td>
               <Table.Td>
                 <Badge color={STATUS_COLOR[p.status] ?? "gray"}>{p.status}</Badge>
+              </Table.Td>
+              <Table.Td>
+                <Badge color={HEALTH_COLOR[p.health] ?? "gray"}>{p.health}</Badge>
               </Table.Td>
               <Table.Td>{p.cpuPercent?.toFixed(1) ?? "-"}</Table.Td>
               <Table.Td>

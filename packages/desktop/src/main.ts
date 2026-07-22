@@ -5,6 +5,11 @@ import { createServer } from "node:net";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+// On Linux, disable hardware acceleration early to avoid GPU-related crashes
+if (process.platform === "linux") {
+  app.disableHardwareAcceleration();
+}
+
 // AppImage extracts to a fresh mountpoint under /tmp on every launch, so
 // chrome-sandbox can never keep the setuid-root (4755) ownership Chromium's
 // sandbox requires - it fails fatally on most modern kernels that restrict
@@ -19,6 +24,26 @@ import { join } from "node:path";
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("no-sandbox");
   app.commandLine.appendSwitch("disable-dev-shm-usage");
+  // Disable GPU acceleration to avoid crashes on systems with GPU issues
+  app.commandLine.appendSwitch("disable-gpu");
+  app.commandLine.appendSwitch("disable-gpu-compositing");
+  // Use software rendering as fallback
+  app.commandLine.appendSwitch("enable-software-rasterizer");
+  // Additional stability flags for restricted Linux environments
+  app.commandLine.appendSwitch("disable-features", "TranslateUI,BackingStoreLimit");
+  app.commandLine.appendSwitch("disable-extensions");
+  app.commandLine.appendSwitch("no-first-run");
+  app.commandLine.appendSwitch("disable-breakpad");
+  app.commandLine.appendSwitch("disable-client-side-phishing-detection");
+  app.commandLine.appendSwitch("disable-component-update");
+  app.commandLine.appendSwitch("disable-sync");
+  // Disable GTK theming integration which may cause crashes on broken GTK setups
+  app.commandLine.appendSwitch("disable-gtk-im-module");
+  // Force X11 backend if available to avoid Wayland compatibility issues
+  // (Chromium/Electron on Wayland can be unstable)
+  if (!process.env.WAYLAND_DISPLAY) {
+    app.commandLine.appendSwitch("ozone-platform", "x11");
+  }
 }
 
 let sidecar: ChildProcess | null = null;
@@ -143,24 +168,37 @@ async function stopSidecar(): Promise<void> {
 }
 
 async function createWindow(port: number) {
-  mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 860,
-    title: "Conductor",
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
+  try {
+    console.log("Creating BrowserWindow...");
+    mainWindow = new BrowserWindow({
+      width: 1280,
+      height: 860,
+      title: "Conductor",
+      show: false, // Don't show until ready
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
 
-  // Any link that would normally navigate away (e.g. a "view on GitHub"
-  // link) should open in the OS browser instead of inside the app window.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
-    return { action: "deny" };
-  });
+    console.log("BrowserWindow created, attaching event handlers...");
 
-  await mainWindow.loadURL(`http://127.0.0.1:${port}/`);
+    // Any link that would normally navigate away (e.g. a "view on GitHub"
+    // link) should open in the OS browser instead of inside the app window.
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+      void shell.openExternal(url);
+      return { action: "deny" };
+    });
+
+    console.log("Loading URL...");
+    await mainWindow.loadURL(`http://127.0.0.1:${port}/`);
+
+    console.log("Window loaded, showing...");
+    mainWindow.show();
+  } catch (err) {
+    console.error("Failed to create window:", err);
+    throw err;
+  }
 }
 
 function buildMenu() {
@@ -197,6 +235,18 @@ app.on("before-quit", (event) => {
 app.whenReady().then(async () => {
   buildMenu();
   try {
+    // Check for display server before trying to create window
+    if (process.platform === "linux") {
+      const display = process.env.DISPLAY || process.env.WAYLAND_DISPLAY;
+      if (!display) {
+        console.error(
+          "No X11 or Wayland display found. Set DISPLAY=:0 or run with a display server.",
+        );
+        console.error("For headless testing, use Xvfb or similar virtual display.");
+        throw new Error("No display server available (set DISPLAY environment variable)");
+      }
+    }
+
     const port = await startSidecar();
     await createWindow(port);
   } catch (err) {

@@ -74,7 +74,7 @@ profiles:
     commands:
       - id: db
         name: "PostgreSQL"
-        run: docker-compose up postgres
+        run: docker compose up postgres
 
       - id: api
         name: "API Server"
@@ -111,7 +111,7 @@ Use the `deps` field to declare which services must start before a command runs:
 commands:
   - id: postgres
     name: "PostgreSQL Database"
-    run: docker-compose up -d postgres
+    run: docker compose up -d postgres
 
   - id: api
     name: "API Server"
@@ -140,7 +140,7 @@ By default, Conductor waits for a process to spawn. Use `healthcheck` to wait fo
 ```yaml
 - id: db
   name: "PostgreSQL"
-  run: docker-compose up postgres
+  run: docker compose up postgres
   healthcheck:
     type: port # wait for port 5432 to accept connections
     port: 5432
@@ -196,8 +196,8 @@ For complex services (e.g., Docker Compose), use `stop_command`:
 
 ```yaml
 - id: services
-  run: docker-compose up
-  stop_command: docker-compose down # runs this to shut down cleanly
+  run: docker compose up
+  stop_command: docker compose down # runs this to shut down cleanly
   stop_timeout_ms: 5000
 ```
 

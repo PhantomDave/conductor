@@ -4,6 +4,7 @@ export interface ProcessInfo {
   profile: string;
   pid: number;
   status: "starting" | "running" | "stopping" | "stopped" | "failed";
+  health: "unknown" | "healthy" | "unhealthy";
   cpuPercent?: number;
   memoryBytes?: number;
   startedAt: string;
@@ -341,4 +342,61 @@ export async function importEnvVars(input: {
   });
   const data = await parseJsonOrThrow(res, "Failed to import env vars");
   return data.imported ?? 0;
+}
+
+// --- Command movement, duplication, and export ----
+
+export async function duplicateCommand(
+  sourceProfile: string,
+  commandId: string,
+  targetProfile: string,
+): Promise<CommandInfo> {
+  const res = await fetch(`${API_BASE}/profiles/${sourceProfile}/commands/${commandId}/duplicate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetProfile }),
+  });
+  const data = await parseJsonOrThrow(res, `Failed to duplicate command "${commandId}"`);
+  return data.command;
+}
+
+export async function moveCommand(
+  sourceProfile: string,
+  commandId: string,
+  targetProfile: string,
+): Promise<CommandInfo> {
+  const res = await fetch(`${API_BASE}/profiles/${sourceProfile}/commands/${commandId}/move`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetProfile }),
+  });
+  const data = await parseJsonOrThrow(res, `Failed to move command "${commandId}"`);
+  return data.command;
+}
+
+export async function exportConfig(): Promise<string> {
+  const res = await fetch(`${API_BASE}/config/export`);
+  const data = await parseJsonOrThrow(res, "Failed to export config");
+  return data.yaml;
+}
+
+export interface SuggestedCommand {
+  id: string;
+  name: string;
+  run: string;
+  stop_command: string;
+  healthcheck?: HealthcheckInfo;
+  deps: string[];
+  needsBuild: boolean;
+  buildContext?: string;
+}
+
+export async function parseDockerCompose(yamlText: string): Promise<SuggestedCommand[]> {
+  const res = await fetch(`${API_BASE}/docker compose/parse`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ yaml: yamlText }),
+  });
+  const data = await parseJsonOrThrow(res, "Failed to parse docker compose.yml");
+  return data.commands ?? [];
 }
