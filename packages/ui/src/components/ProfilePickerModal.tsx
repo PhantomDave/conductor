@@ -11,9 +11,7 @@ interface ProfilePickerModalProps {
   readonly description?: string;
 }
 
-export function ProfilePickerModal(
-  props: Readonly<ProfilePickerModalProps>,
-): React.ReactElement {
+export function ProfilePickerModal(props: Readonly<ProfilePickerModalProps>): React.ReactElement {
   const { opened, onClose, profiles, excludeProfile, onSelect, title, description } = props;
   const availableProfiles = useMemo(() => {
     if (!profiles) return [];
@@ -31,7 +29,12 @@ export function ProfilePickerModal(
         ) : (
           <Stack gap="xs">
             {availableProfiles.map(({ name, commands }) => (
-              <Group key={name} justify="space-between" p="sm" style={{ border: "1px solid #e0e0e0", borderRadius: "4px" }}>
+              <Group
+                key={name}
+                justify="space-between"
+                p="sm"
+                style={{ border: "1px solid #e0e0e0", borderRadius: "4px" }}
+              >
                 <div>
                   <Text fw={500}>{name}</Text>
                   <Badge size="xs" variant="light">

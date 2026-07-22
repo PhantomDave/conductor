@@ -1,4 +1,16 @@
-import { Modal, Stack, Textarea, Button, Table, Badge, Group, Text, FileInput, Loader, Select } from "@mantine/core";
+import {
+  Modal,
+  Stack,
+  Textarea,
+  Button,
+  Table,
+  Badge,
+  Group,
+  Text,
+  FileInput,
+  Loader,
+  Select,
+} from "@mantine/core";
 import { useState } from "react";
 import { useParseDockerCompose } from "../hooks/useConfig";
 import type { SuggestedCommand, ProfileInfo } from "../lib/api";
@@ -10,7 +22,12 @@ interface DockerComposeImporterProps {
   readonly profiles?: Record<string, ProfileInfo>;
 }
 
-export function DockerComposeImporter({ opened, onClose, onImport, profiles }: DockerComposeImporterProps) {
+export function DockerComposeImporter({
+  opened,
+  onClose,
+  onImport,
+  profiles,
+}: DockerComposeImporterProps) {
   const [yamlText, setYamlText] = useState("");
   const [selectedCommands, setSelectedCommands] = useState<Set<string>>(new Set());
   const [targetProfile, setTargetProfile] = useState<string | null>(null);
@@ -106,7 +123,11 @@ export function DockerComposeImporter({ opened, onClose, onImport, profiles }: D
                 onChange={handleFileUpload}
               />
             </Stack>
-            <Button onClick={handleParse} loading={parseDocker.isPending} disabled={!yamlText.trim()}>
+            <Button
+              onClick={handleParse}
+              loading={parseDocker.isPending}
+              disabled={!yamlText.trim()}
+            >
               Parse docker compose.yml
             </Button>
           </>
@@ -128,7 +149,9 @@ export function DockerComposeImporter({ opened, onClose, onImport, profiles }: D
                     <Table.Th style={{ width: "40px" }}>
                       <input
                         type="checkbox"
-                        checked={selectedCommands.size === suggestions.length && suggestions.length > 0}
+                        checked={
+                          selectedCommands.size === suggestions.length && suggestions.length > 0
+                        }
                         onChange={toggleAllCommands}
                       />
                     </Table.Th>
@@ -154,7 +177,15 @@ export function DockerComposeImporter({ opened, onClose, onImport, profiles }: D
                         </Text>
                       </Table.Td>
                       <Table.Td>
-                        <Text size="xs" c="dimmed" style={{ maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <Text
+                          size="xs"
+                          c="dimmed"
+                          style={{
+                            maxWidth: "200px",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
                           {cmd.run}
                         </Text>
                       </Table.Td>

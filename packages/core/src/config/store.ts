@@ -250,11 +250,7 @@ export class ConfigStore {
     this.persist();
   }
 
-  duplicateCommand(
-    sourceProfile: string,
-    commandId: string,
-    targetProfile: string,
-  ): CommandConfig {
+  duplicateCommand(sourceProfile: string, commandId: string, targetProfile: string): CommandConfig {
     const source = this.config.profiles[sourceProfile];
     if (!source) {
       throw new ConfigError(`Unknown profile "${sourceProfile}"`);
@@ -296,11 +292,7 @@ export class ConfigStore {
     return this.config.profiles[targetProfile].commands.find((c) => c.id === newId)!;
   }
 
-  moveCommand(
-    sourceProfile: string,
-    commandId: string,
-    targetProfile: string,
-  ): CommandConfig {
+  moveCommand(sourceProfile: string, commandId: string, targetProfile: string): CommandConfig {
     const source = this.config.profiles[sourceProfile];
     if (!source) {
       throw new ConfigError(`Unknown profile "${sourceProfile}"`);

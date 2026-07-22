@@ -192,7 +192,7 @@ async function createWindow(port: number) {
 
     console.log("Loading URL...");
     await mainWindow.loadURL(`http://127.0.0.1:${port}/`);
-    
+
     console.log("Window loaded, showing...");
     mainWindow.show();
   } catch (err) {

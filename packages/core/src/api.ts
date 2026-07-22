@@ -250,10 +250,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     try {
       const raw = yaml.load(parsed.data.yaml);
       const commands = parseDockerCompose(raw);
-      deps.queries.insertAuditEntry(
-        "parse-docker compose",
-        `${commands.length} service(s) found`,
-      );
+      deps.queries.insertAuditEntry("parse-docker compose", `${commands.length} service(s) found`);
       return { commands };
     } catch (err) {
       return reply.status(400).send({ error: `Failed to parse YAML: ${(err as Error).message}` });
