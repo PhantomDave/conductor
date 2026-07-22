@@ -36,7 +36,7 @@ export default function App() {
         <Group h="100%" px="md" justify="space-between">
           <Group>
             <Title order={3}>🎼 Conductor</Title>
-            <Badge variant="light">v0.2</Badge>
+            <Badge variant="light">v{__VERSION__}</Badge>
           </Group>
           <Text size="sm" c="dimmed">
             Universal task runner & dashboard
