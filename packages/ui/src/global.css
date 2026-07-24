@@ -1,0 +1,170 @@
+/**
+ * Global styles for Conductor UI
+ * Extends Mantine theme with additional polish
+ */
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(13, 17, 23, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 148, 155, 0.4);
+  border-radius: 5px;
+  transition: background 200ms ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 148, 155, 0.6);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-color: rgba(139, 148, 155, 0.4) rgba(13, 17, 23, 0.5);
+  scrollbar-width: thin;
+}
+
+/* Selection styling */
+::selection {
+  background-color: rgba(88, 166, 255, 0.3);
+  color: rgb(230, 237, 243);
+}
+
+::-moz-selection {
+  background-color: rgba(88, 166, 255, 0.3);
+  color: rgb(230, 237, 243);
+}
+
+/* Base body styles */
+body {
+  background-color: rgb(13, 17, 23);
+  color: rgb(230, 237, 243);
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
+}
+
+/* Smooth focus outline for accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(88, 166, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Better link styling */
+a {
+  color: rgb(88, 166, 255);
+  text-decoration: none;
+  transition: color 200ms ease;
+}
+
+a:hover {
+  color: rgb(120, 180, 255);
+}
+
+a:active {
+  color: rgb(58, 156, 255);
+}
+
+/* Better focus states */
+*:focus-within {
+  outline: none;
+}
+
+/* Ensure code blocks have better contrast */
+code,
+pre {
+  background-color: rgba(30, 30, 30, 0.8);
+  border-radius: 4px;
+  color: rgb(200, 209, 217);
+}
+
+/* List styling improvements */
+ul,
+ol {
+  color: rgb(201, 209, 217);
+}
+
+li {
+  margin-bottom: 4px;
+}
+
+/* Form input consistency */
+input,
+textarea,
+select {
+  background-color: rgba(13, 17, 23, 0.5);
+  border: 1px solid rgba(208, 215, 222, 0.15);
+  color: rgb(230, 237, 243);
+  border-radius: 6px;
+  padding: 8px 12px;
+  transition:
+    border-color 200ms ease,
+    background-color 200ms ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: rgba(88, 166, 255, 0.5);
+  background-color: rgba(13, 17, 23, 0.8);
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(139, 148, 155, 0.6);
+}
+
+/* Better table styling if needed */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border: 1px solid rgba(208, 215, 222, 0.1);
+  padding: 12px;
+  text-align: left;
+}
+
+th {
+  background-color: rgba(30, 30, 30, 0.5);
+  color: rgb(230, 237, 243);
+  font-weight: 600;
+}
+
+tr:hover {
+  background-color: rgba(33, 38, 45, 0.3);
+}
+
+/* Accessibility: ensure interactive elements have minimum size */
+button,
+a[role="button"],
+[role="button"] {
+  min-height: 36px;
+  min-width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

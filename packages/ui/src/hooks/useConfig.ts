@@ -3,6 +3,9 @@ import { notifications } from "@mantine/notifications";
 import {
   createProfile,
   deleteProfile,
+  renameProfile,
+  duplicateProfile,
+  exportProfile,
   createCommand,
   updateCommand,
   deleteCommand,
@@ -49,6 +52,60 @@ export function useDeleteProfile() {
       notifications.show({
         color: "red",
         title: "Failed to delete profile",
+        message: error.message,
+      });
+    },
+  });
+}
+
+export function useRenameProfile() {
+  const invalidate = useInvalidateProfiles();
+  return useMutation({
+    mutationFn: ({ oldName, newName }: { oldName: string; newName: string }) =>
+      renameProfile(oldName, newName),
+    onSuccess: (_data, { oldName, newName }) => {
+      notifications.show({ color: "green", message: `Renamed "${oldName}" to "${newName}"` });
+      invalidate();
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to rename profile",
+        message: error.message,
+      });
+    },
+  });
+}
+
+export function useDuplicateProfile() {
+  const invalidate = useInvalidateProfiles();
+  return useMutation({
+    mutationFn: ({ sourceName, newName }: { sourceName: string; newName: string }) =>
+      duplicateProfile(sourceName, newName),
+    onSuccess: (_data, { newName }) => {
+      notifications.show({ color: "green", message: `Duplicated profile as "${newName}"` });
+      invalidate();
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to duplicate profile",
+        message: error.message,
+      });
+    },
+  });
+}
+
+export function useExportProfile() {
+  return useMutation({
+    mutationFn: (profile: string) => exportProfile(profile),
+    onSuccess: (_data, profile) => {
+      notifications.show({ color: "green", message: `Exported profile "${profile}"` });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to export profile",
         message: error.message,
       });
     },
