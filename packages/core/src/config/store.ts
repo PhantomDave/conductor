@@ -11,13 +11,14 @@ export interface EnvVarLookup {
 }
 
 /**
- * Owns the live in-memory config, the on-disk `.conductor.yml`, and the
- * SpawnQueue for each profile. Every mutation persists immediately so
- * the UI, the CLI, and the file on disk never drift apart.
+ * Owns the live in-memory config, the on-disk `.conductor.yml`, and a
+ * single global SpawnQueue for all processes (shared across profiles).
+ * Every mutation persists immediately so the UI, the CLI, and the file
+ * on disk never drift apart.
  */
 export class ConfigStore {
   private config: ConductorConfig;
-  private readonly queues = new Map<string, SpawnQueue>();
+  private mutableQueue: SpawnQueue;
 
   constructor(
     private readonly filePath: string,
@@ -26,28 +27,55 @@ export class ConfigStore {
     private readonly resolveDbEnv: EnvVarLookup = () => ({}),
   ) {
     this.config = initialConfig;
-    this.rebuildQueues();
+    // Create a single global queue with all commands from all profiles
+    this.mutableQueue = this.buildGlobalQueue();
   }
 
-  private rebuildQueues(): void {
-    for (const [profileName, profile] of Object.entries(this.config.profiles)) {
-      const existing = this.queues.get(profileName);
-      if (existing) {
-        existing.setCommands(profile.commands);
-      } else {
-        this.queues.set(
-          profileName,
-          new SpawnQueue(profileName, profile.commands, (cmd) => this.resolveEnv(profileName, cmd)),
-        );
-      }
+  private buildGlobalQueue(): SpawnQueue {
+    // Collect all commands from all profiles
+    const allCommands: CommandConfig[] = [];
+    for (const profile of Object.values(this.config.profiles)) {
+      allCommands.push(...profile.commands);
     }
 
-    // Drop queues for profiles that no longer exist.
-    for (const profileName of [...this.queues.keys()]) {
-      if (!this.config.profiles[profileName]) {
-        this.queues.delete(profileName);
+    // Create a global queue that can resolve env for any profile+command combo
+    return new SpawnQueue(
+      "__global__",
+      allCommands,
+      (cmd) => this.resolveEnvForCommand(cmd),
+    );
+  }
+
+  /**
+   * Finds which profile owns a given command by ID.
+   * Returns null if not found.
+   */
+  private findProfileForCommand(commandId: string): string | null {
+    for (const [profileName, profile] of Object.entries(this.config.profiles)) {
+      if (profile.commands.some((c) => c.id === commandId)) {
+        return profileName;
       }
     }
+    return null;
+  }
+
+  /**
+   * Resolves environment for a command by finding its profile first.
+   */
+  private resolveEnvForCommand(cmd: CommandConfig): Record<string, string> {
+    const profileName = this.findProfileForCommand(cmd.id);
+    if (!profileName) {
+      // Fallback: use global env only
+      return buildCommandEnv({
+        configFilePath: this.filePath,
+        config: this.config,
+        profile: undefined,
+        cmd,
+        dbGlobalEnv: this.resolveDbEnv("__global__"),
+        dbProfileEnv: {},
+      });
+    }
+    return this.resolveEnv(profileName, cmd);
   }
 
   private resolveEnv(profileName: string, cmd: CommandConfig): Record<string, string> {
@@ -70,7 +98,7 @@ export class ConfigStore {
   /** Updates `base_path`, persisting it and re-resolving every command's env. */
   setBasePath(basePath: string): void {
     this.config = validateConfig({ ...this.config, base_path: basePath });
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
   }
 
@@ -86,7 +114,7 @@ export class ConfigStore {
    */
   setDefaultShell(shell: string | undefined): void {
     this.config = validateConfig({ ...this.config, default_shell: shell });
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
   }
 
@@ -99,16 +127,20 @@ export class ConfigStore {
   }
 
   getQueues(): Map<string, SpawnQueue> {
-    return this.queues;
+    // For compatibility: return a map with a single entry for the global queue
+    const map = new Map<string, SpawnQueue>();
+    map.set("__global__", this.mutableQueue);
+    return map;
   }
 
-  getQueue(profile: string): SpawnQueue | undefined {
-    return this.queues.get(profile);
+  getQueue(_profile?: string): SpawnQueue {
+    // Returns the global queue (profile parameter ignored for compatibility)
+    return this.mutableQueue;
   }
 
-  /** Re-runs env resolution for every queue, e.g. after env vars change. */
+  /** Re-runs env resolution for every command, e.g. after env vars change. */
   refreshEnv(): void {
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
   }
 
   /**
@@ -143,7 +175,7 @@ export class ConfigStore {
    */
   importConfig(raw: unknown): ConductorConfig {
     this.config = validateConfig(raw);
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
     return this.config;
   }
@@ -161,7 +193,7 @@ export class ConfigStore {
       },
     };
     this.config = validateConfig(nextConfig);
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
     return this.config.profiles[name];
   }
@@ -172,8 +204,75 @@ export class ConfigStore {
     }
     const { [name]: _removed, ...rest } = this.config.profiles;
     this.config = validateConfig({ ...this.config, profiles: rest });
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
+  }
+
+  renameProfile(oldName: string, newName: string): ProfileConfig {
+    const oldProfile = this.config.profiles[oldName];
+    if (!oldProfile) {
+      throw new ConfigError(`Unknown profile "${oldName}"`);
+    }
+    if (this.config.profiles[newName]) {
+      throw new ConfigError(`Profile "${newName}" already exists`);
+    }
+
+    // Update all commands' dependencies that reference the old profile
+    const updatedProfiles = { ...this.config.profiles };
+    for (const profile of Object.values(updatedProfiles)) {
+      for (const cmd of profile.commands) {
+        if (cmd.deps) {
+          cmd.deps = cmd.deps.map((dep) =>
+            dep.startsWith(`${oldName}/`) ? `${newName}/${dep.slice(oldName.length + 1)}` : dep,
+          );
+        }
+      }
+    }
+
+    // Move the profile entry
+    const { [oldName]: profile, ...rest } = updatedProfiles;
+    this.config = validateConfig({
+      ...this.config,
+      profiles: {
+        ...rest,
+        [newName]: profile!,
+      },
+    });
+    this.mutableQueue = this.buildGlobalQueue();
+    this.persist();
+    return this.config.profiles[newName];
+  }
+
+  duplicateProfile(sourceName: string, targetName: string): ProfileConfig {
+    const source = this.config.profiles[sourceName];
+    if (!source) {
+      throw new ConfigError(`Unknown profile "${sourceName}"`);
+    }
+    if (this.config.profiles[targetName]) {
+      throw new ConfigError(`Profile "${targetName}" already exists`);
+    }
+
+    // Deep copy the profile with new command IDs
+    const copiedCommands = source.commands.map((cmd) => ({
+      ...cmd,
+      id: randomUUID().slice(0, 8), // New IDs for cloned commands
+    }));
+
+    const nextConfig: ConductorConfig = {
+      ...this.config,
+      profiles: {
+        ...this.config.profiles,
+        [targetName]: {
+          description: source.description ? `${source.description} (copy)` : undefined,
+          env: { ...source.env }, // Shallow copy of env vars
+          commands: copiedCommands,
+        },
+      },
+    };
+    this.config = validateConfig(nextConfig);
+    this.mutableQueue = this.buildGlobalQueue();
+    this.persist();
+    return this.config.profiles[targetName];
   }
 
   addCommand(
@@ -199,7 +298,7 @@ export class ConfigStore {
       ...this.config,
       profiles: { ...this.config.profiles, [profileName]: nextProfile },
     });
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
     return this.config.profiles[profileName].commands.find((c) => c.id === id)!;
   }
@@ -227,7 +326,7 @@ export class ConfigStore {
       ...this.config,
       profiles: { ...this.config.profiles, [profileName]: nextProfile },
     });
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
     return this.config.profiles[profileName].commands.find((c) => c.id === commandId)!;
   }
@@ -246,7 +345,7 @@ export class ConfigStore {
       ...this.config,
       profiles: { ...this.config.profiles, [profileName]: nextProfile },
     });
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
   }
 
@@ -287,7 +386,7 @@ export class ConfigStore {
       ...this.config,
       profiles: { ...this.config.profiles, [targetProfile]: nextTarget },
     });
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
     return this.config.profiles[targetProfile].commands.find((c) => c.id === newId)!;
   }
@@ -338,7 +437,7 @@ export class ConfigStore {
         [targetProfile]: nextTarget,
       },
     });
-    this.rebuildQueues();
+    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
     return this.config.profiles[targetProfile].commands.find((c) => c.id === commandId)!;
   }

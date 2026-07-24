@@ -10,6 +10,7 @@ import type { ConfigStore } from "./config/store";
 import type { LogBroadcaster } from "./logs/broadcaster";
 import type { LogHandler } from "./executor/wrapper";
 import { HealthcheckSchema } from "./config/schema";
+import type { ConductorConfig } from "./config/schema";
 import { ConfigError } from "./config/loader";
 import { listAvailableShells } from "./executor/shell";
 import { parseDockerCompose } from "./docker-compose/parser";
@@ -284,6 +285,88 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     }
   });
 
+  // --- Profile rename ---
+  app.put<{ Params: { profile: string }; Body: { newName: string } }>(
+    "/api/profiles/:profile",
+    async (request, reply) => {
+      const oldName = request.params.profile;
+      const { newName } = request.body;
+
+      if (!newName || typeof newName !== "string" || !newName.trim()) {
+        return reply.status(400).send({ error: "newName is required" });
+      }
+
+      try {
+        const profile = deps.store.renameProfile(oldName, newName.trim());
+        deps.queries.insertAuditEntry("rename-profile", `${oldName} → ${newName}`);
+        return { profile, newName };
+      } catch (err) {
+        return handleConfigError(err, reply);
+      }
+    },
+  );
+
+  // --- Profile duplicate ---
+  app.post<{ Params: { profile: string }; Body: { newName: string } }>(
+    "/api/profiles/:profile/duplicate",
+    async (request, reply) => {
+      const sourceName = request.params.profile;
+      const { newName } = request.body;
+
+      if (!newName || typeof newName !== "string" || !newName.trim()) {
+        return reply.status(400).send({ error: "newName is required" });
+      }
+
+      try {
+        const profile = deps.store.duplicateProfile(sourceName, newName.trim());
+        deps.queries.insertAuditEntry("duplicate-profile", `${sourceName} → ${newName}`);
+        return { profile, newName };
+      } catch (err) {
+        return handleConfigError(err, reply);
+      }
+    },
+  );
+
+  // --- Profile export (download as .conductor.yml) ---
+  app.get<{ Params: { profile: string } }>(
+    "/api/profiles/:profile/export",
+    async (request, reply) => {
+      const config = deps.store.getConfig();
+      const profile = config.profiles[request.params.profile];
+
+      if (!profile) {
+        return reply.status(404).send({ error: `Unknown profile "${request.params.profile}"` });
+      }
+
+      try {
+        const exportConfig: ConductorConfig = {
+          version: config.version,
+          name: `${config.name}-${request.params.profile}`,
+          keywords: [],
+          tags: [],
+          env_secrets: [],
+          base_path: config.base_path,
+          profiles: {
+            [request.params.profile]: profile,
+          },
+          global_env: {},
+        };
+        const yamlText = yaml.dump(exportConfig, {
+          indent: 2,
+          lineWidth: 100,
+          noRefs: true,
+        });
+        deps.queries.insertAuditEntry(
+          "export-profile",
+          `${request.params.profile}`,
+        );
+        return { yaml: yamlText, profile: request.params.profile };
+      } catch (err) {
+        return reply.status(500).send({ error: (err as Error).message });
+      }
+    },
+  );
+
   app.post<{ Params: { profile: string }; Body: unknown }>(
     "/api/profiles/:profile/commands",
     async (request, reply) => {
@@ -401,12 +484,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     },
   );
 
-  // --- Processes ------------------------------------------------------------
+  // --- Processes (global queue) ------------------------------------------------
 
   app.get("/api/processes", async () => {
-    const processes = [...deps.store.getQueues().values()].flatMap((queue) =>
-      queue.listSnapshots(),
-    );
+    const queue = deps.store.getQueue();
+    const processes = queue.listSnapshots();
     return { processes };
   });
 
@@ -416,11 +498,17 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       const { id } = request.params;
       const { profile } = request.body;
 
-      const queue = deps.store.getQueue(profile);
-      if (!queue) {
+      // Verify the command exists in the specified profile
+      const config = deps.store.getConfig();
+      const profileConfig = config.profiles[profile];
+      if (!profileConfig) {
         return reply.status(404).send({ error: `Unknown profile "${profile}"` });
       }
+      if (!profileConfig.commands.some((c) => c.id === id)) {
+        return reply.status(404).send({ error: `Unknown command "${id}" in profile "${profile}"` });
+      }
 
+      const queue = deps.store.getQueue();
       try {
         await queue.startOne(id, deps.onLog);
       } catch (err) {
@@ -438,11 +526,17 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       const { id } = request.params;
       const { profile } = request.body;
 
-      const queue = deps.store.getQueue(profile);
-      if (!queue) {
+      // Verify the command exists in the specified profile
+      const config = deps.store.getConfig();
+      const profileConfig = config.profiles[profile];
+      if (!profileConfig) {
         return reply.status(404).send({ error: `Unknown profile "${profile}"` });
       }
+      if (!profileConfig.commands.some((c) => c.id === id)) {
+        return reply.status(404).send({ error: `Unknown command "${id}" in profile "${profile}"` });
+      }
 
+      const queue = deps.store.getQueue();
       try {
         await queue.restartOne(id, deps.onLog);
       } catch (err) {
@@ -459,8 +553,9 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     "/api/profiles/:profile/run",
     async (request, reply) => {
       const { profile } = request.params;
-      const queue = deps.store.getQueue(profile);
-      if (!queue) {
+      const config = deps.store.getConfig();
+      const profileConfig = config.profiles[profile];
+      if (!profileConfig) {
         return reply.status(404).send({ error: `Unknown profile "${profile}"` });
       }
 
@@ -470,8 +565,12 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       // overwrites files that already exist.
       const configReport = deps.store.compileConfigExamples(profile);
 
+      const queue = deps.store.getQueue();
       try {
-        await queue.startAll(deps.onLog);
+        // Start commands in this profile that are defined in its commands list
+        for (const command of profileConfig.commands) {
+          await queue.startOne(command.id, deps.onLog);
+        }
       } catch (err) {
         return reply.status(400).send({ error: (err as Error).message });
       }
@@ -484,12 +583,20 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     "/api/profiles/:profile/stop",
     async (request, reply) => {
       const { profile } = request.params;
-      const queue = deps.store.getQueue(profile);
-      if (!queue) {
+      const config = deps.store.getConfig();
+      const profileConfig = config.profiles[profile];
+      if (!profileConfig) {
         return reply.status(404).send({ error: `Unknown profile "${profile}"` });
       }
 
-      await queue.stopAll();
+      const queue = deps.store.getQueue();
+      // Stop only commands from this profile
+      for (const command of profileConfig.commands) {
+        const wrapper = queue.getWrapper(command.id);
+        if (wrapper) {
+          await wrapper.stop();
+        }
+      }
       deps.queries.insertAuditEntry("stop-profile", profile);
       return { stopped: true, profile };
     },
@@ -498,12 +605,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   app.delete<{ Params: { pid: string } }>("/api/processes/:pid", async (request, reply) => {
     const pid = Number(request.params.pid);
 
-    for (const queue of deps.store.getQueues().values()) {
-      const stopped = await queue.stopByPid(pid);
-      if (stopped) {
-        deps.queries.insertAuditEntry("stop", String(pid));
-        return { stopped: true, pid };
-      }
+    const queue = deps.store.getQueue();
+    const stopped = await queue.stopByPid(pid);
+    if (stopped) {
+      deps.queries.insertAuditEntry("stop", String(pid));
+      return { stopped: true, pid };
     }
 
     return reply.status(404).send({ error: `No running process with pid ${pid}` });

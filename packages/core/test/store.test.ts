@@ -30,7 +30,9 @@ function makeStore() {
 describe("ConfigStore.importConfig", () => {
   test("replaces the whole config, persists to disk, and rebuilds queues", () => {
     const store = makeStore();
-    expect(store.getQueue("dev")).toBeDefined();
+    const initialQueue = store.getQueue();
+    expect(initialQueue).toBeDefined();
+    expect(initialQueue.listCommands().length).toBe(1); // hello from dev
 
     const imported = store.importConfig({
       version: "1",
@@ -44,9 +46,12 @@ describe("ConfigStore.importConfig", () => {
     expect(imported.profiles.staging).toBeDefined();
     expect(imported.profiles.dev).toBeUndefined();
 
-    // The old profile's queue is gone; the new one exists.
-    expect(store.getQueue("dev")).toBeUndefined();
-    expect(store.getQueue("staging")).toBeDefined();
+    // The global queue now contains commands from the new config
+    const newQueue = store.getQueue();
+    expect(newQueue).toBeDefined();
+    expect(newQueue.listCommands().length).toBe(1); // deploy from staging
+    const deployCmd = newQueue.listCommands()[0];
+    expect(deployCmd.id).toBe("deploy");
 
     // And it's actually been written to disk, not just held in memory.
     const onDisk = readFileSync(configPath, "utf-8");

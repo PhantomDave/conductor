@@ -101,6 +101,35 @@ export async function deleteProfile(profile: string): Promise<void> {
   await parseJsonOrThrow(res, `Failed to delete profile "${profile}"`);
 }
 
+export async function renameProfile(oldName: string, newName: string): Promise<ProfileInfo> {
+  const res = await fetch(`${API_BASE}/profiles/${oldName}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newName }),
+  });
+  const data = await parseJsonOrThrow(res, `Failed to rename profile "${oldName}"`);
+  return data.profile;
+}
+
+export async function duplicateProfile(
+  sourceName: string,
+  newName: string,
+): Promise<ProfileInfo> {
+  const res = await fetch(`${API_BASE}/profiles/${sourceName}/duplicate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newName }),
+  });
+  const data = await parseJsonOrThrow(res, `Failed to duplicate profile "${sourceName}"`);
+  return data.profile;
+}
+
+export async function exportProfile(profile: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/profiles/${profile}/export`);
+  const data = await parseJsonOrThrow(res, `Failed to export profile "${profile}"`);
+  return data.yaml;
+}
+
 export type CommandInput = Partial<Omit<CommandInfo, "id">> & {
   id?: string;
   name: string;
