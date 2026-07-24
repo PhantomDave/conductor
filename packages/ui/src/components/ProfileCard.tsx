@@ -26,7 +26,7 @@ interface ProfileCardProps {
   readonly profile: ProfileInfo;
   readonly commandCount: number;
   readonly onSelect?: (profileName: string) => void;
-  readonly onRename?: (oldName: string, newName: string) => void;
+  readonly onRename?: (profileName: string) => void;
   readonly onDuplicate?: (profileName: string) => void;
   readonly onDelete?: (profileName: string) => void;
   readonly onExport?: (profileName: string) => void;

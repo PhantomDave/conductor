@@ -17,7 +17,7 @@ export const conductorTheme: MantineThemeOverride = {
 
   headings: {
     fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
-    fontWeight: 600,
+    fontWeight: "600",
   },
 
   fontSizes: {
@@ -29,11 +29,11 @@ export const conductorTheme: MantineThemeOverride = {
   },
 
   lineHeights: {
-    xs: 1.4,
-    sm: 1.45,
-    md: 1.5,
-    lg: 1.55,
-    xl: 1.6,
+    xs: "1.4",
+    sm: "1.45",
+    md: "1.5",
+    lg: "1.55",
+    xl: "1.6",
   },
 
   // Increase spacing for more breathing room
