@@ -57,7 +57,11 @@ export function ProcessGridView() {
           </Group>
           <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md">
             {running.map((p) => (
-              <ProcessCard key={`${p.profile}/${p.commandId}`} process={p} onSelect={selectProcess} />
+              <ProcessCard
+                key={`${p.profile}/${p.commandId}`}
+                process={p}
+                onSelect={selectProcess}
+              />
             ))}
           </SimpleGrid>
         </Stack>
@@ -73,7 +77,11 @@ export function ProcessGridView() {
           </Group>
           <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md">
             {finished.slice(0, 8).map((p) => (
-              <ProcessCard key={`${p.profile}/${p.commandId}`} process={p} onSelect={selectProcess} />
+              <ProcessCard
+                key={`${p.profile}/${p.commandId}`}
+                process={p}
+                onSelect={selectProcess}
+              />
             ))}
           </SimpleGrid>
         </Stack>

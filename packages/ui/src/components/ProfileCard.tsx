@@ -84,22 +84,13 @@ export function ProfileCard({
               >
                 View Commands
               </Menu.Item>
-              <Menu.Item
-                leftSection={<IconEdit size={14} />}
-                onClick={() => onRename?.(name)}
-              >
+              <Menu.Item leftSection={<IconEdit size={14} />} onClick={() => onRename?.(name)}>
                 Rename
               </Menu.Item>
-              <Menu.Item
-                leftSection={<IconCopy size={14} />}
-                onClick={() => onDuplicate?.(name)}
-              >
+              <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => onDuplicate?.(name)}>
                 Duplicate
               </Menu.Item>
-              <Menu.Item
-                leftSection={<IconDownload size={14} />}
-                onClick={() => onExport?.(name)}
-              >
+              <Menu.Item leftSection={<IconDownload size={14} />} onClick={() => onExport?.(name)}>
                 Export
               </Menu.Item>
               <Menu.Divider />
@@ -154,12 +145,7 @@ export function ProfileCard({
 
         {/* Action buttons */}
         <Group gap="xs">
-          <Button
-            flex={1}
-            size="xs"
-            variant="light"
-            onClick={() => onSelect?.(name)}
-          >
+          <Button flex={1} size="xs" variant="light" onClick={() => onSelect?.(name)}>
             View
           </Button>
           <Button

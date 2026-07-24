@@ -158,13 +158,7 @@ export function ProcessCard({ process, onSelect }: ProcessCardProps) {
 
         {/* Click to view logs hint */}
         {onSelect && (
-          <Button
-            size="xs"
-            variant="subtle"
-            fullWidth
-            onClick={() => onSelect(process)}
-            c="blue"
-          >
+          <Button size="xs" variant="subtle" fullWidth onClick={() => onSelect(process)} c="blue">
             View Logs
           </Button>
         )}

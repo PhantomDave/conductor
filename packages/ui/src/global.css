@@ -44,7 +44,9 @@
 body {
   background-color: rgb(13, 17, 23);
   color: rgb(230, 237, 243);
-  transition: background-color 200ms ease, color 200ms ease;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
 }
 
 /* Smooth focus outline for accessibility */
@@ -115,7 +117,9 @@ select {
   color: rgb(230, 237, 243);
   border-radius: 6px;
   padding: 8px 12px;
-  transition: border-color 200ms ease, background-color 200ms ease;
+  transition:
+    border-color 200ms ease,
+    background-color 200ms ease;
 }
 
 input:focus,

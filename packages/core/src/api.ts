@@ -356,10 +356,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
           lineWidth: 100,
           noRefs: true,
         });
-        deps.queries.insertAuditEntry(
-          "export-profile",
-          `${request.params.profile}`,
-        );
+        deps.queries.insertAuditEntry("export-profile", `${request.params.profile}`);
         return { yaml: yamlText, profile: request.params.profile };
       } catch (err) {
         return reply.status(500).send({ error: (err as Error).message });

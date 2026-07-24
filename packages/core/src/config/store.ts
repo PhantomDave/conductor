@@ -39,11 +39,7 @@ export class ConfigStore {
     }
 
     // Create a global queue that can resolve env for any profile+command combo
-    return new SpawnQueue(
-      "__global__",
-      allCommands,
-      (cmd) => this.resolveEnvForCommand(cmd),
-    );
+    return new SpawnQueue("__global__", allCommands, (cmd) => this.resolveEnvForCommand(cmd));
   }
 
   /**

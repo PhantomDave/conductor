@@ -85,7 +85,10 @@ export default function App() {
       </AppShell.Header>
 
       <AppShell.Main>
-        <Tabs value={tab} onChange={(value) => setTab((value as "processes" | "profiles") ?? "processes")}>
+        <Tabs
+          value={tab}
+          onChange={(value) => setTab((value as "processes" | "profiles") ?? "processes")}
+        >
           <Tabs.List>
             <Tabs.Tab value="processes">Processes</Tabs.Tab>
             <Tabs.Tab value="profiles">Profiles</Tabs.Tab>
