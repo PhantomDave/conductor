@@ -317,10 +317,7 @@ export class ConfigStore {
   /**
    * Updates a root-level command.
    */
-  updateCommand(
-    commandId: string,
-    patch: Partial<Omit<CommandConfig, "id">>,
-  ): CommandConfig {
+  updateCommand(commandId: string, patch: Partial<Omit<CommandConfig, "id">>): CommandConfig {
     const existing = this.config.commands.find((c) => c.id === commandId);
     if (!existing) {
       throw new ConfigError(`Unknown command "${commandId}"`);

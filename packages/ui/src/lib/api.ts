@@ -82,11 +82,13 @@ export async function fetchProcesses(): Promise<ProcessInfo[]> {
   return data.processes ?? [];
 }
 
-export async function fetchProfiles(): Promise<Record<string, ProfileInfo & { commands: CommandInfo[] }>> {
+export async function fetchProfiles(): Promise<
+  Record<string, ProfileInfo & { commands: CommandInfo[] }>
+> {
   const res = await fetch(`${API_BASE}/profiles`);
   const data = await parseJsonOrThrow(res, `Failed to fetch profiles: ${res.status}`);
   const { profiles, commands } = data;
-  
+
   // Resolve command_ids to full command objects
   const resolvedProfiles = Object.fromEntries(
     Object.entries(profiles ?? {}).map(([name, profile]: [string, any]) => [
@@ -100,7 +102,7 @@ export async function fetchProfiles(): Promise<Record<string, ProfileInfo & { co
       } as ProfileInfo & { commands: CommandInfo[] },
     ]),
   );
-  
+
   return resolvedProfiles;
 }
 

@@ -341,7 +341,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       try {
         // Resolve commands for this profile
         const profileCommands = deps.store.getProfileCommands(request.params.profile);
-        
+
         const exportConfig: ConductorConfig = {
           version: config.version,
           name: `${config.name}-${request.params.profile}`,
@@ -437,14 +437,13 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
         // Duplicate command at root level (creates new ID)
         const command = deps.store.duplicateCommand(request.params.id);
         // Optionally add to target profile if specified
-        const body = z.object({ targetProfile: z.string().min(1).optional() }).safeParse(request.body);
+        const body = z
+          .object({ targetProfile: z.string().min(1).optional() })
+          .safeParse(request.body);
         if (body.success && body.data.targetProfile) {
           deps.store.addCommandToProfile(body.data.targetProfile, command.id);
         }
-        deps.queries.insertAuditEntry(
-          "duplicate-command",
-          `${request.params.id} -> ${command.id}`,
-        );
+        deps.queries.insertAuditEntry("duplicate-command", `${request.params.id} -> ${command.id}`);
         return { command };
       } catch (err) {
         return handleConfigError(err, reply);

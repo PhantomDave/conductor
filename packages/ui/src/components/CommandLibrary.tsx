@@ -311,81 +311,81 @@ export function CommandLibrary() {
                               </Text>
                             )}
                           </div>
-                      <Group gap={4} wrap="nowrap">
-                        <Button
-                          size="xs"
-                          variant="light"
-                          leftSection={<IconPlayerPlay size={14} />}
-                          loading={
-                            executeCommand.isPending &&
-                            executeCommand.variables?.commandId === command.id
-                          }
-                          onClick={() =>
-                            executeCommand.mutate({
-                              profile: profileName,
-                              commandId: command.id,
-                            })
-                          }
-                        >
-                          Run
-                        </Button>
-                        <Menu position="bottom-end">
-                          <Menu.Target>
-                            <ActionIcon variant="subtle">
-                              <IconChevronDown size={16} />
-                            </ActionIcon>
-                          </Menu.Target>
-                          <Menu.Dropdown>
-                            <Menu.Item
-                              leftSection={<IconPencil size={14} />}
-                              onClick={() =>
-                                setFormState({ profile: profileName, editing: command })
-                              }
-                            >
-                              Edit
-                            </Menu.Item>
-                            <Menu.Item
-                              leftSection={<IconCopy size={14} />}
-                              onClick={() =>
-                                setDuplicateState({
-                                  sourceProfile: profileName,
-                                  commandId: command.id,
-                                })
-                              }
-                            >
-                              Duplicate to...
-                            </Menu.Item>
-                            <Menu.Item
-                              leftSection={<IconArrowRight size={14} />}
-                              onClick={() =>
-                                setMoveState({
-                                  sourceProfile: profileName,
-                                  commandId: command.id,
-                                })
-                              }
-                            >
-                              Move to...
-                            </Menu.Item>
-                            <Menu.Divider />
-                            <Menu.Item
-                              leftSection={<IconTrash size={14} />}
-                              color="red"
-                              disabled={
-                                deleteCommand.isPending &&
-                                deleteCommand.variables?.commandId === command.id
+                          <Group gap={4} wrap="nowrap">
+                            <Button
+                              size="xs"
+                              variant="light"
+                              leftSection={<IconPlayerPlay size={14} />}
+                              loading={
+                                executeCommand.isPending &&
+                                executeCommand.variables?.commandId === command.id
                               }
                               onClick={() =>
-                                deleteCommand.mutate({
+                                executeCommand.mutate({
                                   profile: profileName,
                                   commandId: command.id,
                                 })
                               }
                             >
-                              Delete
-                            </Menu.Item>
-                          </Menu.Dropdown>
-                        </Menu>
-                      </Group>
+                              Run
+                            </Button>
+                            <Menu position="bottom-end">
+                              <Menu.Target>
+                                <ActionIcon variant="subtle">
+                                  <IconChevronDown size={16} />
+                                </ActionIcon>
+                              </Menu.Target>
+                              <Menu.Dropdown>
+                                <Menu.Item
+                                  leftSection={<IconPencil size={14} />}
+                                  onClick={() =>
+                                    setFormState({ profile: profileName, editing: command })
+                                  }
+                                >
+                                  Edit
+                                </Menu.Item>
+                                <Menu.Item
+                                  leftSection={<IconCopy size={14} />}
+                                  onClick={() =>
+                                    setDuplicateState({
+                                      sourceProfile: profileName,
+                                      commandId: command.id,
+                                    })
+                                  }
+                                >
+                                  Duplicate to...
+                                </Menu.Item>
+                                <Menu.Item
+                                  leftSection={<IconArrowRight size={14} />}
+                                  onClick={() =>
+                                    setMoveState({
+                                      sourceProfile: profileName,
+                                      commandId: command.id,
+                                    })
+                                  }
+                                >
+                                  Move to...
+                                </Menu.Item>
+                                <Menu.Divider />
+                                <Menu.Item
+                                  leftSection={<IconTrash size={14} />}
+                                  color="red"
+                                  disabled={
+                                    deleteCommand.isPending &&
+                                    deleteCommand.variables?.commandId === command.id
+                                  }
+                                  onClick={() =>
+                                    deleteCommand.mutate({
+                                      profile: profileName,
+                                      commandId: command.id,
+                                    })
+                                  }
+                                >
+                                  Delete
+                                </Menu.Item>
+                              </Menu.Dropdown>
+                            </Menu>
+                          </Group>
                         </Group>
                       </Tooltip>
                     );
