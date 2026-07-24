@@ -114,10 +114,10 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     const profiles = Object.fromEntries(
       Object.entries(config.profiles).map(([name, profile]) => [
         name,
-        { description: profile.description, commands: profile.commands },
+        { description: profile.description, command_ids: profile.command_ids },
       ]),
     );
-    return { profiles };
+    return { profiles, commands: config.commands };
   });
 
   // --- Base path (where the target app is installed) --------------------
@@ -339,6 +339,9 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       }
 
       try {
+        // Resolve commands for this profile
+        const profileCommands = deps.store.getProfileCommands(request.params.profile);
+        
         const exportConfig: ConductorConfig = {
           version: config.version,
           name: `${config.name}-${request.params.profile}`,
@@ -346,6 +349,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
           tags: [],
           env_secrets: [],
           base_path: config.base_path,
+          commands: profileCommands,
           profiles: {
             [request.params.profile]: profile,
           },
@@ -374,7 +378,10 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
           .send({ error: parsed.error.issues[0]?.message ?? "Invalid command" });
       }
       try {
-        const command = deps.store.addCommand(request.params.profile, parsed.data);
+        // Create command at root level
+        const command = deps.store.addCommand(parsed.data);
+        // Add reference to profile
+        deps.store.addCommandToProfile(request.params.profile, command.id);
         deps.queries.insertAuditEntry("add-command", `${request.params.profile}/${command.id}`);
         return { command };
       } catch (err) {
@@ -393,11 +400,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
           .send({ error: parsed.error.issues[0]?.message ?? "Invalid command" });
       }
       try {
-        const command = deps.store.updateCommand(
-          request.params.profile,
-          request.params.id,
-          parsed.data,
-        );
+        const command = deps.store.updateCommand(request.params.id, parsed.data);
         deps.queries.insertAuditEntry(
           "update-command",
           `${request.params.profile}/${request.params.id}`,
@@ -413,7 +416,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     "/api/profiles/:profile/commands/:id",
     async (request, reply) => {
       try {
-        deps.store.removeCommand(request.params.profile, request.params.id);
+        deps.store.removeCommandFromProfile(request.params.profile, request.params.id);
         deps.queries.insertAuditEntry(
           "remove-command",
           `${request.params.profile}/${request.params.id}`,
@@ -430,21 +433,17 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   app.post<{ Params: { profile: string; id: string }; Body: unknown }>(
     "/api/profiles/:profile/commands/:id/duplicate",
     async (request, reply) => {
-      const body = z.object({ targetProfile: z.string().min(1) }).safeParse(request.body);
-      if (!body.success) {
-        return reply
-          .status(400)
-          .send({ error: body.error.issues[0]?.message ?? "Invalid request" });
-      }
       try {
-        const command = deps.store.duplicateCommand(
-          request.params.profile,
-          request.params.id,
-          body.data.targetProfile,
-        );
+        // Duplicate command at root level (creates new ID)
+        const command = deps.store.duplicateCommand(request.params.id);
+        // Optionally add to target profile if specified
+        const body = z.object({ targetProfile: z.string().min(1).optional() }).safeParse(request.body);
+        if (body.success && body.data.targetProfile) {
+          deps.store.addCommandToProfile(body.data.targetProfile, command.id);
+        }
         deps.queries.insertAuditEntry(
           "duplicate-command",
-          `${request.params.profile}/${request.params.id} -> ${body.data.targetProfile}/${command.id}`,
+          `${request.params.id} -> ${command.id}`,
         );
         return { command };
       } catch (err) {
@@ -465,11 +464,13 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
           .send({ error: body.error.issues[0]?.message ?? "Invalid request" });
       }
       try {
-        const command = deps.store.moveCommand(
-          request.params.profile,
-          request.params.id,
-          body.data.targetProfile,
-        );
+        // Remove from source profile and add to target profile
+        deps.store.removeCommandFromProfile(request.params.profile, request.params.id);
+        deps.store.addCommandToProfile(body.data.targetProfile, request.params.id);
+        const command = deps.store.getCommand(request.params.id);
+        if (!command) {
+          return reply.status(404).send({ error: `Command "${request.params.id}" not found` });
+        }
         deps.queries.insertAuditEntry(
           "move-command",
           `${request.params.profile}/${request.params.id} -> ${body.data.targetProfile}`,
@@ -495,13 +496,13 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       const { id } = request.params;
       const { profile } = request.body;
 
-      // Verify the command exists in the specified profile
+      // Verify the command exists and is referenced in the specified profile
       const config = deps.store.getConfig();
       const profileConfig = config.profiles[profile];
       if (!profileConfig) {
         return reply.status(404).send({ error: `Unknown profile "${profile}"` });
       }
-      if (!profileConfig.commands.some((c) => c.id === id)) {
+      if (!profileConfig.command_ids.includes(id)) {
         return reply.status(404).send({ error: `Unknown command "${id}" in profile "${profile}"` });
       }
 
@@ -523,13 +524,13 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       const { id } = request.params;
       const { profile } = request.body;
 
-      // Verify the command exists in the specified profile
+      // Verify the command exists and is referenced in the specified profile
       const config = deps.store.getConfig();
       const profileConfig = config.profiles[profile];
       if (!profileConfig) {
         return reply.status(404).send({ error: `Unknown profile "${profile}"` });
       }
-      if (!profileConfig.commands.some((c) => c.id === id)) {
+      if (!profileConfig.command_ids.includes(id)) {
         return reply.status(404).send({ error: `Unknown command "${id}" in profile "${profile}"` });
       }
 
@@ -564,9 +565,9 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
 
       const queue = deps.store.getQueue();
       try {
-        // Start commands in this profile that are defined in its commands list
-        for (const command of profileConfig.commands) {
-          await queue.startOne(command.id, deps.onLog);
+        // Start commands in this profile (resolve from command_ids)
+        for (const commandId of profileConfig.command_ids) {
+          await queue.startOne(commandId, deps.onLog);
         }
       } catch (err) {
         return reply.status(400).send({ error: (err as Error).message });
@@ -587,9 +588,9 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       }
 
       const queue = deps.store.getQueue();
-      // Stop only commands from this profile
-      for (const command of profileConfig.commands) {
-        const wrapper = queue.getWrapper(command.id);
+      // Stop only commands from this profile (resolve from command_ids)
+      for (const commandId of profileConfig.command_ids) {
+        const wrapper = queue.getWrapper(commandId);
         if (wrapper) {
           await wrapper.stop();
         }

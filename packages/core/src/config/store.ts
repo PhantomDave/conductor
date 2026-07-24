@@ -32,34 +32,34 @@ export class ConfigStore {
   }
 
   private buildGlobalQueue(): SpawnQueue {
-    // Collect all commands from all profiles
-    const allCommands: CommandConfig[] = [];
-    for (const profile of Object.values(this.config.profiles)) {
-      allCommands.push(...profile.commands);
-    }
-
-    // Create a global queue that can resolve env for any profile+command combo
-    return new SpawnQueue("__global__", allCommands, (cmd) => this.resolveEnvForCommand(cmd));
+    // Use root-level commands directly
+    return new SpawnQueue("__global__", this.config.commands, (cmd) =>
+      this.resolveEnvForCommand(cmd),
+    );
   }
 
   /**
-   * Finds which profile owns a given command by ID.
-   * Returns null if not found.
+   * Resolves environment for a command.
+   * Finds which profiles reference this command to build correct env context.
    */
-  private findProfileForCommand(commandId: string): string | null {
+  private findProfilesForCommand(commandId: string): string[] {
+    const profiles: string[] = [];
     for (const [profileName, profile] of Object.entries(this.config.profiles)) {
-      if (profile.commands.some((c) => c.id === commandId)) {
-        return profileName;
+      if (profile.command_ids.includes(commandId)) {
+        profiles.push(profileName);
       }
     }
-    return null;
+    return profiles;
   }
 
   /**
-   * Resolves environment for a command by finding its profile first.
+   * Resolves environment for a command.
+   * Uses the first profile that references this command for context.
    */
   private resolveEnvForCommand(cmd: CommandConfig): Record<string, string> {
-    const profileName = this.findProfileForCommand(cmd.id);
+    const profileNames = this.findProfilesForCommand(cmd.id);
+    const profileName = profileNames[0]; // Use first matching profile
+
     if (!profileName) {
       // Fallback: use global env only
       return buildCommandEnv({
@@ -120,6 +120,31 @@ export class ConfigStore {
 
   getConfig(): ConductorConfig {
     return this.config;
+  }
+
+  /**
+   * Returns all root-level command definitions.
+   */
+  getCommands(): CommandConfig[] {
+    return this.config.commands;
+  }
+
+  /**
+   * Returns a specific command by ID.
+   */
+  getCommand(commandId: string): CommandConfig | undefined {
+    return this.config.commands.find((c) => c.id === commandId);
+  }
+
+  /**
+   * Returns commands for a specific profile (resolved from command_ids).
+   */
+  getProfileCommands(profileName: string): CommandConfig[] {
+    const profile = this.config.profiles[profileName];
+    if (!profile) return [];
+    return profile.command_ids
+      .map((id) => this.config.commands.find((c) => c.id === id))
+      .filter((c): c is CommandConfig => c !== undefined);
   }
 
   getQueues(): Map<string, SpawnQueue> {
@@ -185,7 +210,7 @@ export class ConfigStore {
       ...this.config,
       profiles: {
         ...this.config.profiles,
-        [name]: { description: input.description, env: {}, commands: [] },
+        [name]: { description: input.description, env: {}, command_ids: [] },
       },
     };
     this.config = validateConfig(nextConfig);
@@ -213,20 +238,8 @@ export class ConfigStore {
       throw new ConfigError(`Profile "${newName}" already exists`);
     }
 
-    // Update all commands' dependencies that reference the old profile
-    const updatedProfiles = { ...this.config.profiles };
-    for (const profile of Object.values(updatedProfiles)) {
-      for (const cmd of profile.commands) {
-        if (cmd.deps) {
-          cmd.deps = cmd.deps.map((dep) =>
-            dep.startsWith(`${oldName}/`) ? `${newName}/${dep.slice(oldName.length + 1)}` : dep,
-          );
-        }
-      }
-    }
-
-    // Move the profile entry
-    const { [oldName]: profile, ...rest } = updatedProfiles;
+    // Simply move the profile entry (no command updates needed since commands are at root)
+    const { [oldName]: profile, ...rest } = this.config.profiles;
     this.config = validateConfig({
       ...this.config,
       profiles: {
@@ -248,20 +261,28 @@ export class ConfigStore {
       throw new ConfigError(`Profile "${targetName}" already exists`);
     }
 
-    // Deep copy the profile with new command IDs
-    const copiedCommands = source.commands.map((cmd) => ({
+    // Get commands for this profile
+    const sourceCommands = source.command_ids
+      .map((id) => this.config.commands.find((c) => c.id === id))
+      .filter((c): c is CommandConfig => c !== undefined);
+
+    // Create new commands at root level with new IDs
+    const newCommands = sourceCommands.map((cmd) => ({
       ...cmd,
       id: randomUUID().slice(0, 8), // New IDs for cloned commands
     }));
 
+    const newCommandIds = newCommands.map((c) => c.id);
+
     const nextConfig: ConductorConfig = {
       ...this.config,
+      commands: [...this.config.commands, ...newCommands],
       profiles: {
         ...this.config.profiles,
         [targetName]: {
           description: source.description ? `${source.description} (copy)` : undefined,
           env: { ...source.env }, // Shallow copy of env vars
-          commands: copiedCommands,
+          command_ids: newCommandIds,
         },
       },
     };
@@ -271,171 +292,156 @@ export class ConfigStore {
     return this.config.profiles[targetName];
   }
 
+  /**
+   * Adds a new command at the root level.
+   */
   addCommand(
-    profileName: string,
     input: Partial<Omit<CommandConfig, "id">> & { name: string; run: string; id?: string },
   ): CommandConfig {
-    const profile = this.config.profiles[profileName];
-    if (!profile) {
-      throw new ConfigError(`Unknown profile "${profileName}"`);
-    }
-
     const id = input.id?.trim() || slugify(input.name) || randomUUID().slice(0, 8);
-    if (profile.commands.some((c) => c.id === id)) {
-      throw new ConfigError(`Command "${id}" already exists in profile "${profileName}"`);
+    if (this.config.commands.some((c) => c.id === id)) {
+      throw new ConfigError(`Command "${id}" already exists`);
     }
 
     const command = { ...input, id } as CommandConfig;
-    const nextProfile: ProfileConfig = {
-      ...profile,
-      commands: [...profile.commands, command],
-    };
-    this.config = validateConfig({
+    const nextConfig: ConductorConfig = {
       ...this.config,
-      profiles: { ...this.config.profiles, [profileName]: nextProfile },
-    });
+      commands: [...this.config.commands, command],
+    };
+    this.config = validateConfig(nextConfig);
     this.mutableQueue = this.buildGlobalQueue();
     this.persist();
-    return this.config.profiles[profileName].commands.find((c) => c.id === id)!;
+    return this.config.commands.find((c) => c.id === id)!;
   }
 
+  /**
+   * Updates a root-level command.
+   */
   updateCommand(
-    profileName: string,
     commandId: string,
     patch: Partial<Omit<CommandConfig, "id">>,
   ): CommandConfig {
-    const profile = this.config.profiles[profileName];
-    if (!profile) {
-      throw new ConfigError(`Unknown profile "${profileName}"`);
-    }
-    const existing = profile.commands.find((c) => c.id === commandId);
+    const existing = this.config.commands.find((c) => c.id === commandId);
     if (!existing) {
-      throw new ConfigError(`Unknown command "${commandId}" in profile "${profileName}"`);
+      throw new ConfigError(`Unknown command "${commandId}"`);
     }
 
     const updated = { ...existing, ...patch, id: commandId };
-    const nextProfile: ProfileConfig = {
-      ...profile,
-      commands: profile.commands.map((c) => (c.id === commandId ? updated : c)),
-    };
-    this.config = validateConfig({
+    const nextConfig: ConductorConfig = {
       ...this.config,
-      profiles: { ...this.config.profiles, [profileName]: nextProfile },
-    });
+      commands: this.config.commands.map((c) => (c.id === commandId ? updated : c)),
+    };
+    this.config = validateConfig(nextConfig);
     this.mutableQueue = this.buildGlobalQueue();
     this.persist();
-    return this.config.profiles[profileName].commands.find((c) => c.id === commandId)!;
+    return this.config.commands.find((c) => c.id === commandId)!;
   }
 
-  removeCommand(profileName: string, commandId: string): void {
-    const profile = this.config.profiles[profileName];
-    if (!profile) {
-      throw new ConfigError(`Unknown profile "${profileName}"`);
-    }
-
-    const nextProfile: ProfileConfig = {
-      ...profile,
-      commands: profile.commands.filter((c) => c.id !== commandId),
-    };
-    this.config = validateConfig({
+  /**
+   * Removes a command and all references to it from profiles.
+   */
+  removeCommand(commandId: string): void {
+    // Remove from root commands
+    const nextConfig: ConductorConfig = {
       ...this.config,
-      profiles: { ...this.config.profiles, [profileName]: nextProfile },
-    });
+      commands: this.config.commands.filter((c) => c.id !== commandId),
+      // Also remove from all profiles
+      profiles: Object.fromEntries(
+        Object.entries(this.config.profiles).map(([name, profile]) => [
+          name,
+          {
+            ...profile,
+            command_ids: profile.command_ids.filter((id) => id !== commandId),
+          },
+        ]),
+      ),
+    };
+    this.config = validateConfig(nextConfig);
     this.mutableQueue = this.buildGlobalQueue();
     this.persist();
   }
 
-  duplicateCommand(sourceProfile: string, commandId: string, targetProfile: string): CommandConfig {
-    const source = this.config.profiles[sourceProfile];
-    if (!source) {
-      throw new ConfigError(`Unknown profile "${sourceProfile}"`);
-    }
-
-    const target = this.config.profiles[targetProfile];
-    if (!target) {
-      throw new ConfigError(`Unknown profile "${targetProfile}"`);
-    }
-
-    const existing = source.commands.find((c) => c.id === commandId);
+  /**
+   * Duplicates a root-level command with a new ID.
+   */
+  duplicateCommand(commandId: string): CommandConfig {
+    const existing = this.config.commands.find((c) => c.id === commandId);
     if (!existing) {
-      throw new ConfigError(`Unknown command "${commandId}" in profile "${sourceProfile}"`);
+      throw new ConfigError(`Unknown command "${commandId}"`);
     }
 
     // Generate a new ID for the duplicate, avoiding collisions
     let newId = `${existing.id}-copy`;
     let suffix = 2;
-    while (
-      target.commands.some((c) => c.id === newId) ||
-      source.commands.some((c) => c.id === newId)
-    ) {
+    while (this.config.commands.some((c) => c.id === newId)) {
       newId = `${existing.id}-copy-${suffix}`;
       suffix++;
     }
 
     const duplicated = { ...existing, id: newId };
-    const nextTarget: ProfileConfig = {
-      ...target,
-      commands: [...target.commands, duplicated],
+    const nextConfig: ConductorConfig = {
+      ...this.config,
+      commands: [...this.config.commands, duplicated],
     };
 
-    this.config = validateConfig({
-      ...this.config,
-      profiles: { ...this.config.profiles, [targetProfile]: nextTarget },
-    });
+    this.config = validateConfig(nextConfig);
     this.mutableQueue = this.buildGlobalQueue();
     this.persist();
-    return this.config.profiles[targetProfile].commands.find((c) => c.id === newId)!;
+    return this.config.commands.find((c) => c.id === newId)!;
   }
 
-  moveCommand(sourceProfile: string, commandId: string, targetProfile: string): CommandConfig {
-    const source = this.config.profiles[sourceProfile];
-    if (!source) {
-      throw new ConfigError(`Unknown profile "${sourceProfile}"`);
+  /**
+   * Adds a command to a profile by reference (command_ids).
+   */
+  addCommandToProfile(profileName: string, commandId: string): ProfileConfig {
+    const profile = this.config.profiles[profileName];
+    if (!profile) {
+      throw new ConfigError(`Unknown profile "${profileName}"`);
     }
 
-    const target = this.config.profiles[targetProfile];
-    if (!target) {
-      throw new ConfigError(`Unknown profile "${targetProfile}"`);
+    if (!this.config.commands.some((c) => c.id === commandId)) {
+      throw new ConfigError(`Unknown command "${commandId}"`);
     }
 
-    const existing = source.commands.find((c) => c.id === commandId);
-    if (!existing) {
-      throw new ConfigError(`Unknown command "${commandId}" in profile "${sourceProfile}"`);
+    if (profile.command_ids.includes(commandId)) {
+      throw new ConfigError(`Profile "${profileName}" already references command "${commandId}"`);
     }
 
-    // Check if other commands in source depend on this command
-    const dependents = source.commands.filter(
-      (c) => c.deps && c.deps.includes(commandId) && c.id !== commandId,
-    );
-    if (dependents.length > 0) {
-      throw new ConfigError(
-        `Cannot move command "${commandId}": other commands depend on it (${dependents.map((c) => c.id).join(", ")})`,
-      );
-    }
-
-    // Remove from source
-    const nextSource: ProfileConfig = {
-      ...source,
-      commands: source.commands.filter((c) => c.id !== commandId),
-    };
-
-    // Add to target
-    const nextTarget: ProfileConfig = {
-      ...target,
-      commands: [...target.commands, existing],
+    const nextProfile: ProfileConfig = {
+      ...profile,
+      command_ids: [...profile.command_ids, commandId],
     };
 
     this.config = validateConfig({
       ...this.config,
-      profiles: {
-        ...this.config.profiles,
-        [sourceProfile]: nextSource,
-        [targetProfile]: nextTarget,
-      },
+      profiles: { ...this.config.profiles, [profileName]: nextProfile },
     });
     this.mutableQueue = this.buildGlobalQueue();
     this.persist();
-    return this.config.profiles[targetProfile].commands.find((c) => c.id === commandId)!;
+    return this.config.profiles[profileName];
+  }
+
+  /**
+   * Removes a command reference from a profile.
+   */
+  removeCommandFromProfile(profileName: string, commandId: string): ProfileConfig {
+    const profile = this.config.profiles[profileName];
+    if (!profile) {
+      throw new ConfigError(`Unknown profile "${profileName}"`);
+    }
+
+    const nextProfile: ProfileConfig = {
+      ...profile,
+      command_ids: profile.command_ids.filter((id) => id !== commandId),
+    };
+
+    this.config = validateConfig({
+      ...this.config,
+      profiles: { ...this.config.profiles, [profileName]: nextProfile },
+    });
+    this.mutableQueue = this.buildGlobalQueue();
+    this.persist();
+    return this.config.profiles[profileName];
   }
 }
 

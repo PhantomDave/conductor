@@ -40,11 +40,12 @@ export type CommandConfig = z.infer<typeof CommandSchema>;
 
 /**
  * Schema for a profile (e.g. dev, staging, prod).
+ * Profiles now reference commands by ID instead of embedding them.
  */
 export const ProfileSchema = z.object({
   description: z.string().optional(),
   env: z.record(z.string(), z.string()).default({}),
-  commands: z.array(CommandSchema).default([]),
+  command_ids: z.array(z.string()).default([]),
 });
 
 export type ProfileConfig = z.infer<typeof ProfileSchema>;
@@ -74,6 +75,8 @@ export const ConductorConfigSchema = z.object({
   // Falls back to $SHELL/%COMSPEC% when unset - see executor/shell.ts.
   default_shell: z.string().optional(),
   global_env: z.record(z.string(), z.string()).default({}),
+  // Root-level command definitions (single source of truth, reused across profiles)
+  commands: z.array(CommandSchema).default([]),
   profiles: z.record(z.string(), ProfileSchema),
 });
 

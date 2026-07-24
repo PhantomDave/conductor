@@ -6,6 +6,80 @@ import { ConductorConfigSchema, type ConductorConfig } from "./schema";
 export class ConfigError extends Error {}
 
 /**
+ * Checks if a config uses the old format (commands nested in profiles).
+ */
+function usesOldFormat(profiles: Record<string, any> | undefined): boolean {
+  if (!profiles || typeof profiles !== "object") return false;
+  return Object.values(profiles).some(
+    (profile) => profile && typeof profile === "object" && Array.isArray(profile.commands),
+  );
+}
+
+/**
+ * Extracts commands from old-format profiles and deduplicates by ID.
+ */
+function extractCommandsFromProfiles(profiles: Record<string, any>): Map<string, any> {
+  const commandMap = new Map<string, any>();
+  for (const profile of Object.values(profiles)) {
+    if (profile && Array.isArray(profile.commands)) {
+      for (const cmd of profile.commands) {
+        if (cmd && typeof cmd === "object" && cmd.id) {
+          commandMap.set(cmd.id, cmd);
+        }
+      }
+    }
+  }
+  return commandMap;
+}
+
+/**
+ * Converts old-format profiles to new format (with command_ids instead of commands).
+ */
+function migrateProfiles(profiles: Record<string, any>): Record<string, any> {
+  const migratedProfiles: Record<string, any> = {};
+  for (const [profileName, profile] of Object.entries(profiles)) {
+    if (!profile || typeof profile !== "object") continue;
+    const commands = (profile as Record<string, any>).commands || [];
+    const command_ids = Array.isArray(commands)
+      ? commands.filter((c): c is any => c && typeof c === "object" && c.id).map((c) => c.id)
+      : [];
+    migratedProfiles[profileName] = {
+      description: (profile as Record<string, any>).description,
+      env: ((profile as Record<string, any>).env as Record<string, string>) || {},
+      command_ids,
+    };
+  }
+  return migratedProfiles;
+}
+
+/**
+ * Migrates old config format (commands nested in profiles) to new format
+ * (commands at root level, profiles reference via command_ids).
+ * This enables backward compatibility with existing .conductor.yml files.
+ */
+function migrateConfigFormat(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null) {
+    return raw;
+  }
+
+  const config = raw as Record<string, unknown>;
+  const profiles = config.profiles as Record<string, any> | undefined;
+
+  if (!profiles || !usesOldFormat(profiles)) {
+    return raw;
+  }
+
+  const commandMap = extractCommandsFromProfiles(profiles);
+  const migratedProfiles = migrateProfiles(profiles);
+
+  return {
+    ...config,
+    commands: Array.from(commandMap.values()),
+    profiles: migratedProfiles,
+  };
+}
+
+/**
  * Loads and parses a `.conductor.yml` file from an absolute or relative path.
  * Throws ConfigError on missing file or invalid YAML.
  */
@@ -25,10 +99,14 @@ export function loadConfigFile(filePath: string): unknown {
 
 /**
  * Validates a raw parsed object against the Conductor config schema.
+ * Automatically migrates old config format to new format.
  * Throws ConfigError with a readable message on validation failure.
  */
 export function validateConfig(raw: unknown): ConductorConfig {
-  const result = ConductorConfigSchema.safeParse(raw);
+  // Migrate old format to new format if needed
+  const migrated = migrateConfigFormat(raw);
+
+  const result = ConductorConfigSchema.safeParse(migrated);
   if (!result.success) {
     const issues = result.error.issues
       .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)

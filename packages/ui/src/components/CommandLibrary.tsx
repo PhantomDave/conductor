@@ -11,6 +11,7 @@ import {
   TextInput,
   Modal,
   Menu,
+  Tooltip,
 } from "@mantine/core";
 import {
   IconPlayerPlay,
@@ -211,28 +212,105 @@ export function CommandLibrary() {
                     </Button>
                   </Group>
 
-                  {profile.commands.map((command) => (
-                    <Group key={command.id} justify="space-between" wrap="nowrap">
-                      <div>
-                        <Group gap={6}>
-                          <Text size="sm">{command.name}</Text>
-                          {command.healthcheck && command.healthcheck.type !== "none" && (
-                            <Badge size="xs" variant="dot" color="blue">
-                              {command.healthcheck.type} healthcheck
-                            </Badge>
-                          )}
-                          {command.deps.length > 0 && (
-                            <Badge size="xs" variant="light" color="grape">
-                              deps: {command.deps.join(", ")}
-                            </Badge>
-                          )}
-                        </Group>
-                        {command.description && (
-                          <Text size="xs" c="dimmed">
-                            {command.description}
+                  {profile.commands.map((command) => {
+                    // Build tooltip content showing command details
+                    const tooltipContent = (
+                      <Stack gap={4} style={{ whiteSpace: "normal", maxWidth: 300 }}>
+                        <div>
+                          <Text size="xs" fw={600} c="white">
+                            {command.name}
                           </Text>
+                          {command.description && (
+                            <Text size="xs" c="dimmed">
+                              {command.description}
+                            </Text>
+                          )}
+                        </div>
+                        <div>
+                          <Text size="xs" fw={600} c="blue">
+                            Command:
+                          </Text>
+                          <Text size="xs" c="white" style={{ fontFamily: "monospace" }}>
+                            {command.run}
+                          </Text>
+                        </div>
+                        {command.cwd && command.cwd !== "." && (
+                          <div>
+                            <Text size="xs" fw={600} c="blue">
+                              Working directory:
+                            </Text>
+                            <Text size="xs" c="white">
+                              {command.cwd}
+                            </Text>
+                          </div>
                         )}
-                      </div>
+                        {command.deps.length > 0 && (
+                          <div>
+                            <Text size="xs" fw={600} c="blue">
+                              Dependencies:
+                            </Text>
+                            <Text size="xs" c="white">
+                              {command.deps.join(", ")}
+                            </Text>
+                          </div>
+                        )}
+                        {command.healthcheck && command.healthcheck.type !== "none" && (
+                          <div>
+                            <Text size="xs" fw={600} c="blue">
+                              Healthcheck:
+                            </Text>
+                            <Text size="xs" c="white">
+                              {command.healthcheck.type} (every {command.healthcheck.interval_ms}ms)
+                            </Text>
+                          </div>
+                        )}
+                        {command.watch && command.watch.length > 0 && (
+                          <div>
+                            <Text size="xs" fw={600} c="blue">
+                              Watch patterns:
+                            </Text>
+                            <Text size="xs" c="white">
+                              {command.watch.join(", ")}
+                            </Text>
+                          </div>
+                        )}
+                      </Stack>
+                    );
+
+                    return (
+                      <Tooltip
+                        key={command.id}
+                        label={tooltipContent}
+                        position="top"
+                        multiline
+                        withArrow
+                        color="dark"
+                      >
+                        <Group
+                          justify="space-between"
+                          wrap="nowrap"
+                          style={{ flex: 1, cursor: "default" }}
+                        >
+                          <div>
+                            <Group gap={6}>
+                              <Text size="sm">{command.name}</Text>
+                              {command.healthcheck && command.healthcheck.type !== "none" && (
+                                <Badge size="xs" variant="dot" color="blue">
+                                  {command.healthcheck.type} healthcheck
+                                </Badge>
+                              )}
+                              {command.deps.length > 0 && (
+                                <Badge size="xs" variant="light" color="grape">
+                                  deps: {command.deps.join(", ")}
+                                </Badge>
+                              )}
+                            </Group>
+                            {command.description && (
+                              <Text size="xs" c="dimmed">
+                                {command.description}
+                              </Text>
+                            )}
+                          </div>
                       <Group gap={4} wrap="nowrap">
                         <Button
                           size="xs"
@@ -308,8 +386,10 @@ export function CommandLibrary() {
                           </Menu.Dropdown>
                         </Menu>
                       </Group>
-                    </Group>
-                  ))}
+                        </Group>
+                      </Tooltip>
+                    );
+                  })}
                 </Stack>
               </Accordion.Panel>
             </Accordion.Item>

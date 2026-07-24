@@ -41,7 +41,8 @@ export interface CommandInfo {
 
 export interface ProfileInfo {
   description?: string;
-  commands: CommandInfo[];
+  command_ids: string[];
+  commands: CommandInfo[]; // Always populated by useProfiles resolver
 }
 
 export interface EnvVarRow {
@@ -81,10 +82,26 @@ export async function fetchProcesses(): Promise<ProcessInfo[]> {
   return data.processes ?? [];
 }
 
-export async function fetchProfiles(): Promise<Record<string, ProfileInfo>> {
+export async function fetchProfiles(): Promise<Record<string, ProfileInfo & { commands: CommandInfo[] }>> {
   const res = await fetch(`${API_BASE}/profiles`);
   const data = await parseJsonOrThrow(res, `Failed to fetch profiles: ${res.status}`);
-  return data.profiles ?? {};
+  const { profiles, commands } = data;
+  
+  // Resolve command_ids to full command objects
+  const resolvedProfiles = Object.fromEntries(
+    Object.entries(profiles ?? {}).map(([name, profile]: [string, any]) => [
+      name,
+      {
+        description: profile.description,
+        command_ids: profile.command_ids,
+        commands: (profile.command_ids as string[])
+          .map((id: string) => (commands as CommandInfo[]).find((c: CommandInfo) => c.id === id))
+          .filter((c: CommandInfo | undefined): c is CommandInfo => c !== undefined),
+      } as ProfileInfo & { commands: CommandInfo[] },
+    ]),
+  );
+  
+  return resolvedProfiles;
 }
 
 export async function createProfile(name: string, description?: string): Promise<void> {

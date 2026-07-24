@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import type { CommandConfig } from "@conductor/core";
 import { requireConfig } from "../config-context";
 
 export function registerListCommand(program: import("commander").Command) {
@@ -22,8 +23,13 @@ export function registerListCommand(program: import("commander").Command) {
         process.exit(1);
       }
 
+      // Resolve command_ids to full command objects
+      const commands = selected.command_ids
+        .map((id) => config.commands.find((c) => c.id === id))
+        .filter((c): c is CommandConfig => c !== undefined);
+
       console.log(pc.bold(`Commands in "${profile}":`));
-      for (const cmd of selected.commands) {
+      for (const cmd of commands) {
         const deps = cmd.deps.length ? pc.dim(` (deps: ${cmd.deps.join(", ")})`) : "";
         console.log(`  ${pc.cyan(cmd.id)}  ${cmd.name}${deps}`);
       }

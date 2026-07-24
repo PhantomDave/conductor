@@ -5,6 +5,7 @@ import {
   buildProfileEnv,
   compileConfigExamples,
   type LogEntry,
+  type CommandConfig,
 } from "@conductor/core";
 import { requireConfig } from "../config-context";
 
@@ -40,8 +41,13 @@ export function registerRunCommand(program: import("commander").Command) {
         );
       }
 
-      const queue = new SpawnQueue(profile, selected.commands, (cmd) =>
-        buildCommandEnv({ configFilePath: configPath, config, profile: selected, cmd }),
+      const queue = new SpawnQueue(
+        profile,
+        // Resolve command_ids to full command objects
+        selected.command_ids
+          .map((id) => config.commands.find((c) => c.id === id))
+          .filter((c): c is CommandConfig => c !== undefined),
+        (cmd) => buildCommandEnv({ configFilePath: configPath, config, profile: selected, cmd }),
       );
 
       const onLog = (entry: LogEntry) => {
