@@ -63,9 +63,9 @@ describe("ConfigStore.importConfig", () => {
     const store = makeStore();
     const before = store.getConfig();
 
-    expect(() => store.importConfig({ commands: [{}], profiles: { dev: { command_ids: [] } } })).toThrow(
-      ConfigError,
-    );
+    expect(() =>
+      store.importConfig({ commands: [{}], profiles: { dev: { command_ids: [] } } }),
+    ).toThrow(ConfigError);
 
     // Nothing changed - same reference, same profiles.
     expect(store.getConfig()).toBe(before);

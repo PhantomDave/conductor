@@ -24,6 +24,8 @@ describe("validateConfig", () => {
   });
 
   test("rejects config missing required fields", () => {
-    expect(() => validateConfig({ commands: [{}], profiles: { dev: { command_ids: [] } } })).toThrow(ConfigError);
+    expect(() =>
+      validateConfig({ commands: [{}], profiles: { dev: { command_ids: [] } } }),
+    ).toThrow(ConfigError);
   });
 });
