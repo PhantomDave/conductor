@@ -63,7 +63,7 @@ describe("ConfigStore.importConfig", () => {
     const store = makeStore();
     const before = store.getConfig();
 
-    expect(() => store.importConfig({ profiles: { dev: { commands: [{}] } } })).toThrow(
+    expect(() => store.importConfig({ commands: [{}], profiles: { dev: { command_ids: [] } } })).toThrow(
       ConfigError,
     );
 
