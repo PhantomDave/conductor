@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { dirname, resolve } from "node:path";
-import { resolveBasePath, buildCommandEnv } from "../src/config/env-resolution";
-import { validateConfig } from "../src/config/loader";
+import { resolveBasePath, buildCommandEnv } from "../src";
+import { validateConfig } from "../src";
 
 // Use a path under the actual cwd rather than a hardcoded POSIX absolute
 // path so these assertions hold on Windows too, where `path.resolve`
@@ -41,7 +41,7 @@ describe("buildCommandEnv", () => {
       configFilePath,
       config,
       profile: config.profiles.dev,
-      cmd: config.profiles.dev.commands[0]!,
+      cmd: config.commands[0]!,
     });
 
     const expectedBasePath = resolve(dirname(configFilePath), "../app");
@@ -55,7 +55,7 @@ describe("buildCommandEnv", () => {
       configFilePath,
       config,
       profile: config.profiles.dev,
-      cmd: config.profiles.dev.commands[0]!,
+      cmd: config.commands[0]!,
     });
 
     // Env var name casing for PATH/HOME-equivalents is platform-dependent

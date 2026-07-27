@@ -3,11 +3,29 @@ import { ProcessWrapper, type LogHandler, type ProcessSnapshot } from "./wrapper
 import { waitForHealthy } from "./healthcheck";
 
 /**
+ * Represents a failure event in the queue: process start failure,
+ * dependency block, or healthcheck timeout.
+ */
+export interface Notification {
+  id: string;
+  timestamp: number;
+  type: "failed_start" | "dependency_failed" | "healthcheck_failed";
+  profile: string;
+  commandId: string;
+  commandName?: string;
+  reason: string;
+  exitCode?: number;
+  affectedDownstream: string[]; // Command IDs that were blocked by this failure
+}
+
+/**
  * Orchestrates a set of commands within a profile: resolves `deps` order
  * and manages the lifecycle of each ProcessWrapper.
  */
 export class SpawnQueue {
   private wrappers = new Map<string, ProcessWrapper>();
+  private notifications: Notification[] = [];
+  private readonly MAX_NOTIFICATIONS = 1000;
 
   constructor(
     private readonly profile: string,
@@ -75,18 +93,21 @@ export class SpawnQueue {
         return;
       }
 
-      // Failed - throw
+      // Failed - throw and record notification
       if (status === "failed") {
-        throw new Error(
-          `Dependency "${depId}" failed with exit code ${wrapper.getSnapshot()?.exitCode ?? "?"}`,
-        );
+        const snapshot = wrapper.getSnapshot();
+        const reason = `Dependency failed with exit code ${snapshot?.exitCode ?? "?"}`;
+        this.recordNotification("dependency_failed", depId, reason, snapshot?.exitCode);
+        throw new Error(reason);
       }
 
       // Still starting or stopping - wait a bit more
       await new Promise((r) => setTimeout(r, 100));
     }
 
-    throw new Error(`Dependency "${depId}" did not become ready within ${maxWaitMs}ms`);
+    const reason = `Dependency did not become ready within ${maxWaitMs}ms`;
+    this.recordNotification("dependency_failed", depId, reason);
+    throw new Error(reason);
   }
 
   /**
@@ -236,5 +257,50 @@ export class SpawnQueue {
    */
   findByPid(pid: number): ProcessWrapper | undefined {
     return this.listWrappers().find((w) => w.pid === pid);
+  }
+
+  /**
+   * Records a failure notification for a command. Maintains a bounded
+   * history (max 1000 notifications).
+   */
+  private recordNotification(
+    type: Notification["type"],
+    commandId: string,
+    reason: string,
+    exitCode?: number,
+    affectedDownstream: string[] = [],
+  ): void {
+    const cmd = this.commands.find((c) => c.id === commandId);
+    const notification: Notification = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      timestamp: Date.now(),
+      type,
+      profile: this.profile,
+      commandId,
+      commandName: cmd?.name,
+      reason,
+      exitCode,
+      affectedDownstream,
+    };
+
+    this.notifications.push(notification);
+    if (this.notifications.length > this.MAX_NOTIFICATIONS) {
+      this.notifications.shift(); // Remove oldest
+    }
+  }
+
+  /**
+   * Returns all recorded failure notifications, most recent first.
+   */
+  listNotifications(): Notification[] {
+    return [...this.notifications].reverse();
+  }
+
+  /**
+   * Returns paginated notifications with optional limit and offset.
+   */
+  getNotifications(limit = 100, offset = 0): Notification[] {
+    const reversed = this.listNotifications();
+    return reversed.slice(offset, offset + limit);
   }
 }

@@ -1,7 +1,9 @@
-import { Table, Badge, Text, Card, Button, Group } from "@mantine/core";
-import { IconPlayerStop, IconRefresh } from "@tabler/icons-react";
+import { Table, Badge, Text, Card, Button, Group, Tabs } from "@mantine/core";
+import { IconPlayerStop, IconRefresh, IconFileText } from "@tabler/icons-react";
+import { useState } from "react";
 import { useProcesses } from "../hooks/useProcesses";
 import { useStopProcess, useRestartCommand } from "../hooks/useProcessActions";
+import { useUiStore } from "../store/ui";
 
 const STATUS_COLOR: Record<string, string> = {
   running: "green",
@@ -17,23 +19,23 @@ const HEALTH_COLOR: Record<string, string> = {
   unknown: "gray",
 };
 
-export function ProcessBoard() {
-  const { data: processes, isLoading, error } = useProcesses();
-  const stopProcess = useStopProcess();
-  const restartCommand = useRestartCommand();
+interface ProcessTableProps {
+  processes: typeof useProcesses extends (...args: any[]) => infer R
+    ? R extends { data: infer D }
+      ? D
+      : never
+    : never;
+  stopProcess: ReturnType<typeof useStopProcess>;
+  restartCommand: ReturnType<typeof useRestartCommand>;
+}
 
-  if (isLoading) return <Text c="dimmed">Loading processes...</Text>;
-  if (error) {
-    return <Text c="red">Could not reach Conductor core API. Is `bun run dev:core` running?</Text>;
-  }
+function ProcessTable({ processes, stopProcess, restartCommand }: ProcessTableProps) {
+  const { selectProcess } = useUiStore();
 
   if (!processes || processes.length === 0) {
     return (
       <Card withBorder padding="lg">
-        <Text c="dimmed">
-          No processes running. Start one with `conductor run &lt;profile&gt;` or from the command
-          library below.
-        </Text>
+        <Text c="dimmed">No processes to display</Text>
       </Card>
     );
   }
@@ -75,6 +77,14 @@ export function ProcessBoard() {
                   <Button
                     size="xs"
                     variant="subtle"
+                    leftSection={<IconFileText size={14} />}
+                    onClick={() => selectProcess({ profile: p.profile, commandId: p.commandId })}
+                  >
+                    Logs
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="subtle"
                     leftSection={<IconRefresh size={14} />}
                     loading={
                       restartCommand.isPending &&
@@ -105,5 +115,75 @@ export function ProcessBoard() {
         })}
       </Table.Tbody>
     </Table>
+  );
+}
+
+export function ProcessBoard() {
+  const { data: processes, isLoading, error } = useProcesses();
+  const stopProcess = useStopProcess();
+  const restartCommand = useRestartCommand();
+  const [activeTab, setActiveTab] = useState<string | null>("running");
+
+  if (isLoading) return <Text c="dimmed">Loading processes...</Text>;
+  if (error) {
+    return <Text c="red">Could not reach Conductor core API. Is `bun run dev:core` running?</Text>;
+  }
+
+  if (!processes || processes.length === 0) {
+    return (
+      <Card withBorder padding="lg">
+        <Text c="dimmed">
+          No processes running. Start one with `conductor run &lt;profile&gt;` or from the command
+          library below.
+        </Text>
+      </Card>
+    );
+  }
+
+  // Filter processes by status
+  const runningProcesses = processes.filter((p) => p.status === "running");
+  const queuedProcesses = processes.filter(
+    (p) => p.status === "starting" || p.status === "stopping",
+  );
+  const stoppedProcesses = processes.filter((p) => p.status === "stopped" || p.status === "failed");
+
+  return (
+    <Tabs value={activeTab} onChange={setActiveTab}>
+      <Tabs.List>
+        <Tabs.Tab value="running" rightSection={<Badge>{runningProcesses.length}</Badge>}>
+          Running
+        </Tabs.Tab>
+        <Tabs.Tab value="queued" rightSection={<Badge>{queuedProcesses.length}</Badge>}>
+          Queued
+        </Tabs.Tab>
+        <Tabs.Tab value="stopped" rightSection={<Badge>{stoppedProcesses.length}</Badge>}>
+          Recent
+        </Tabs.Tab>
+      </Tabs.List>
+
+      <Tabs.Panel value="running" pt="md">
+        <ProcessTable
+          processes={runningProcesses}
+          stopProcess={stopProcess}
+          restartCommand={restartCommand}
+        />
+      </Tabs.Panel>
+
+      <Tabs.Panel value="queued" pt="md">
+        <ProcessTable
+          processes={queuedProcesses}
+          stopProcess={stopProcess}
+          restartCommand={restartCommand}
+        />
+      </Tabs.Panel>
+
+      <Tabs.Panel value="stopped" pt="md">
+        <ProcessTable
+          processes={stoppedProcesses}
+          stopProcess={stopProcess}
+          restartCommand={restartCommand}
+        />
+      </Tabs.Panel>
+    </Tabs>
   );
 }

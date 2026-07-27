@@ -2,8 +2,8 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConfigStore } from "../src/config/store";
-import { ConfigError, validateConfig } from "../src/config/loader";
+import { ConfigStore } from "../src";
+import { ConfigError, validateConfig } from "../src";
 
 let dir: string;
 let configPath: string;
@@ -63,12 +63,98 @@ describe("ConfigStore.importConfig", () => {
     const store = makeStore();
     const before = store.getConfig();
 
-    expect(() => store.importConfig({ profiles: { dev: { commands: [{}] } } })).toThrow(
-      ConfigError,
-    );
+    expect(() =>
+      store.importConfig({ commands: [{}], profiles: { dev: { command_ids: [] } } }),
+    ).toThrow(ConfigError);
 
     // Nothing changed - same reference, same profiles.
     expect(store.getConfig()).toBe(before);
     expect(store.getQueue("dev")).toBeDefined();
+  });
+});
+
+describe("ConfigStore.duplicateProfile", () => {
+  test("duplicates a profile and references same command IDs (not creating new commands)", () => {
+    const initial = validateConfig({
+      version: "1",
+      commands: [
+        { id: "api", name: "API", run: "npm run api" },
+        { id: "db", name: "Database", run: "docker run postgres" },
+      ],
+      profiles: {
+        dev: {
+          command_ids: ["api", "db"],
+          env: { DEBUG: "true" },
+        },
+      },
+    });
+    const store = new ConfigStore(configPath, initial);
+
+    // Duplicate the profile
+    const duplicate = store.duplicateProfile("dev", "dev-copy");
+
+    // Verify the duplicated profile references the same command IDs
+    expect(duplicate.command_ids).toEqual(["api", "db"]);
+    expect(duplicate.env).toEqual({ DEBUG: "true" });
+    expect(duplicate.description).toBeUndefined();
+
+    // Verify no new commands were created
+    const config = store.getConfig();
+    expect(config.commands.length).toBe(2); // Still only the original 2 commands
+    expect(config.commands[0].id).toBe("api");
+    expect(config.commands[1].id).toBe("db");
+
+    // Verify both profiles exist and reference the same commands
+    expect(config.profiles.dev.command_ids).toEqual(["api", "db"]);
+    expect(config.profiles["dev-copy"].command_ids).toEqual(["api", "db"]);
+  });
+
+  test("duplicates profile description with (copy) suffix", () => {
+    const initial = validateConfig({
+      version: "1",
+      commands: [{ id: "hello", name: "Hello", run: "echo hi" }],
+      profiles: {
+        production: {
+          command_ids: ["hello"],
+          description: "Production environment",
+        },
+      },
+    });
+    const store = new ConfigStore(configPath, initial);
+
+    const duplicate = store.duplicateProfile("production", "prod-backup");
+
+    expect(duplicate.description).toBe("Production environment (copy)");
+  });
+
+  test("throws if source profile does not exist", () => {
+    const store = makeStore();
+
+    expect(() => store.duplicateProfile("nonexistent", "copy")).toThrow(
+      /Unknown profile "nonexistent"/,
+    );
+  });
+
+  test("throws if target profile already exists", () => {
+    const store = makeStore();
+
+    expect(() => store.duplicateProfile("dev", "dev")).toThrow(/Profile "dev" already exists/);
+  });
+
+  test("persists duplicated profile to disk", () => {
+    const initial = validateConfig({
+      version: "1",
+      commands: [{ id: "test", name: "Test", run: "npm test" }],
+      profiles: {
+        dev: { command_ids: ["test"] },
+      },
+    });
+    const store = new ConfigStore(configPath, initial);
+
+    store.duplicateProfile("dev", "dev-staging");
+
+    const onDisk = readFileSync(configPath, "utf-8");
+    expect(onDisk).toContain("dev-staging");
+    expect(onDisk).toContain("test");
   });
 });
