@@ -20,11 +20,7 @@ export function NotificationsTab() {
 
   if (isLoading) return <Text c="dimmed">Loading notifications...</Text>;
   if (error) {
-    return (
-      <Text c="red">
-        Could not reach Conductor core API. Is `bun run dev:core` running?
-      </Text>
-    );
+    return <Text c="red">Could not reach Conductor core API. Is `bun run dev:core` running?</Text>;
   }
 
   const notifications = data?.notifications || [];
@@ -67,9 +63,7 @@ export function NotificationsTab() {
             const time = new Date(notif.timestamp);
             const timeStr = time.toLocaleTimeString();
             const blockedStr =
-              notif.affectedDownstream.length > 0
-                ? notif.affectedDownstream.join(", ")
-                : "-";
+              notif.affectedDownstream.length > 0 ? notif.affectedDownstream.join(", ") : "-";
 
             return (
               <Table.Tr key={notif.id}>

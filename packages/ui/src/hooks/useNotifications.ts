@@ -16,9 +16,7 @@ export function useNotifications(limit = 100, offset = 0) {
   return useQuery({
     queryKey: ["notifications", limit, offset],
     queryFn: async () => {
-      const response = await fetch(
-        `/api/notifications?limit=${limit}&offset=${offset}`,
-      );
+      const response = await fetch(`/api/notifications?limit=${limit}&offset=${offset}`);
       if (!response.ok) {
         throw new Error("Failed to fetch notifications");
       }

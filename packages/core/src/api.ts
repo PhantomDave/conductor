@@ -489,13 +489,16 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     return { processes };
   });
 
-  app.get<{ Querystring: { limit?: string; offset?: string } }>("/api/notifications", async (request) => {
-    const queue = deps.store.getQueue();
-    const limit = Math.min(parseInt(request.query.limit ?? "100"), 1000);
-    const offset = Math.max(parseInt(request.query.offset ?? "0"), 0);
-    const notifications = queue.getNotifications(limit, offset);
-    return { notifications };
-  });
+  app.get<{ Querystring: { limit?: string; offset?: string } }>(
+    "/api/notifications",
+    async (request) => {
+      const queue = deps.store.getQueue();
+      const limit = Math.min(parseInt(request.query.limit ?? "100"), 1000);
+      const offset = Math.max(parseInt(request.query.offset ?? "0"), 0);
+      const notifications = queue.getNotifications(limit, offset);
+      return { notifications };
+    },
+  );
 
   app.post<{ Params: { id: string }; Body: { profile: string } }>(
     "/api/commands/:id/execute",

@@ -31,7 +31,7 @@ interface ProcessTableProps {
 
 function ProcessTable({ processes, stopProcess, restartCommand }: ProcessTableProps) {
   const { selectProcess } = useUiStore();
-  
+
   if (!processes || processes.length === 0) {
     return (
       <Card withBorder padding="lg">
@@ -143,11 +143,9 @@ export function ProcessBoard() {
   // Filter processes by status
   const runningProcesses = processes.filter((p) => p.status === "running");
   const queuedProcesses = processes.filter(
-    (p) => p.status === "starting" || p.status === "stopping"
+    (p) => p.status === "starting" || p.status === "stopping",
   );
-  const stoppedProcesses = processes.filter(
-    (p) => p.status === "stopped" || p.status === "failed"
-  );
+  const stoppedProcesses = processes.filter((p) => p.status === "stopped" || p.status === "failed");
 
   return (
     <Tabs value={activeTab} onChange={setActiveTab}>

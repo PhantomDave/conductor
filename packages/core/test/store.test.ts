@@ -138,9 +138,7 @@ describe("ConfigStore.duplicateProfile", () => {
   test("throws if target profile already exists", () => {
     const store = makeStore();
 
-    expect(() => store.duplicateProfile("dev", "dev")).toThrow(
-      /Profile "dev" already exists/,
-    );
+    expect(() => store.duplicateProfile("dev", "dev")).toThrow(/Profile "dev" already exists/);
   });
 
   test("persists duplicated profile to disk", () => {
