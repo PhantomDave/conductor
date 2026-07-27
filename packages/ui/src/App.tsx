@@ -1,7 +1,8 @@
 import { AppShell, Group, Title, Badge, Box, Tabs, Stack, Text } from "@mantine/core";
 import { LogViewer } from "./components/LogViewer";
 import { EnvironmentManager } from "./components/EnvironmentManager";
-import { ProcessGridView } from "./components/ProcessGridView";
+import { ProcessBoard } from "./components/ProcessBoard";
+import { NotificationsTab } from "./components/NotificationsTab";
 import { ProfileGridView } from "./components/ProfileGridView";
 import { CommandLibrary } from "./components/CommandLibrary";
 import { useUiStore } from "./store/ui";
@@ -97,7 +98,23 @@ export default function App() {
           </Tabs.List>
 
           <Tabs.Panel value="processes" pt="md">
-            <ProcessGridView />
+            <Stack gap="xl">
+              <div>
+                <Title order={2}>Processes</Title>
+                <Text c="dimmed" size="sm">
+                  Live view of all running Conductor processes
+                </Text>
+                <ProcessBoard />
+              </div>
+
+              <div>
+                <Title order={2}>Notifications</Title>
+                <Text c="dimmed" size="sm">
+                  Process failures, blocked dependencies, and healthcheck issues
+                </Text>
+                <NotificationsTab />
+              </div>
+            </Stack>
           </Tabs.Panel>
 
           <Tabs.Panel value="profiles" pt="md">

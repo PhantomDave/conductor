@@ -1,6 +1,7 @@
 import { Stack, Title, Text } from "@mantine/core";
 import { ProcessBoard } from "../components/ProcessBoard";
 import { CommandLibrary } from "../components/CommandLibrary";
+import { NotificationsTab } from "../components/NotificationsTab";
 
 export function Dashboard() {
   return (
@@ -11,6 +12,14 @@ export function Dashboard() {
           Live view of all running Conductor processes
         </Text>
         <ProcessBoard />
+      </div>
+
+      <div>
+        <Title order={2}>Notifications</Title>
+        <Text c="dimmed" size="sm">
+          Process failures, blocked dependencies, and healthcheck issues
+        </Text>
+        <NotificationsTab />
       </div>
 
       <div>

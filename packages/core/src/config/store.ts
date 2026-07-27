@@ -261,28 +261,16 @@ export class ConfigStore {
       throw new ConfigError(`Profile "${targetName}" already exists`);
     }
 
-    // Get commands for this profile
-    const sourceCommands = source.command_ids
-      .map((id) => this.config.commands.find((c) => c.id === id))
-      .filter((c): c is CommandConfig => c !== undefined);
-
-    // Create new commands at root level with new IDs
-    const newCommands = sourceCommands.map((cmd) => ({
-      ...cmd,
-      id: randomUUID().slice(0, 8), // New IDs for cloned commands
-    }));
-
-    const newCommandIds = newCommands.map((c) => c.id);
-
+    // Duplicate only the profile, not the commands
+    // Reference the same command_ids so changes to commands affect both profiles
     const nextConfig: ConductorConfig = {
       ...this.config,
-      commands: [...this.config.commands, ...newCommands],
       profiles: {
         ...this.config.profiles,
         [targetName]: {
           description: source.description ? `${source.description} (copy)` : undefined,
           env: { ...source.env }, // Shallow copy of env vars
-          command_ids: newCommandIds,
+          command_ids: [...source.command_ids], // Reference same commands by ID
         },
       },
     };
