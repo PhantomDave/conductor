@@ -114,11 +114,9 @@ export class SpawnQueue {
    * Marks a wrapper as healthy after successful healthcheck.
    */
   private markHealthy(wrapper: ProcessWrapper): void {
-    const internal = wrapper as any;
-    if (internal.process) {
-      internal.process.health = "healthy";
-    }
+    wrapper.markHealthy("healthy");
   }
+
 
   /**
    * Returns commands ordered so that dependencies always start before
@@ -170,8 +168,12 @@ export class SpawnQueue {
       if (onLog) wrapper.onLog(onLog);
       (this.wrappers as any).set(cmd.id, wrapper);
       await wrapper.start();
-      await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env);
-      this.markHealthy(wrapper);
+      try {
+        await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env);
+        this.markHealthy(wrapper);
+      } catch {
+        wrapper.markFailed();
+      }
     }
   }
 
@@ -196,8 +198,12 @@ export class SpawnQueue {
     if (onLog) wrapper.onLog(onLog);
     (this.wrappers as any).set(cmd.id, wrapper);
     await wrapper.start();
-    await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env);
-    this.markHealthy(wrapper);
+    try {
+      await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env);
+      this.markHealthy(wrapper);
+    } catch {
+      wrapper.markFailed();
+    }
   }
 
   /**

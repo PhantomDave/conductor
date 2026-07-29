@@ -100,6 +100,31 @@ export class ProcessWrapper {
   }
 
   /**
+   * Transitions the process to "running" after its healthcheck passes.
+   * No-op if called when status is not "starting".
+   * Also sets `health` in-process — callers no longer need to mutate health separately.
+   */
+  markHealthy(health: HealthStatus): void {
+    if (this.process?.status !== "starting") return;
+    this.process.status = "running";
+    this.process.health = health;
+  }
+
+  /**
+   * Transitions the process to "failed" (e.g. when a healthcheck timed out
+   * or a dependency failure blocked startup). Safe to call from any state.
+   */
+  markFailed(): void {
+    if (!this.process) return;
+    // Allow starting → failed transition for healthcheck timeouts
+    // Ignore redundant transitions from already terminal states
+    if (this.process.status === "starting" || this.process.status === "running") {
+      this.process.status = "failed";
+      this.process.health = "unhealthy";
+    }
+  }
+
+  /**
    * Returns a serializable snapshot of the current process state, or
    * null if the process has never been started.
    */
@@ -162,7 +187,7 @@ export class ProcessWrapper {
       commandId: this.commandConfig.id,
       profile: this.profile,
       pid: subprocess.pid,
-      status: "running",
+      status: "starting",
       health: "unknown",
       startedAt: new Date(),
       subprocess,
