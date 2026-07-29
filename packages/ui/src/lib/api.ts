@@ -162,6 +162,52 @@ export async function createCommand(profile: string, input: CommandInput): Promi
   return data.command;
 }
 
+export async function fetchAllCommands(): Promise<Record<string, CommandInfo>> {
+  const res = await fetch(`${API_BASE}/command`);
+  const data = await parseJsonOrThrow(res, "Failed to fetch commands");
+  return data.commands ?? {};
+}
+
+/** Add an existing standalone command ID to a profile. */
+export async function addToProfile(commandId: string, profileName: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/profiles/${profileName}/commands`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: commandId }),
+  });
+  await parseJsonOrThrow(res, `Failed to add ${commandId} to profile "${profileName}"`);
+}
+
+export async function createStandaloneCommand(
+  input: Omit<CommandInput, "id">,
+): Promise<CommandInfo> {
+  const res = await fetch(`${API_BASE}/command`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = await parseJsonOrThrow(res, `Failed to create command "${input.name}"`);
+  return data.command;
+}
+
+export async function updateStandaloneCommand(
+  id: string,
+  patch: Partial<Omit<CommandInfo, "id">>,
+): Promise<CommandInfo> {
+  const res = await fetch(`${API_BASE}/command/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  const data = await parseJsonOrThrow(res, `Failed to update command "${id}"`);
+  return data.command;
+}
+
+export async function deleteStandaloneCommand(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/command/${id}`, { method: "DELETE" });
+  await parseJsonOrThrow(res, `Failed to delete command "${id}"`);
+}
+
 export async function updateCommand(
   profile: string,
   commandId: string,
