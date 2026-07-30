@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
-import { fetchAllCommands, updateStandaloneCommand, deleteStandaloneCommand, createStandaloneCommand, type CommandInput } from "../lib/api";
+import {
+  fetchAllCommands,
+  updateStandaloneCommand,
+  deleteStandaloneCommand,
+  createStandaloneCommand,
+  type CommandInput,
+} from "../lib/api";
 
 export function useCommandLibrary() {
   const queryClient = useQueryClient();
@@ -17,17 +23,26 @@ export function useCommandLibrary() {
       queryClient.invalidateQueries({ queryKey: ["command-library"] });
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to create command", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to create command",
+        message: error.message,
+      });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<CommandInput> }) => updateStandaloneCommand(id, patch),
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<CommandInput> }) =>
+      updateStandaloneCommand(id, patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["command-library"] });
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to update command", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to update command",
+        message: error.message,
+      });
     },
   });
 
@@ -37,7 +52,11 @@ export function useCommandLibrary() {
       queryClient.invalidateQueries({ queryKey: ["command-library"] });
     },
     onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to delete command", message: error.message });
+      notifications.show({
+        color: "red",
+        title: "Failed to delete command",
+        message: error.message,
+      });
     },
   });
 

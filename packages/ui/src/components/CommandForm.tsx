@@ -132,8 +132,17 @@ export function CommandForm({
       if (isStandalone) {
         setIsSubmitting(true);
         updateStandaloneCommand(editing.id, input as Partial<CommandInfo>)
-          .then(() => { notifications.show({ color: "green", message: `Updated command "${input.name}"` }); onClose(); })
-          .catch((err: Error) => { notifications.show({ color: "red", title: "Failed to update command", message: err.message }); })
+          .then(() => {
+            notifications.show({ color: "green", message: `Updated command "${input.name}"` });
+            onClose();
+          })
+          .catch((err: Error) => {
+            notifications.show({
+              color: "red",
+              title: "Failed to update command",
+              message: err.message,
+            });
+          })
           .finally(() => setIsSubmitting(false));
       } else {
         profileUpdate.mutate(
@@ -145,8 +154,17 @@ export function CommandForm({
       if (isStandalone) {
         setIsSubmitting(true);
         createStandaloneCommand(input)
-          .then((created) => { notifications.show({ color: "green", message: `Created command "${created.name}"` }); onClose(); })
-          .catch((err: Error) => { notifications.show({ color: "red", title: "Failed to create command", message: err.message }); })
+          .then((created) => {
+            notifications.show({ color: "green", message: `Created command "${created.name}"` });
+            onClose();
+          })
+          .catch((err: Error) => {
+            notifications.show({
+              color: "red",
+              title: "Failed to create command",
+              message: err.message,
+            });
+          })
           .finally(() => setIsSubmitting(false));
       } else {
         profileCreate.mutate({ profile: profile!, input }, { onSuccess: onClose });
@@ -155,7 +173,7 @@ export function CommandForm({
   };
 
   // In standalone mode we use the local isSubmitting; in profile mode we delegate to the mutation states.
-  const pending = isStandalone ? isSubmitting : (profileCreate.isPending || profileUpdate.isPending);
+  const pending = isStandalone ? isSubmitting : profileCreate.isPending || profileUpdate.isPending;
 
   return (
     <Modal

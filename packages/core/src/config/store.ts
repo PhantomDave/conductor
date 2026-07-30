@@ -252,10 +252,7 @@ export class ConfigStore {
     return this.config.profiles[newName];
   }
 
-  updateProfile(
-    name: string,
-    changes: { newName?: string; description?: string },
-  ): ProfileConfig {
+  updateProfile(name: string, changes: { newName?: string; description?: string }): ProfileConfig {
     const profile = this.config.profiles[name];
     if (!profile) {
       throw new ConfigError(`Unknown profile "${name}"`);
