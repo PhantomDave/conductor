@@ -142,10 +142,8 @@ export function ProcessBoard() {
 
   // Filter processes by status
   const runningProcesses = processes.filter((p) => p.status === "running");
-  const queuedProcesses = processes.filter(
-    (p) => p.status === "starting" || p.status === "stopping",
-  );
-  const stoppedProcesses = processes.filter((p) => p.status === "stopped" || p.status === "failed");
+  const queuedProcesses = processes.filter((p) => p.status !== "running" && p.status !== "stopped");
+  const stoppedProcesses = processes.filter((p) => p.status === "stopped");
 
   return (
     <Tabs value={activeTab} onChange={setActiveTab}>

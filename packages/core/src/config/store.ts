@@ -94,8 +94,8 @@ export class ConfigStore {
   /** Updates `base_path`, persisting it and re-resolving every command's env. */
   setBasePath(basePath: string): void {
     this.config = validateConfig({ ...this.config, base_path: basePath });
-    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
+    this.mutableQueue.setCommands(this.config.commands);
   }
 
   getDefaultShell(): string | undefined {
@@ -110,8 +110,8 @@ export class ConfigStore {
    */
   setDefaultShell(shell: string | undefined): void {
     this.config = validateConfig({ ...this.config, default_shell: shell });
-    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
+    this.mutableQueue.setCommands(this.config.commands);
   }
 
   private persist(): void {
@@ -161,7 +161,7 @@ export class ConfigStore {
 
   /** Re-runs env resolution for every command, e.g. after env vars change. */
   refreshEnv(): void {
-    this.mutableQueue = this.buildGlobalQueue();
+    this.mutableQueue.setCommands(this.config.commands);
   }
 
   /**
@@ -196,8 +196,8 @@ export class ConfigStore {
    */
   importConfig(raw: unknown): ConductorConfig {
     this.config = validateConfig(raw);
-    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
+    this.mutableQueue.setCommands(this.config.commands);
     return this.config;
   }
 
@@ -214,8 +214,8 @@ export class ConfigStore {
       },
     };
     this.config = validateConfig(nextConfig);
-    this.mutableQueue = this.buildGlobalQueue();
     this.persist();
+    this.mutableQueue.setCommands(this.config.commands);
     return this.config.profiles[name];
   }
 
@@ -225,7 +225,7 @@ export class ConfigStore {
     }
     const { [name]: _removed, ...rest } = this.config.profiles;
     this.config = validateConfig({ ...this.config, profiles: rest });
-    this.mutableQueue = this.buildGlobalQueue();
+    this.mutableQueue.setCommands(this.config.commands);
     this.persist();
   }
 
@@ -247,7 +247,7 @@ export class ConfigStore {
         [newName]: profile!,
       },
     });
-    this.mutableQueue = this.buildGlobalQueue();
+    this.mutableQueue.setCommands(this.config.commands);
     this.persist();
     return this.config.profiles[newName];
   }
@@ -275,7 +275,7 @@ export class ConfigStore {
       },
     };
     this.config = validateConfig(nextConfig);
-    this.mutableQueue = this.buildGlobalQueue();
+    this.mutableQueue.setCommands(this.config.commands);
     this.persist();
     return this.config.profiles[targetName];
   }
@@ -297,7 +297,7 @@ export class ConfigStore {
       commands: [...this.config.commands, command],
     };
     this.config = validateConfig(nextConfig);
-    this.mutableQueue = this.buildGlobalQueue();
+    this.mutableQueue.setCommands(this.config.commands);
     this.persist();
     return this.config.commands.find((c) => c.id === id)!;
   }
@@ -317,7 +317,7 @@ export class ConfigStore {
       commands: this.config.commands.map((c) => (c.id === commandId ? updated : c)),
     };
     this.config = validateConfig(nextConfig);
-    this.mutableQueue = this.buildGlobalQueue();
+    this.mutableQueue.setCommands(this.config.commands);
     this.persist();
     return this.config.commands.find((c) => c.id === commandId)!;
   }
@@ -342,7 +342,7 @@ export class ConfigStore {
       ),
     };
     this.config = validateConfig(nextConfig);
-    this.mutableQueue = this.buildGlobalQueue();
+    this.mutableQueue.setCommands(this.config.commands);
     this.persist();
   }
 
@@ -370,7 +370,7 @@ export class ConfigStore {
     };
 
     this.config = validateConfig(nextConfig);
-    this.mutableQueue = this.buildGlobalQueue();
+    this.mutableQueue.setCommands(this.config.commands);
     this.persist();
     return this.config.commands.find((c) => c.id === newId)!;
   }
@@ -401,7 +401,7 @@ export class ConfigStore {
       ...this.config,
       profiles: { ...this.config.profiles, [profileName]: nextProfile },
     });
-    this.mutableQueue = this.buildGlobalQueue();
+    this.mutableQueue.setCommands(this.config.commands);
     this.persist();
     return this.config.profiles[profileName];
   }
@@ -424,7 +424,7 @@ export class ConfigStore {
       ...this.config,
       profiles: { ...this.config.profiles, [profileName]: nextProfile },
     });
-    this.mutableQueue = this.buildGlobalQueue();
+    this.mutableQueue.setCommands(this.config.commands);
     this.persist();
     return this.config.profiles[profileName];
   }
