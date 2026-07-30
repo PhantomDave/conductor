@@ -89,7 +89,9 @@ export function useUpdateProfile() {
       changes: { newName?: string; description?: string };
     }) => updateProfile(oldName, changes),
     onSuccess: (_data, { oldName, changes }) => {
-      const label = changes.newName ? `'${oldName}' → '${changes.newName}'` : `profile "${oldName}"`;
+      const label = changes.newName
+        ? `'${oldName}' → '${changes.newName}'`
+        : `profile "${oldName}"`;
       notifications.show({ color: "green", message: `Updated ${label}` });
       invalidate();
     },

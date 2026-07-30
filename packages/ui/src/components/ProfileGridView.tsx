@@ -11,7 +11,7 @@ import {
   TextInput,
   Textarea,
 } from "@mantine/core";
-import { IconPlus, IconPlayerPlay } from "@tabler/icons-react";
+import { IconPlus } from "@tabler/icons-react";
 import { useProfiles } from "../hooks/useProfiles";
 import { useRunProfile } from "../hooks/useProcessActions";
 import {
@@ -186,9 +186,18 @@ export function ProfileGridView() {
       <Modal
         title="Create New Profile"
         opened={createModalOpen}
-        onClose={() => { setCreateModalOpen(false); setNewProfileName(""); setNewProfileDesc(""); }}
+        onClose={() => {
+          setCreateModalOpen(false);
+          setNewProfileName("");
+          setNewProfileDesc("");
+        }}
       >
-        <form onSubmit={(e) => { e.preventDefault(); handleCreateProfile(); }}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleCreateProfile();
+          }}
+        >
           <Stack gap="md">
             <TextInput
               label="Profile Name"
@@ -206,8 +215,23 @@ export function ProfileGridView() {
               rows={3}
             />
             <Group justify="flex-end" gap="sm">
-              <Button variant="light" onClick={() => { setCreateModalOpen(false); setNewProfileName(""); setNewProfileDesc(""); }}>Cancel</Button>
-              <Button type="submit" disabled={!newProfileName.trim()} loading={createMutation.isPending}>Create</Button>
+              <Button
+                variant="light"
+                onClick={() => {
+                  setCreateModalOpen(false);
+                  setNewProfileName("");
+                  setNewProfileDesc("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!newProfileName.trim()}
+                loading={createMutation.isPending}
+              >
+                Create
+              </Button>
             </Group>
           </Stack>
         </form>
@@ -215,12 +239,13 @@ export function ProfileGridView() {
 
       {/* ── Edit Profile Modal ── */}
       {editTargetName && (
-        <Modal
-          title="Edit Profile"
-          opened={editModalOpen}
-          onClose={() => setEditModalOpen(false)}
-        >
-          <form onSubmit={(e) => { e.preventDefault(); handleEditProfile(); }}>
+        <Modal title="Edit Profile" opened={editModalOpen} onClose={() => setEditModalOpen(false)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleEditProfile();
+            }}
+          >
             <Stack gap="md">
               <TextInput
                 label="Profile Name"
@@ -237,8 +262,17 @@ export function ProfileGridView() {
                 rows={3}
               />
               <Group justify="flex-end" gap="sm">
-                <Button variant="light" onClick={() => { setEditModalOpen(false); }}>Cancel</Button>
-                <Button type="submit" loading={updateMutation.isPending}>Save</Button>
+                <Button
+                  variant="light"
+                  onClick={() => {
+                    setEditModalOpen(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" loading={updateMutation.isPending}>
+                  Save
+                </Button>
               </Group>
             </Stack>
           </form>
@@ -249,9 +283,18 @@ export function ProfileGridView() {
       <Modal
         title="Duplicate Profile"
         opened={duplicateModalOpen}
-        onClose={() => { setDuplicateModalOpen(false); setDuplicateSourceName(""); setDuplicateNewName(""); }}
+        onClose={() => {
+          setDuplicateModalOpen(false);
+          setDuplicateSourceName("");
+          setDuplicateNewName("");
+        }}
       >
-        <form onSubmit={(e) => { e.preventDefault(); handleDuplicateProfile(); }}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleDuplicateProfile();
+          }}
+        >
           <Stack gap="md">
             <Text size="sm" c="dimmed">
               Duplicating: <strong>{duplicateSourceName}</strong>
@@ -264,8 +307,21 @@ export function ProfileGridView() {
               autoFocus
             />
             <Group justify="flex-end" gap="sm">
-              <Button variant="light" onClick={() => { setDuplicateModalOpen(false); }}>Cancel</Button>
-              <Button type="submit" disabled={!duplicateNewName.trim()} loading={duplicateMutation.isPending}>Duplicate</Button>
+              <Button
+                variant="light"
+                onClick={() => {
+                  setDuplicateModalOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!duplicateNewName.trim()}
+                loading={duplicateMutation.isPending}
+              >
+                Duplicate
+              </Button>
             </Group>
           </Stack>
         </form>
@@ -279,10 +335,16 @@ export function ProfileGridView() {
           onClose={() => setConfirmTarget(null)}
         >
           <Stack gap="lg">
-            <Text size="sm">Are you sure you want to delete profile "{confirmTarget}"? This cannot be undone.</Text>
+            <Text size="sm">
+              Are you sure you want to delete profile "{confirmTarget}"? This cannot be undone.
+            </Text>
             <Group justify="flex-end" gap="sm">
-              <Button variant="subtle" onClick={() => setConfirmTarget(null)}>Cancel</Button>
-              <Button color="red" onClick={handleDeleteProfile} loading={deleteMutation.isPending}>Delete</Button>
+              <Button variant="subtle" onClick={() => setConfirmTarget(null)}>
+                Cancel
+              </Button>
+              <Button color="red" onClick={handleDeleteProfile} loading={deleteMutation.isPending}>
+                Delete
+              </Button>
             </Group>
           </Stack>
         </Modal>
@@ -316,7 +378,8 @@ function CommandsModal({
     <Modal title={profileName} size="lg" centered opened={opened} onClose={onClose}>
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          Profile: <strong>{profileName}</strong> &ndash; {commands.length} command{commands.length !== 1 ? "s" : ""}
+          Profile: <strong>{profileName}</strong> &ndash; {commands.length} command
+          {commands.length !== 1 ? "s" : ""}
         </Text>
         {commands.length === 0 ? (
           <Text c="dimmed">This profile has no commands yet.</Text>
@@ -334,7 +397,9 @@ function CommandsModal({
             <Table.Tbody>
               {commands.map((cmd) => (
                 <Table.Tr key={cmd.id}>
-                  <Table.Td><code>{cmd.id}</code></Table.Td>
+                  <Table.Td>
+                    <code>{cmd.id}</code>
+                  </Table.Td>
                   <Table.Td>{cmd.name}</Table.Td>
                   <Table.Td>{cmd.description ?? "—"}</Table.Td>
                   <Table.Td>{cmd.cwd ?? "—"}</Table.Td>

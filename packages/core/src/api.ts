@@ -300,7 +300,9 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       }
 
       if (!body.data.newName && body.data.description === undefined) {
-        return reply.status(400).send({ error: "At least one of newName or description must be provided" });
+        return reply
+          .status(400)
+          .send({ error: "At least one of newName or description must be provided" });
       }
 
       try {

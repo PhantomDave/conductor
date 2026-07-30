@@ -66,7 +66,9 @@ export function ProfileCard({
                 </Text>
               </Tooltip>
             ) : (
-              <Text fw={600} size="sm" lineClamp={1}>{name}</Text>
+              <Text fw={600} size="sm" lineClamp={1}>
+                {name}
+              </Text>
             )}
             <Group gap={6}>
               <ThemeIcon size="sm" variant="light" radius="md">
@@ -152,7 +154,16 @@ export function ProfileCard({
               View
             </Button>
           )}
-          <Button flex={1} size="xs" leftSection={<IconPlayerPlay size={12} />} color="green" variant="light" onClick={onRun} loading={isRunning} disabled={isRunning}>
+          <Button
+            flex={1}
+            size="xs"
+            leftSection={<IconPlayerPlay size={12} />}
+            color="green"
+            variant="light"
+            onClick={onRun}
+            loading={isRunning}
+            disabled={isRunning}
+          >
             Run
           </Button>
           <Button
