@@ -4,25 +4,9 @@ updates:
   - package-ecosystem: "bun"
     directory: "/packages/ui"
     schedule:
-      interval: "daily"
-    groups:
-      react-and-react-dom:
-        patterns:
-          - "react"
-          - "react-dom"
-        update-types:
-          - minor
-          - patch
+      interval: "weekly"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "daily"
-
-groups:
-  mantine-packages:
-    patterns:
-      - "@mantine/*"
-    update-types:
-      - minor
-      - patch
