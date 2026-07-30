@@ -1,20 +1,28 @@
 version: 2
+
 updates:
   - package-ecosystem: "bun"
-    directory: "/"
+    directory: "/packages/ui"
     schedule:
       interval: "daily"
+    groups:
+      react-and-react-dom:
+        patterns:
+          - "react"
+          - "react-dom"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "daily"
 
-auto-bump-groups:
-  - group-name: "react-and-react-dom"
-    update-types: ["patch"]
-    include-paths:
-      - "packages/ui/package.json"
-    packages:
-      - "react"
-      - "react-dom"
+groups:
+  mantine-packages:
+    patterns:
+      - "@mantine/*"
+    update-types:
+      - minor
+      - patch
