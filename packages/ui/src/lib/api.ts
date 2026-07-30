@@ -130,6 +130,19 @@ export async function renameProfile(oldName: string, newName: string): Promise<P
   return data.profile;
 }
 
+export async function updateProfile(
+  oldName: string,
+  changes: { newName?: string; description?: string },
+): Promise<ProfileInfo> {
+  const res = await fetch(`${API_BASE}/profiles/${oldName}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changes),
+  });
+  const data = await parseJsonOrThrow(res, `Failed to update profile "${oldName}"`);
+  return data.profile;
+}
+
 export async function duplicateProfile(sourceName: string, newName: string): Promise<ProfileInfo> {
   const res = await fetch(`${API_BASE}/profiles/${sourceName}/duplicate`, {
     method: "POST",

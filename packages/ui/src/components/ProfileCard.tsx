@@ -12,12 +12,12 @@ import {
 } from "@mantine/core";
 import {
   IconBox,
-  IconChevronRight,
   IconDots,
   IconCopy,
   IconTrash,
   IconDownload,
   IconEdit,
+  IconPlayerPlay,
 } from "@tabler/icons-react";
 import type { ProfileInfo } from "../lib/api";
 
@@ -25,8 +25,10 @@ interface ProfileCardProps {
   readonly name: string;
   readonly profile: ProfileInfo;
   readonly commandCount: number;
-  readonly onSelect?: (profileName: string) => void;
-  readonly onRename?: (profileName: string) => void;
+  readonly onView?: (profileName: string) => void;
+  readonly onEdit?: (profileName: string) => void;
+  readonly onRun?: () => void;
+  readonly isRunning?: boolean;
   readonly onDuplicate?: (profileName: string) => void;
   readonly onDelete?: (profileName: string) => void;
   readonly onExport?: (profileName: string) => void;
@@ -36,8 +38,10 @@ export function ProfileCard({
   name,
   profile,
   commandCount,
-  onSelect,
-  onRename,
+  onView,
+  onEdit,
+  onRun,
+  isRunning,
   onDuplicate,
   onDelete,
   onExport,
@@ -48,18 +52,24 @@ export function ProfileCard({
         {/* Header: Profile name + command count */}
         <Group justify="space-between" align="flex-start">
           <Stack gap={2} flex={1}>
-            <Tooltip label="Click to view commands" withArrow>
-              <Text
-                fw={600}
-                size="sm"
-                lineClamp={1}
-                onClick={() => onSelect?.(name)}
-                style={{ cursor: onSelect ? "pointer" : "default" }}
-                c={onSelect ? "blue" : "auto"}
-              >
+            {onView ? (
+              <Tooltip label="Click to view commands" withArrow>
+                <Text
+                  fw={600}
+                  size="sm"
+                  lineClamp={1}
+                  onClick={() => onView?.(name)}
+                  style={{ cursor: "pointer" }}
+                  c="blue"
+                >
+                  {name}
+                </Text>
+              </Tooltip>
+            ) : (
+              <Text fw={600} size="sm" lineClamp={1}>
                 {name}
               </Text>
-            </Tooltip>
+            )}
             <Group gap={6}>
               <ThemeIcon size="sm" variant="light" radius="md">
                 <IconBox size={14} />
@@ -78,14 +88,8 @@ export function ProfileCard({
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item
-                leftSection={<IconChevronRight size={14} />}
-                onClick={() => onSelect?.(name)}
-              >
-                View Commands
-              </Menu.Item>
-              <Menu.Item leftSection={<IconEdit size={14} />} onClick={() => onRename?.(name)}>
-                Rename
+              <Menu.Item leftSection={<IconEdit size={14} />} onClick={() => onEdit?.(name)}>
+                Edit
               </Menu.Item>
               <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => onDuplicate?.(name)}>
                 Duplicate
@@ -145,8 +149,22 @@ export function ProfileCard({
 
         {/* Action buttons */}
         <Group gap="xs">
-          <Button flex={1} size="xs" variant="light" onClick={() => onSelect?.(name)}>
-            View
+          {onView && (
+            <Button flex={1} size="xs" variant="light" onClick={() => onView?.(name)}>
+              View
+            </Button>
+          )}
+          <Button
+            flex={1}
+            size="xs"
+            leftSection={<IconPlayerPlay size={12} />}
+            color="green"
+            variant="light"
+            onClick={onRun}
+            loading={isRunning}
+            disabled={isRunning}
+          >
+            Run
           </Button>
           <Button
             flex={1}

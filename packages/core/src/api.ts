@@ -284,22 +284,38 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       return handleConfigError(err, reply);
     }
   });
+  // --- Profile update (rename + description) ---
 
-  // --- Profile rename ---
-  app.put<{ Params: { profile: string }; Body: { newName: string } }>(
+  app.put<{ Params: { profile: string }; Body: { newName?: string; description?: string } }>(
     "/api/profiles/:profile",
     async (request, reply) => {
       const oldName = request.params.profile;
-      const { newName } = request.body;
+      const body = z
+        .object({ newName: z.string().min(1).optional(), description: z.string().optional() })
+        .strict()
+        .safeParse(request.body);
 
-      if (!newName || typeof newName !== "string" || !newName.trim()) {
-        return reply.status(400).send({ error: "newName is required" });
+      if (!body.success) {
+        return reply.status(400).send({ error: "Invalid request body" });
+      }
+
+      if (!body.data.newName && body.data.description === undefined) {
+        return reply
+          .status(400)
+          .send({ error: "At least one of newName or description must be provided" });
       }
 
       try {
-        const profile = deps.store.renameProfile(oldName, newName.trim());
-        deps.queries.insertAuditEntry("rename-profile", `${oldName} → ${newName}`);
-        return { profile, newName };
+        const profile = deps.store.updateProfile(oldName, {
+          newName: body.data.newName,
+          description: body.data.description,
+        });
+        if (body.data.newName) {
+          deps.queries.insertAuditEntry("rename-profile", `${oldName} → ${body.data.newName}`);
+        } else {
+          deps.queries.insertAuditEntry("update-profile-description", oldName);
+        }
+        return { profile, newName: body.data.newName ?? oldName };
       } catch (err) {
         return handleConfigError(err, reply);
       }
@@ -550,20 +566,16 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     },
   );
 
-  app.post<{ Params: { id: string }; Body: { profile: string } }>(
+  app.post<{ Params: { id: string }; Body: { profile?: string } }>(
     "/api/commands/:id/execute",
     async (request, reply) => {
       const { id } = request.params;
-      const { profile } = request.body;
 
-      // Verify the command exists and is referenced in the specified profile
+      // Commands are root-level — use them directly. Profile is display-only.
       const config = deps.store.getConfig();
-      const profileConfig = config.profiles[profile];
-      if (!profileConfig) {
-        return reply.status(404).send({ error: `Unknown profile "${profile}"` });
-      }
-      if (!profileConfig.command_ids.includes(id)) {
-        return reply.status(404).send({ error: `Unknown command "${id}" in profile "${profile}"` });
+      const cmd = config.commands.find((c) => c.id === id);
+      if (!cmd) {
+        return reply.status(404).send({ error: `Unknown command "${id}"` });
       }
 
       const queue = deps.store.getQueue();
@@ -573,25 +585,22 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
         return reply.status(400).send({ error: (err as Error).message });
       }
 
-      deps.queries.insertAuditEntry("execute", `${profile}/${id}`);
+      const profile = request.body.profile ?? null;
+      deps.queries.insertAuditEntry("execute", `${profile ?? "__global__"}/${id}`);
       return { started: true, commandId: id, profile };
     },
   );
 
-  app.post<{ Params: { id: string }; Body: { profile: string } }>(
+  app.post<{ Params: { id: string }; Body: { profile?: string } }>(
     "/api/commands/:id/restart",
     async (request, reply) => {
       const { id } = request.params;
-      const { profile } = request.body;
 
-      // Verify the command exists and is referenced in the specified profile
+      // Commands are root-level — use them directly. Profile is display-only.
       const config = deps.store.getConfig();
-      const profileConfig = config.profiles[profile];
-      if (!profileConfig) {
-        return reply.status(404).send({ error: `Unknown profile "${profile}"` });
-      }
-      if (!profileConfig.command_ids.includes(id)) {
-        return reply.status(404).send({ error: `Unknown command "${id}" in profile "${profile}"` });
+      const cmd = config.commands.find((c) => c.id === id);
+      if (!cmd) {
+        return reply.status(404).send({ error: `Unknown command "${id}"` });
       }
 
       const queue = deps.store.getQueue();
@@ -601,6 +610,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
         return reply.status(400).send({ error: (err as Error).message });
       }
 
+      const profile = request.body.profile ?? "global";
       deps.queries.insertAuditEntry("restart", `${profile}/${id}`);
       const restarted = queue.getWrapper(id)?.getSnapshot();
       return { restarted: true, commandId: id, profile, process: restarted };
