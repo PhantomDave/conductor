@@ -142,9 +142,7 @@ export function ProcessBoard() {
 
   // Filter processes by status
   const runningProcesses = processes.filter((p) => p.status === "running");
-  const queuedProcesses = processes.filter(
-    (p) => p.status !== "running" && p.status !== "stopped",
-  );
+  const queuedProcesses = processes.filter((p) => p.status !== "running" && p.status !== "stopped");
   const stoppedProcesses = processes.filter((p) => p.status === "stopped");
 
   return (

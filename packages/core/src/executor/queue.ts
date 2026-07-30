@@ -117,7 +117,6 @@ export class SpawnQueue {
     wrapper.markHealthy("healthy");
   }
 
-
   /**
    * Returns commands ordered so that dependencies always start before
    * the commands that depend on them. Throws on circular dependencies.
