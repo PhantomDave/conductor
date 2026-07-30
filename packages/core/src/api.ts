@@ -428,6 +428,46 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     },
   );
 
+  // Sync profile ↔ command membership in batch (add + remove).
+  // Replaces the old POST /api/profiles/:profile/commands/add endpoint.
+  app.post<{ Params: { profile: string } }>(
+    "/api/profiles/:profile/commands/sync",
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          add: z.array(z.string().min(1)).optional(),
+          remove: z.array(z.string().min(1)).optional(),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid body" });
+      }
+      try {
+        const profileName = request.params.profile;
+
+        // Add commands
+        if (parsed.data.add?.length) {
+          for (const cmdId of parsed.data.add) {
+            deps.store.addCommandToProfile(profileName, cmdId);
+            deps.queries.insertAuditEntry("sync-command-to-profile", `${profileName}/${cmdId}`);
+          }
+        }
+
+        // Remove commands
+        if (parsed.data.remove?.length) {
+          for (const cmdId of parsed.data.remove) {
+            deps.store.removeCommandFromProfile(profileName, cmdId);
+            deps.queries.insertAuditEntry("sync-remove-command", `${profileName}/${cmdId}`);
+          }
+        }
+
+        return { success: true };
+      } catch (err) {
+        return handleConfigError(err, reply);
+      }
+    },
+  );
+
   app.delete<{ Params: { profile: string; id: string } }>(
     "/api/profiles/:profile/commands/:id",
     async (request, reply) => {

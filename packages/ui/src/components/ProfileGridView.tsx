@@ -11,7 +11,9 @@ import {
   TextInput,
   Textarea,
 } from "@mantine/core";
-import { IconPlus } from "@tabler/icons-react";
+import { IconPlayerPlay, IconSettings } from "@tabler/icons-react";
+import { Checkbox } from "@mantine/core";
+import type { CommandInfo } from "../lib/api";
 import { useProfiles } from "../hooks/useProfiles";
 import { useRunProfile } from "../hooks/useProcessActions";
 import {
@@ -20,12 +22,14 @@ import {
   useDuplicateProfile,
   useDeleteProfile,
   useExportProfile,
+  useSyncCommandsToProfile,
 } from "../hooks/useConfig";
+import { useCommandLibrary } from "../hooks/useCommandLibrary";
 import { ProfileCard } from "./ProfileCard";
-import type { ProfileInfo } from "../lib/api";
 
 export function ProfileGridView() {
   const { data: profiles, isLoading, error } = useProfiles();
+  const { commands: allCommands } = useCommandLibrary();
 
   // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -45,6 +49,11 @@ export function ProfileGridView() {
   // Confirmation modal state (shared with delete)
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
 
+  // Command picker state
+  const [pickerProfileName, setPickerProfileName] = useState<string | null>(null);
+  const [selectedCommands, setSelectedCommands] = useState<Record<string, boolean>>({});
+  const [currentMembership, setCurrentMembership] = useState<Set<string>>(new Set());
+
   // Mutations
   const createMutation = useCreateProfile();
   const updateMutation = useUpdateProfile();
@@ -52,8 +61,9 @@ export function ProfileGridView() {
   const deleteMutation = useDeleteProfile();
   const exportMutation = useExportProfile();
   const runMutation = useRunProfile();
+  const syncMutation = useSyncCommandsToProfile();
 
-  // Handlers
+  // Helpers
   const handleCreateProfile = async () => {
     if (!newProfileName.trim()) return;
     await createMutation.mutateAsync({
@@ -115,6 +125,39 @@ export function ProfileGridView() {
     await runMutation.mutateAsync(profileName);
   };
 
+  // Command picker handlers
+  const openCommandPicker = (profileName: string) => {
+    setPickerProfileName(profileName);
+    const profile = profiles?.[profileName];
+    const existingIds = new Set((profile?.commands ?? []).map((c) => c.id));
+    setCurrentMembership(existingIds);
+    const commandsArr = Object.values(allCommands).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    ) as CommandInfo[];
+    setSelectedCommands(
+      commandsArr.reduce<Record<string, boolean>>((acc, cmd) => {
+        acc[cmd.id] = existingIds.has(cmd.id);
+        return acc;
+      }, {}),
+    );
+  };
+
+  const handleToggleCommands = async () => {
+    if (!pickerProfileName) return;
+
+    await syncMutation.mutateAsync({
+      profileName: pickerProfileName,
+      selectedCommands,
+      allAvailable: allCommandsList,
+      currentMembership,
+    });
+    setPickerProfileName(null);
+  };
+
+  const allCommandsList = Object.values(allCommands).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  ) as CommandInfo[];
+
   if (isLoading) return <Text c="dimmed">Loading profiles...</Text>;
   if (error) {
     return <Text c="red">Could not reach Conductor core API. Is `bun run dev:core` running?</Text>;
@@ -132,7 +175,7 @@ export function ProfileGridView() {
           <Button
             size="xs"
             variant="light"
-            leftSection={<IconPlus size={14} />}
+            leftSection={<IconPlayerPlay size={14} />}
             onClick={() => setCreateModalOpen(true)}
           >
             New Profile
@@ -144,7 +187,7 @@ export function ProfileGridView() {
             <Stack gap="md">
               <Text c="dimmed">No profiles configured yet. Create one to get started.</Text>
               <Button
-                leftSection={<IconPlus size={16} />}
+                leftSection={<IconPlayerPlay size={16} />}
                 fullWidth
                 onClick={() => setCreateModalOpen(true)}
               >
@@ -173,6 +216,7 @@ export function ProfileGridView() {
                   setDuplicateNewName(`${profileName}-copy`);
                   setDuplicateModalOpen(true);
                 }}
+                onManageCommands={openCommandPicker}
                 onDelete={(profileName) => setConfirmTarget(profileName)}
                 onExport={handleExportProfile}
                 onRun={() => handleRunProfile(name)}
@@ -359,6 +403,66 @@ export function ProfileGridView() {
           onClose={() => setViewProfileName(null)}
         />
       ) : null}
+
+      {/* ── Command Picker Modal ── */}
+      {pickerProfileName && (
+        <Modal
+          title={`Edit commands for "${pickerProfileName}"`}
+          opened={Boolean(pickerProfileName)}
+          onClose={() => setPickerProfileName(null)}
+          size="lg"
+        >
+          <Stack gap="md">
+            <Text size="sm" c="dimmed">
+              Profile: <strong>{pickerProfileName}</strong> — check commands to keep in this
+              profile. Unchecked ones will be removed.
+            </Text>
+            {allCommandsList.length === 0 ? (
+              <Text c="dimmed">No commands available in the library.</Text>
+            ) : (
+              <Stack gap={4}>
+                {allCommandsList.map((cmd) => {
+                  return (
+                    <Group key={cmd.id} justify="space-between">
+                      <Stack gap={2}>
+                        <Text size="sm" fw={500}>
+                          {cmd.name}
+                        </Text>
+                        {cmd.description && (
+                          <Text size="xs" c="dimmed">
+                            {cmd.description}
+                          </Text>
+                        )}
+                      </Stack>
+                      <Checkbox
+                        checked={selectedCommands[cmd.id] ?? false}
+                        onChange={() => {
+                          setSelectedCommands((prev) => ({
+                            ...prev,
+                            [cmd.id]: !(prev[cmd.id] ?? false),
+                          }));
+                        }}
+                      />
+                    </Group>
+                  );
+                })}
+              </Stack>
+            )}
+            <Group justify="flex-end" gap="sm">
+              <Button variant="light" onClick={() => setPickerProfileName(null)}>
+                Cancel
+              </Button>
+              <Button
+                leftSection={<IconSettings size={14} />}
+                onClick={handleToggleCommands}
+                loading={syncMutation.isPending}
+              >
+                Save Changes
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+      )}
     </>
   );
 }
@@ -370,7 +474,7 @@ function CommandsModal({
   onClose,
 }: {
   readonly profileName: string;
-  readonly commands: ProfileInfo["commands"];
+  readonly commands: CommandInfo[];
   readonly opened: boolean;
   readonly onClose: () => void;
 }) {
@@ -401,9 +505,9 @@ function CommandsModal({
                     <code>{cmd.id}</code>
                   </Table.Td>
                   <Table.Td>{cmd.name}</Table.Td>
-                  <Table.Td>{cmd.description ?? "—"}</Table.Td>
-                  <Table.Td>{cmd.cwd ?? "—"}</Table.Td>
-                  <Table.Td>{cmd.deps.length ? cmd.deps.join(", ") : "—"}</Table.Td>
+                  <Table.Td>{cmd.description ?? "\u2014"}</Table.Td>
+                  <Table.Td>{cmd.cwd ?? "\u2014"}</Table.Td>
+                  <Table.Td>{cmd.deps.length ? cmd.deps.join(", ") : "\u2014"}</Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>

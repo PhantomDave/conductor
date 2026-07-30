@@ -12,12 +12,13 @@ import {
 } from "@mantine/core";
 import {
   IconBox,
-  IconDots,
   IconCopy,
-  IconTrash,
+  IconDots,
   IconDownload,
   IconEdit,
   IconPlayerPlay,
+  IconSettings,
+  IconTrash,
 } from "@tabler/icons-react";
 import type { ProfileInfo } from "../lib/api";
 
@@ -30,6 +31,7 @@ interface ProfileCardProps {
   readonly onRun?: () => void;
   readonly isRunning?: boolean;
   readonly onDuplicate?: (profileName: string) => void;
+  readonly onManageCommands?: (profileName: string) => void;
   readonly onDelete?: (profileName: string) => void;
   readonly onExport?: (profileName: string) => void;
 }
@@ -43,13 +45,14 @@ export function ProfileCard({
   onRun,
   isRunning,
   onDuplicate,
+  onManageCommands,
   onDelete,
   onExport,
 }: ProfileCardProps) {
   return (
     <Card withBorder p="md" radius="md" style={{ flex: "1 1 280px", minWidth: 280 }}>
       <Stack gap="sm">
-        {/* Header: Profile name + command count */}
+        {/* Header */}
         <Group justify="space-between" align="flex-start">
           <Stack gap={2} flex={1}>
             {onView ? (
@@ -80,7 +83,7 @@ export function ProfileCard({
             </Group>
           </Stack>
 
-          {/* Menu */}
+          {/* Hamburger menu */}
           <Menu shadow="md" position="bottom-end">
             <Menu.Target>
               <ActionIcon variant="subtle" color="gray" size="xs">
@@ -148,7 +151,7 @@ export function ProfileCard({
         )}
 
         {/* Action buttons */}
-        <Group gap="xs">
+        <Group grow gap="xs">
           {onView && (
             <Button flex={1} size="xs" variant="light" onClick={() => onView?.(name)}>
               View
@@ -169,11 +172,12 @@ export function ProfileCard({
           <Button
             flex={1}
             size="xs"
+            leftSection={<IconSettings size={12} />}
             variant="light"
-            color="gray"
-            onClick={() => onDuplicate?.(name)}
+            color="blue"
+            onClick={() => onManageCommands?.(name)}
           >
-            Duplicate
+            Edit Commands
           </Button>
         </Group>
       </Stack>

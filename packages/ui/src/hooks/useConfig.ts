@@ -14,6 +14,9 @@ import {
   moveCommand,
   exportConfig,
   parseDockerCompose,
+  attachCommandToProfile,
+  syncCommandsToProfile,
+  type CommandInfo,
   type CommandInput,
 } from "../lib/api";
 
@@ -301,6 +304,59 @@ export function useParseDockerCompose() {
       notifications.show({
         color: "red",
         title: "Failed to parse docker compose",
+        message: error.message,
+      });
+    },
+  });
+}
+
+export function useAttachCommandToProfile() {
+  const invalidate = useInvalidateProfiles();
+  return useMutation({
+    mutationFn: ({ profileName, commandId }: { profileName: string; commandId: string }) =>
+      attachCommandToProfile(commandId, profileName),
+    onSuccess: (_data, variables) => {
+      notifications.show({
+        color: "green",
+        message: `Added "${variables.commandId}" to ${variables.profileName}`,
+      });
+      invalidate();
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to add command",
+        message: error.message,
+      });
+    },
+  });
+}
+
+export function useSyncCommandsToProfile() {
+  const invalidate = useInvalidateProfiles();
+  return useMutation({
+    mutationFn: ({
+      profileName,
+      selectedCommands,
+      allAvailable,
+      currentMembership,
+    }: {
+      profileName: string;
+      selectedCommands: Record<string, boolean>;
+      allAvailable: CommandInfo[];
+      currentMembership: Set<string>;
+    }) => syncCommandsToProfile(profileName, selectedCommands, allAvailable, currentMembership),
+    onSuccess: (_data, variables) => {
+      notifications.show({
+        color: "green",
+        message: `Updated commands for profile "${variables.profileName}"`,
+      });
+      invalidate();
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to update commands",
         message: error.message,
       });
     },
