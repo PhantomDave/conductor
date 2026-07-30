@@ -252,6 +252,43 @@ export class ConfigStore {
     return this.config.profiles[newName];
   }
 
+  updateProfile(name: string, changes: { newName?: string; description?: string }): ProfileConfig {
+    const profile = this.config.profiles[name];
+    if (!profile) {
+      throw new ConfigError(`Unknown profile "${name}"`);
+    }
+
+    const { newName, description } = changes;
+
+    // If renaming, check for conflicts (but same name is allowed when only updating description)
+    if (newName && newName !== name && this.config.profiles[newName]) {
+      throw new ConfigError(`Profile "${newName}" already exists`);
+    }
+
+    const nextProfiles: Record<string, ProfileConfig> = { ...this.config.profiles };
+
+    if (newName && newName !== name) {
+      // Rename key
+      delete nextProfiles[name];
+      nextProfiles[newName] = {
+        ...profile,
+        description: description ?? profile.description,
+      };
+    } else {
+      // Description-only update
+      nextProfiles[name] = { ...profile, description };
+    }
+
+    const nextConfig: ConductorConfig = {
+      ...this.config,
+      profiles: nextProfiles,
+    };
+    this.config = validateConfig(nextConfig);
+    this.mutableQueue.setCommands(this.config.commands);
+    this.persist();
+    return this.config.profiles[newName ?? name];
+  }
+
   duplicateProfile(sourceName: string, targetName: string): ProfileConfig {
     const source = this.config.profiles[sourceName];
     if (!source) {

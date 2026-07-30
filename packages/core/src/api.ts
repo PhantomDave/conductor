@@ -481,6 +481,56 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     },
   );
 
+  // --- Standalone Commands (not tied to any profile) ---------------
+
+  app.get("/api/command", async () => {
+    const config = deps.store.getConfig();
+    return { commands: config.commands };
+  });
+
+  app.post<{ Body: unknown }>("/api/command", async (request, reply) => {
+    const parsed = CommandInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: parsed.error.issues[0]?.message ?? "Invalid command" });
+    }
+    try {
+      const command = deps.store.addCommand(parsed.data);
+      deps.queries.insertAuditEntry("add-command-standalone", command.id);
+      return { command };
+    } catch (err) {
+      return handleConfigError(err, reply);
+    }
+  });
+
+  app.put<{ Params: { id: string }; Body: unknown }>("/api/command/:id", async (request, reply) => {
+    const parsed = CommandPatchSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: parsed.error.issues[0]?.message ?? "Invalid command" });
+    }
+    try {
+      const command = deps.store.updateCommand(request.params.id, parsed.data);
+      deps.queries.insertAuditEntry("update-command-standalone", request.params.id);
+      return { command };
+    } catch (err) {
+      return handleConfigError(err, reply);
+    }
+  });
+
+  app.delete<{ Params: { id: string } }>("/api/command/:id", async (request, reply) => {
+    try {
+      // Remove both the root-level command AND all profile references
+      deps.store.removeCommand(request.params.id);
+      deps.queries.insertAuditEntry("delete-command-standalone", request.params.id);
+      return { removed: true };
+    } catch (err) {
+      return handleConfigError(err, reply);
+    }
+  });
+
   // --- Processes (global queue) ------------------------------------------------
 
   app.get("/api/processes", async () => {

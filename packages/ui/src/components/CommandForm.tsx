@@ -14,15 +14,17 @@ import {
   Text,
   ActionIcon,
 } from "@mantine/core";
-import { IconPlus, IconTrash } from "@tabler/icons-react";
+import { notifications } from "@mantine/notifications";
 import { useCreateCommand, useUpdateCommand } from "../hooks/useConfig";
+import { createStandaloneCommand, updateStandaloneCommand } from "../lib/api";
+import { IconPlus, IconTrash } from "@tabler/icons-react";
 import type { CommandInfo, CommandInput, HealthcheckInfo } from "../lib/api";
 
 interface CommandFormProps {
   opened: boolean;
   onClose: () => void;
-  profile: string;
-  /** Existing commands in the profile, used for the dependency picker. */
+  profile?: string;
+  /** Existing commands in the configuration, used for the dependency picker. */
   existingCommands: CommandInfo[];
   /** When set, the form edits this command instead of creating a new one. */
   editing?: CommandInfo | null;
@@ -42,9 +44,13 @@ export function CommandForm({
   existingCommands,
   editing,
 }: CommandFormProps) {
-  const createCommand = useCreateCommand();
-  const updateCommand = useUpdateCommand();
+  const isStandalone = !profile;
   const isEditing = Boolean(editing);
+
+  // Both hooks always called (rules of hooks). In standalone mode they are harmless no-ops.
+  const profileCreate = useCreateCommand();
+  const profileUpdate = useUpdateCommand();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [name, setName] = useState("");
   const [run, setRun] = useState("");
@@ -94,7 +100,7 @@ export function CommandForm({
 
   const depOptions = existingCommands
     .filter((c) => c.id !== editing?.id)
-    .map((c) => ({ value: c.id, label: c.name }));
+    .map((c: CommandInfo) => ({ value: c.id, label: c.name }));
 
   const submit = () => {
     if (!name.trim() || !run.trim()) return;
@@ -107,7 +113,7 @@ export function CommandForm({
       .map((w) => w.trim())
       .filter(Boolean);
 
-    const input: CommandInput = {
+    const input: Omit<CommandInput, "id"> = {
       name: name.trim(),
       run: run.trim(),
       cwd,
@@ -123,16 +129,51 @@ export function CommandForm({
     };
 
     if (isEditing && editing) {
-      updateCommand.mutate(
-        { profile, commandId: editing.id, patch: input },
-        { onSuccess: onClose },
-      );
+      if (isStandalone) {
+        setIsSubmitting(true);
+        updateStandaloneCommand(editing.id, input as Partial<CommandInfo>)
+          .then(() => {
+            notifications.show({ color: "green", message: `Updated command "${input.name}"` });
+            onClose();
+          })
+          .catch((err: Error) => {
+            notifications.show({
+              color: "red",
+              title: "Failed to update command",
+              message: err.message,
+            });
+          })
+          .finally(() => setIsSubmitting(false));
+      } else {
+        profileUpdate.mutate(
+          { profile: profile!, commandId: editing.id, patch: input },
+          { onSuccess: onClose },
+        );
+      }
     } else {
-      createCommand.mutate({ profile, input }, { onSuccess: onClose });
+      if (isStandalone) {
+        setIsSubmitting(true);
+        createStandaloneCommand(input)
+          .then((created) => {
+            notifications.show({ color: "green", message: `Created command "${created.name}"` });
+            onClose();
+          })
+          .catch((err: Error) => {
+            notifications.show({
+              color: "red",
+              title: "Failed to create command",
+              message: err.message,
+            });
+          })
+          .finally(() => setIsSubmitting(false));
+      } else {
+        profileCreate.mutate({ profile: profile!, input }, { onSuccess: onClose });
+      }
     }
   };
 
-  const isPending = createCommand.isPending || updateCommand.isPending;
+  // In standalone mode we use the local isSubmitting; in profile mode we delegate to the mutation states.
+  const pending = isStandalone ? isSubmitting : profileCreate.isPending || profileUpdate.isPending;
 
   return (
     <Modal
@@ -327,7 +368,7 @@ export function CommandForm({
           <Button variant="subtle" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={submit} loading={isPending}>
+          <Button onClick={submit} loading={pending}>
             {isEditing ? "Save changes" : "Create command"}
           </Button>
         </Group>
