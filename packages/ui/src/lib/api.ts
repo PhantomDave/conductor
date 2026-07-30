@@ -181,7 +181,7 @@ export async function fetchAllCommands(): Promise<Record<string, CommandInfo>> {
   return data.commands ?? {};
 }
 
-/** Add an existing standalone command ID to a profile. */
+/** Add an existing root-level command ID to a profile's command_ids. */
 export async function addToProfile(commandId: string, profileName: string): Promise<void> {
   const res = await fetch(`${API_BASE}/profiles/${profileName}/commands`, {
     method: "POST",
@@ -189,6 +189,47 @@ export async function addToProfile(commandId: string, profileName: string): Prom
     body: JSON.stringify({ id: commandId }),
   });
   await parseJsonOrThrow(res, `Failed to add ${commandId} to profile "${profileName}"`);
+}
+
+/** Attach an existing command to a profile (new dedicated endpoint). */
+export async function attachCommandToProfile(
+  commandId: string,
+  profileName: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/profiles/${profileName}/commands/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ add: [commandId], remove: [] }),
+  });
+  await parseJsonOrThrow(res, `Failed to add command "${commandId}" to profile "${profileName}"`);
+}
+
+/** Sync commands to/from a profile: checked ✅ = in profile, unchecked ❌ = out of profile. */
+export async function syncCommandsToProfile(
+  profileName: string,
+  selectedCommands: Record<string, boolean>,
+  allAvailable: CommandInfo[],
+  currentMembership?: Set<string>,
+): Promise<void> {
+  const addList: string[] = [];
+  const removeList: string[] = [];
+
+  for (const cmd of allAvailable) {
+    const isChecked = selectedCommands[cmd.id] ?? false;
+    const wasInProfile = currentMembership?.has(cmd.id);
+    if (isChecked && !wasInProfile) addList.push(cmd.id);
+    if (!isChecked && wasInProfile) removeList.push(cmd.id);
+  }
+
+  // No changes to send — avoid a no-op API call
+  if (addList.length === 0 && removeList.length === 0) return;
+
+  const res = await fetch(`${API_BASE}/profiles/${profileName}/commands/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ add: addList, remove: removeList }),
+  });
+  await parseJsonOrThrow(res, `Failed to sync commands for profile "${profileName}"`);
 }
 
 export async function createStandaloneCommand(
