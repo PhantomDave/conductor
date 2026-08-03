@@ -51,6 +51,79 @@ export interface LogEntry {
 
 export type LogHandler = (entry: LogEntry) => void;
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Sends a signal to the entire process group (POSIX) or terminates the
+ * whole process tree (Windows). Commands often run through a shell
+ * (`bash -c "dotnet watch ..."`), and killing only the shell leader would
+ * orphan the real service — which keeps running and holds its port after
+ * a restart. Because every managed process is spawned with
+ * `detached: true` (setsid), the leader is its own process-group leader,
+ * so a negative-pid kill reaches every member.
+ */
+function killTree(pid: number, signal: NodeJS.Signals): void {
+  if (process.platform === "win32") {
+    const args = ["/pid", String(pid), "/T"];
+    if (signal === "SIGKILL") args.push("/F");
+    try {
+      Bun.spawnSync(["taskkill", ...args], { stdout: "ignore", stderr: "ignore" });
+    } catch {
+      /* process tree already gone */
+    }
+    return;
+  }
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    /* ESRCH: process group already gone */
+  }
+}
+
+/** True if any member of the process group led by `pid` is still alive (POSIX). */
+function groupAlive(pid: number): boolean {
+  if (process.platform === "win32") return false;
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Waits (up to `timeoutMs`) for every member of the process group led by
+ * `pid` to exit. A shell leader can die while its children keep running,
+ * so awaiting `subprocess.exited` alone is not enough to know the
+ * process is really gone. On Windows the `taskkill /T` tree kill is
+ * synchronous, so this resolves immediately.
+ */
+async function waitForGroupDeath(pid: number, timeoutMs: number): Promise<boolean> {
+  if (process.platform === "win32") return true;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!groupAlive(pid)) return true;
+    await sleep(50);
+  }
+  return !groupAlive(pid);
+}
+
+/**
+ * SIGKILLs the process group led by `subprocess` and blocks until every
+ * member has exited: waits for the leader, then sweeps for stragglers
+ * (members that ignored earlier graceful signals), re-killing once if
+ * needed.
+ */
+async function killTreeAndWait(subprocess: Subprocess, sweepTimeoutMs = 3000): Promise<void> {
+  const pid = subprocess.pid;
+  killTree(pid, "SIGKILL");
+  await subprocess.exited.catch(() => {});
+  if (!(await waitForGroupDeath(pid, sweepTimeoutMs))) {
+    killTree(pid, "SIGKILL"); // second pass for stubborn members
+    await waitForGroupDeath(pid, 1000);
+  }
+}
+
 /**
  * Wraps a single command's lifecycle: spawn, stream output, and
  * gracefully terminate on request.
@@ -147,8 +220,18 @@ export class ProcessWrapper {
   /**
    * Spawns the command via the shell and begins streaming stdout/stderr
    * line-by-line to registered log handlers.
+   * Always kills any stale subprocess from a previous lifecycle before spawning
+   * so there is never an overlap of two processes for one command.
    */
   async start(): Promise<void> {
+    // CRITICAL: Kill any lingering subprocess (and its process group) before
+    // spawning the new one. Even if stop() was called, a zombie process may
+    // still be alive (SIGTERM/exit races, stop_command not working, etc.).
+    // We always force-kill the whole group first.
+    if (this.process?.subprocess) {
+      await killTreeAndWait(this.process.subprocess);
+    }
+
     // Allow `cwd` to reference resolved env vars (e.g. "${BASE_PATH}/backend/Api")
     // so a single value can drive every command's working directory. If the
     // result is still relative (including the default "."), resolve it
@@ -181,6 +264,10 @@ export class ProcessWrapper {
       env: this.env,
       stdout: "pipe",
       stderr: "pipe",
+      // Run in its own process group/session (setsid on POSIX) so we can
+      // later kill the whole tree — the shell leader alone is not the
+      // real service and can exit while its children keep running.
+      detached: true,
     });
 
     this.process = {
@@ -232,16 +319,30 @@ export class ProcessWrapper {
   }
 
   /**
-   * Gracefully stops the process: if `stop_command` is configured, runs
-   * that command first (giving the process a chance to shut down cleanly).
-   * Otherwise sends stop_signal directly. In both cases, if the process
-   * has not exited within stop_timeout_ms, it is force-killed with SIGKILL.
+   * Waits for the current subprocess to fully terminate (SIGTERM + SIGKILL),
+   * updating wrapper state when it does. If no process is running, returns immediately.
    */
-  async stop(): Promise<void> {
-    if (!this.process || this.process.status !== "running") return;
+  /**
+   * Force-kill the current subprocess's whole process group and wait until
+   * everything has exited. This is used by the restart logic which owns
+   * wrapper lifecycle across boundaries — it needs a plain "terminate now"
+   * that doesn't inspect process state/flags.
+   */
+  async forceKillAndWait(): Promise<void> {
+    if (!this.process || this.process.subprocess == null) return;
+    await killTreeAndWait(this.process.subprocess);
+  }
 
+  async stop(): Promise<void> {
+    if (!this.process || this.process.subprocess == null) return;
+
+    // Always attempt to kill the subprocess regardless of current status.
+    // During healthcheck the status may still be "starting"; during restart
+    // it may be "stopping" mid-flight. We must always terminate the process,
+    // not just record an intention to stop.
     this.process.status = "stopping";
     const { subprocess } = this.process;
+    const pid = subprocess.pid;
     const timeoutMs = this.commandConfig.stop_timeout_ms;
     const startedAt = Date.now();
 
@@ -260,9 +361,11 @@ export class ProcessWrapper {
           env: this.env,
           stdout: "inherit",
           stderr: "inherit",
+          detached: true,
         });
         // Give the stop command the same deadline as the overall stop timeout.
-        // If it hangs, kill it and fall through to the SIGKILL path for the main process.
+        // If it hangs, kill it (and its group) and fall through to the
+        // SIGKILL path for the main process.
         const stopResult = await Promise.race([
           stopProc.exited.then((code) => ({ timedOut: false as const, code })),
           new Promise<{ timedOut: true }>((resolve) =>
@@ -271,11 +374,7 @@ export class ProcessWrapper {
         ]);
         if (stopResult.timedOut) {
           this.emitLog(`stop_command timed out after ${timeoutMs}ms`, "stderr");
-          try {
-            stopProc.kill("SIGKILL");
-          } catch {
-            // Best-effort: the stop process may have already exited.
-          }
+          killTree(stopProc.pid, "SIGKILL");
         } else if (stopResult.code !== 0) {
           this.emitLog(`stop_command exited with code ${stopResult.code}`, "stderr");
         }
@@ -287,7 +386,7 @@ export class ProcessWrapper {
         );
       }
     } else {
-      subprocess.kill(this.commandConfig.stop_signal as NodeJS.Signals);
+      killTree(pid, this.commandConfig.stop_signal as NodeJS.Signals);
     }
 
     // Use only the remaining time budget so total shutdown stays within stop_timeout_ms.
@@ -295,19 +394,42 @@ export class ProcessWrapper {
 
     // If the budget is exhausted (e.g. stop_command consumed all of it), SIGKILL immediately.
     if (remainingMs === 0) {
-      subprocess.kill("SIGKILL");
-      await subprocess.exited;
+      await killTreeAndWait(subprocess);
+      this.process.status = "stopped";
+      this.process.exitCode ??= -1;
+      this.process.endedAt = new Date();
       return;
     }
 
+    // Wait for the process to actually exit (or timeout), then update state immediately
     const exitedInTime = await Promise.race([
-      subprocess.exited.then(() => true),
-      new Promise<false>((resolve) => setTimeout(() => resolve(false), remainingMs)),
+      new Promise<boolean>((resolve) => {
+        subprocess.exited.then((code) => {
+          if (this.process) {
+            this.process.status = "stopped";
+            this.process.exitCode ??= code;
+            this.process.endedAt = new Date();
+          }
+          resolve(true);
+        });
+      }),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), remainingMs)),
     ]);
 
     if (!exitedInTime) {
-      subprocess.kill("SIGKILL");
-      await subprocess.exited;
+      await killTreeAndWait(subprocess);
+      this.process.status = "stopped";
+      this.process.exitCode ??= -1;
+      this.process.endedAt = new Date();
+      return;
+    }
+
+    // The leader exited in time — but children that ignored the graceful
+    // signal (e.g. services spawned by a shell) may still be alive and
+    // holding ports. Sweep the group and hard-kill any stragglers.
+    if (!(await waitForGroupDeath(pid, 2000))) {
+      killTree(pid, "SIGKILL");
+      await waitForGroupDeath(pid, 1000);
     }
   }
 }

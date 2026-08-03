@@ -47,30 +47,28 @@ export class SpawnQueue {
   }
 
   /**
-   * Checks if a dependency is ready: either still running,
-   * or completed successfully (exit code 0). Throws if the dependency
-   * failed (exit code !== 0).
+   * Checks if a dependency is ready: either currently running,
+   * or already ran and completed correctly (stopped with exit code 0).
+   * Manually stopped/killed (exit non-zero) or failed deps re-run.
    */
   private isDependencyReady(depId: string): boolean {
     const wrapper = this.wrappers.get(depId);
     if (!wrapper) return false;
 
-    const status = wrapper.status;
+    const snapshot = wrapper.getSnapshot();
+    if (!snapshot) return false;
     // Still running - good
-    if (status === "running") {
-      return true;
-    }
-    // Stopped gracefully (exit code 0) - success
-    if (status === "stopped") {
-      return true;
-    }
-    // Failed or stopping - not ready
+    if (snapshot.status === "running") return true;
+    // Already ran and completed correctly (exit 0) - skip
+    if (snapshot.status === "stopped" && snapshot.exitCode === 0) return true;
+    // Failed, stopping, or stopped-with-nonzero (manual stop/killed) - re-run
     return false;
   }
 
   /**
-   * Waits for a dependency to become ready: either still running,
-   * or complete with exit code 0. Throws if the dependency fails.
+   * Waits for a dependency to become ready: either currently running,
+   * or completed with exit code 0. Throws if the dependency fails
+   * (exit code non-zero) or times out.
    */
   private async waitForDependency(depId: string): Promise<void> {
     const wrapper = this.wrappers.get(depId);
@@ -78,24 +76,23 @@ export class SpawnQueue {
 
     // Poll every 100ms until the dependency is ready or failed
     const startTime = Date.now();
-    const maxWaitMs = 60000; // 60 second timeout for dependencies
+    const maxWaitMs = 60_000; // 60 second timeout for dependencies
 
     while (Date.now() - startTime < maxWaitMs) {
       const status = wrapper.status;
 
       // Still running - good
-      if (status === "running") {
-        return;
-      }
+      if (status === "running") return;
 
-      // Stopped successfully - good
-      if (status === "stopped") {
-        return;
-      }
+      // Snapshot to check exit code before any further state changes
+      const snapshot = wrapper.getSnapshot();
 
-      // Failed - throw and record notification
-      if (status === "failed") {
-        const snapshot = wrapper.getSnapshot();
+      // Stopped with exit 0 - dependency completed successfully
+      if (snapshot?.exitCode === 0) return;
+
+      // Stopped with non-zero exit (or explicit failure) - throw immediately
+      // rather than waiting for the poll to see "failed".
+      if (status === "stopped" || status === "failed") {
         const reason = `Dependency failed with exit code ${snapshot?.exitCode ?? "?"}`;
         this.recordNotification("dependency_failed", depId, reason, snapshot?.exitCode);
         throw new Error(reason);
@@ -165,7 +162,7 @@ export class SpawnQueue {
       const env = this.resolveEnv(cmd);
       const wrapper = new ProcessWrapper(cmd, this.profile, env);
       if (onLog) wrapper.onLog(onLog);
-      (this.wrappers as any).set(cmd.id, wrapper);
+      this.wrappers.set(cmd.id, wrapper);
       await wrapper.start();
       try {
         await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env);
@@ -192,10 +189,17 @@ export class SpawnQueue {
       await this.waitForDependency(depId);
     }
 
+    // Before spawning, force-kill any existing orphan for this command (from an overlapping restart)
+    const orphan = this.wrappers.get(commandId);
+    if (orphan != null) {
+      await orphan.forceKillAndWait();
+      await new Promise<void>(r => setTimeout(r, 50)); // brief OS port-release delay
+    }
+
     const env = this.resolveEnv(cmd);
     const wrapper = new ProcessWrapper(cmd, this.profile, env);
     if (onLog) wrapper.onLog(onLog);
-    (this.wrappers as any).set(cmd.id, wrapper);
+    this.wrappers.set(cmd.id, wrapper);
     await wrapper.start();
     try {
       await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env);
@@ -211,10 +215,27 @@ export class SpawnQueue {
    * traffic/logs again immediately. Dependencies are left untouched
    * (assumed already healthy), matching `startOne`'s behavior of
    * skipping deps that are already running.
+   *
+   * `stop()` terminates the whole process group (not just the shell
+   * leader) and blocks until every member has exited, so the replacement
+   * never overlaps with the old process or races it for ports.
    */
   async restartOne(commandId: string, onLog?: LogHandler): Promise<void> {
+    const cmd = this.commands.find((c) => c.id === commandId);
+    if (!cmd) throw new Error(`Unknown command "${commandId}" in profile "${this.profile}"`);
+
     await this.stopOne(commandId);
-    await this.startOne(commandId, onLog);
+
+    const env = this.resolveEnv(cmd);
+    const newWrapper = new ProcessWrapper(cmd, this.profile, env);
+    if (onLog) newWrapper.onLog(onLog);
+    this.wrappers.set(cmd.id, newWrapper);
+    await newWrapper.start();
+  }
+
+  /** Alias of startOne: runs a single command standalone, starting (and waiting on) any deps first. */
+  async run(commandId: string, onLog?: LogHandler): Promise<void> {
+    return this.startOne(commandId, onLog);
   }
 
   async stopAll(): Promise<void> {
@@ -223,7 +244,7 @@ export class SpawnQueue {
   }
 
   async stopOne(commandId: string): Promise<void> {
-    const wrapper = (this.wrappers as any).get(commandId);
+    const wrapper = this.wrappers.get(commandId);
     if (wrapper) await wrapper.stop();
   }
 

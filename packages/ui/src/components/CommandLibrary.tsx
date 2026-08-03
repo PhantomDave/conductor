@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { Badge, Button, Modal, Card, Group, Stack, Text } from "@mantine/core";
-import { IconEdit, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconEdit, IconPlus, IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useCommandLibrary } from "../hooks/useCommandLibrary";
+import { useProcesses } from "../hooks/useProcesses";
 import { CommandForm } from "./CommandForm";
+import { useExecuteCommand } from "../hooks/useProcessActions";
 
 export function CommandLibrary() {
-  const { commands, isLoading, error, deleteItem } = useCommandLibrary();
+  const { commands, isLoading: loadingCommands, error, deleteItem } = useCommandLibrary();
+  const processes = useProcesses();
+  const execute = useExecuteCommand();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editState, setEditState] = useState<
@@ -13,11 +17,16 @@ export function CommandLibrary() {
   >(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  if (isLoading) return <Text c="dimmed">Loading command library...</Text>;
+  if (loadingCommands || processes.isLoading) return <Text c="dimmed">Loading command library...</Text>;
   if (error) return <Text c="red">{(error as Error).message}</Text>;
 
   // Flatten commands into a deduplicated array
   const flatCommands = Object.values(commands).sort((a, b) => a.name.localeCompare(b.name));
+
+  const isRunning = (commandId: string): boolean =>
+    processes.data?.some(
+      (p) => p.commandId === commandId && (p.status === "running" || p.status === "starting"),
+    ) ?? false;
 
   return (
     <Stack gap="sm">
@@ -63,30 +72,44 @@ export function CommandLibrary() {
                 )}
               </Stack>
 
-              {!cmd.readonly ? (
-                <Group gap={4}>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    leftSection={<IconEdit size={12} />}
-                    onClick={() => {
-                      setFormOpen(true);
-                      setEditState(cmd);
-                    }}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="xs"
-                    color="red"
-                    variant="light"
-                    leftSection={<IconTrash size={12} />}
-                    onClick={() => setDeleteConfirm(cmd.id)}
-                  >
-                    Delete
-                  </Button>
-                </Group>
-              ) : null}
+              <Group gap={4}>
+                {/* Run button — uses __global__ since commands are root-level */}
+                <Button
+                  size="xs"
+                  leftSection={<IconPlayerPlay size={12} />}
+                  color="green"
+                  variant="light"
+                  onClick={() => execute.mutate({ profile: "__global__", commandId: cmd.id })}
+                  loading={execute.isPending && execute.variables?.commandId === cmd.id}
+                  disabled={isRunning(cmd.id)}
+                >
+                  Run
+                </Button>
+                {!cmd.readonly ? (
+                  <Group gap={4}>
+                    <Button
+                      size="xs"
+                      variant="light"
+                      leftSection={<IconEdit size={12} />}
+                      onClick={() => {
+                        setFormOpen(true);
+                        setEditState(cmd);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="xs"
+                      color="red"
+                      variant="light"
+                      leftSection={<IconTrash size={12} />}
+                      onClick={() => setDeleteConfirm(cmd.id)}
+                    >
+                      Delete
+                    </Button>
+                  </Group>
+                ) : null}
+              </Group>
             </Group>
           </Card>
         ))
