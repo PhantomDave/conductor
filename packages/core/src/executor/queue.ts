@@ -193,7 +193,7 @@ export class SpawnQueue {
     const orphan = this.wrappers.get(commandId);
     if (orphan != null) {
       await orphan.forceKillAndWait();
-      await new Promise<void>(r => setTimeout(r, 50)); // brief OS port-release delay
+      await new Promise<void>((r) => setTimeout(r, 50)); // brief OS port-release delay
     }
 
     const env = this.resolveEnv(cmd);

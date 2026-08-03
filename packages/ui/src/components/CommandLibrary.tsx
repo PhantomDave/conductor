@@ -17,7 +17,8 @@ export function CommandLibrary() {
   >(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  if (loadingCommands || processes.isLoading) return <Text c="dimmed">Loading command library...</Text>;
+  if (loadingCommands || processes.isLoading)
+    return <Text c="dimmed">Loading command library...</Text>;
   if (error) return <Text c="red">{(error as Error).message}</Text>;
 
   // Flatten commands into a deduplicated array
