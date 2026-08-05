@@ -99,7 +99,7 @@ export function resolveShell(configuredShell?: string): ShellCommand {
     if (found) return { bin: found, flag: flagFor(found) };
   }
 
-   return { bin: "/bin/sh", flag: "-c" };
+  return { bin: "/bin/sh", flag: "-c" };
 }
 
 /**
