@@ -6,7 +6,7 @@ Run your entire dev stack — databases, servers, workers — with one command.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Built with Bun](https://img.shields.io/badge/runtime-bun-f472b6)](https://bun.sh)
-[![Status: beta](https://img.shields.io/badge/status-beta-orange)]()
+[![Status: beta](https://img.shields.io/badge/status-beta-orange)](https://github.com/PhantomDave/conductor/releases)
 
 ## Why Conductor?
 
@@ -104,8 +104,7 @@ Then:
 
 ```bash
 conductor run dev          # starts postgres → api → web, in order
-conductor ps                # see what's running
-conductor logs --follow    # tail everything in real-time
+conductor ps               # see what's running (requires API server on :4000)
 ```
 
 ## Configuration Reference
@@ -117,17 +116,17 @@ Conductor configs are YAML files starting at the root with two top-level section
 
 ## CLI Commands
 
-| Command | Description |
-| --- | --- |
-| `conductor run <profile> [command]` | Start a profile's commands in dependency order |
-| `conductor configure [profile] [-f]` | Auto-compile `.env` / `appsettings.json` from `.example` templates |
-| `conductor list [profile]` | List profiles or commands within a profile |
-| `conductor config validate [file]` | Validate a YAML config against the schema |
-| `conductor env get <profile> <key>` | Read an env var (from `.env.<profile>.local`) |
-| `conductor env set <profile> <key> <val>` | Write an env var into `.env.<profile>.local` |
-| `conductor ps` | List all running processes (hits API at :4000) |
-| `conductor logs [--follow]` | View process logs (stub — SQL layer exists, UI wired only) |
-| `conductor stop <profile>` | Stub — use Ctrl+C for now |
+| Command                                   | Description                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------ |
+| `conductor run <profile> [command]`       | Start a profile's commands in dependency order                     |
+| `conductor configure [profile] [-f]`      | Auto-compile `.env` / `appsettings.json` from `.example` templates |
+| `conductor list [profile]`                | List profiles or commands within a profile                         |
+| `conductor config validate [file]`        | Validate a YAML config against the schema                          |
+| `conductor env get <profile> <key>`       | Read an env var (from `.env.<profile>.local`)                      |
+| `conductor env set <profile> <key> <val>` | Write an env var into `.env.<profile>.local`                       |
+| `conductor ps`                            | List all running processes (hits API at :4000)                     |
+| `conductor logs [--follow]`               | View process logs (stub — SQL layer exists, UI wired only)         |
+| `conductor stop <profile>`                | Stub — use Ctrl+C for now                                          |
 
 Full reference: [CLI.md](./docs/CLI.md)
 
@@ -135,22 +134,22 @@ Full reference: [CLI.md](./docs/CLI.md)
 
 Conductor tracks **process status** and **health**:
 
-| Status | Meaning |
-| --- | --- |
-| `starting` | Process spawned, awaiting health check |
-| `running` | No explicit healthcheck yet, or polling in progress |
-| `healthy` | Health check passed (`port`, `http`, or `command`) |
-| `stopped` | Exited gracefully (code 0) |
-| `failed` | Exited with error (code ≠ 0) |
+| Status     | Meaning                                             |
+| ---------- | --------------------------------------------------- |
+| `starting` | Process spawned, awaiting health check              |
+| `running`  | No explicit healthcheck yet, or polling in progress |
+| `stopping` | Graceful shutdown in progress                       |
+| `stopped`  | Exited gracefully (code 0)                          |
+| `failed`   | Exited with error (code ≠ 0)                        |
 
 Health check types:
 
-| Type | Checks |
-| --- | --- |
-| `port` | TCP connection succeeds (2 s socket timeout) |
-| `http` | HTTP endpoint responds with status < 500 (2 s fetch timeout) |
-| `command` | Shell command exits with code 0 |
-| `none` | Just wait for process to spawn (default) |
+| Type      | Checks                                                       |
+| --------- | ------------------------------------------------------------ |
+| `port`    | TCP connection succeeds (2 s socket timeout)                 |
+| `http`    | HTTP endpoint responds with status < 500 (2 s fetch timeout) |
+| `command` | Shell command exits with code 0                              |
+| `none`    | Just wait for process to spawn (default)                     |
 
 ## Web Dashboard
 
@@ -186,7 +185,7 @@ The desktop app checks for updates automatically on launch via GitHub Releases. 
 - ✅ Fastify HTTP API + SSE log stream
 - ✅ React + Mantine dashboard (single page, all panels)
 - ✅ Desktop app (Electron 43 + electron-builder, auto-update)
-- ✅ Docker Compose import (`POST /api/docker compose/parse`)
+- ✅ Docker Compose import (`POST /api/docker%20compose/parse`)
 - `configure` command — compiles `.env` and `appsettings.json` from `.example` templates
 - 🔄 Live log wiring in UI LogViewer via SSE (server-side ready)
 - 🔲 Process CPU/memory metrics collection (`packages/core/src/monitor/` empty)

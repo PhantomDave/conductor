@@ -15,7 +15,7 @@ usage: conductor run <profile> [commandId]
 - `<profile>` — name of the profile to run (from `.conductor.yml`)
 - `[commandId]` — optional: run only this specific command instead of the entire profile
 
-The CLI reads `.conductor.yml` from the current directory, resolves commands in dependency order, and starts them sequentially with health check polling. The process stays alive for the duration of the run. When you press Ctrl+C, Conductor sends SIGKILL immediately to all processes (graceful shutdown is a future feature).
+The CLI reads `.conductor.yml` from the current directory, resolves commands in dependency order, and starts them sequentially with health check polling. The process stays alive for the duration of the run. When you press Ctrl+C, Conductor's shutdown handler calls `queue.stopAll()`, which sends each process its configured `stop_signal` (or runs `stop_command` if set) and waits up to `stop_timeout_ms` before escalating to SIGKILL.
 
 All commands are auto-compiled from `.example` templates if the target files don't exist yet. Missing environment variables produce warnings on stderr but don't block execution.
 
@@ -38,7 +38,7 @@ Show running processes via the API server (default `http://localhost:4000`).
 usage: conductor ps [--api-url <url>]
 ```
 
-Hits `/api/processes` and displays a table with PID, command name, status, elapsed time, and snapshot counts. If the API server isn't running, the CLI prints an error message and exits without output. Set the `CONDUCTOR_API_URL` environment variable to override the API endpoint.
+Hits `/api/processes` and prints the raw JSON array of process snapshots. If the API server isn't running, the CLI prints an error message and exits without output. Set the `CONDUCTOR_API_URL` environment variable to override the API endpoint.
 
 ### conductor env
 
@@ -111,20 +111,20 @@ usage: conductor stop [profile]
 
 ## CLI Environment Variables
 
-| Variable | Purpose | Default |
-|---|---|---|
-| `CONDUCTOR_API_URL` | Override the HTTP API server URL used by `ps` | `http://localhost:4000` |
-| `BASE_PATH` | Base directory for config resolution (overrides `.conductor.yml`) | `"."` |
+| Variable            | Purpose                                                           | Default                 |
+| ------------------- | ----------------------------------------------------------------- | ----------------------- |
+| `CONDUCTOR_API_URL` | Override the HTTP API server URL used by `ps`                     | `http://localhost:4000` |
+| `BASE_PATH`         | Base directory for config resolution (overrides `.conductor.yml`) | `"."`                   |
 
 ## Exit Codes
 
-| Code | Meaning |
-|---|---|
-| 0 | Success |
-| 1 | Validation error or missing config file |
-| 2 | Profile not found |
-| 3 | Command execution failed |
-| 4 | API connection error (`ps` command) |
+| Code | Meaning                                 |
+| ---- | --------------------------------------- |
+| 0    | Success                                 |
+| 1    | Validation error or missing config file |
+| 2    | Profile not found                       |
+| 3    | Command execution failed                |
+| 4    | API connection error (`ps` command)     |
 
 ## Version Info
 
