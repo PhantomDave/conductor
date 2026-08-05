@@ -73,7 +73,12 @@ export async function probeOnce(
   try {
     switch (healthcheck.type) {
       case "port": {
-        if (!healthcheck.port) return { ok: false, latencyMs: start - start, detail: "healthcheck.port is required" as never };
+        if (!healthcheck.port)
+          return {
+            ok: false,
+            latencyMs: start - start,
+            detail: "healthcheck.port is required" as never,
+          };
         const ok = await checkPort(healthcheck.port);
         return { ok, latencyMs: Date.now() - start, detail: `port ${healthcheck.port}` };
       }
@@ -87,11 +92,15 @@ export async function probeOnce(
         return { ok, latencyMs: Date.now() - start, detail: `HTTP ${url}` };
       }
       case "command": {
-        if (!healthcheck.command) return { ok: false, latencyMs: start - start, detail: "healthcheck.command is required" as never };
+        if (!healthcheck.command)
+          return {
+            ok: false,
+            latencyMs: start - start,
+            detail: "healthcheck.command is required" as never,
+          };
         const resolvedCmd = interpolateString(healthcheck.command, env);
-        const cwd = (env.BASE_PATH && isAbsolute(env.BASE_PATH))
-          ? resolvePath(env.BASE_PATH)
-          : undefined;
+        const cwd =
+          env.BASE_PATH && isAbsolute(env.BASE_PATH) ? resolvePath(env.BASE_PATH) : undefined;
         const ok = await checkCommand(resolvedCmd, cwd, env.CONDUCTOR_SHELL);
         return { ok, latencyMs: Date.now() - start, detail: `command "${resolvedCmd}"` };
       }

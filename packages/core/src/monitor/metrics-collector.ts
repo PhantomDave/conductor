@@ -131,7 +131,10 @@ export class MetricCollector {
             if (last > 0) {
               const delta = nowTicks - last;
               // deltaMs approx interval; ticks per ms for CPU % on a single core is 0.1
-              cpuSum += Math.min(Math.max(delta / (this.options.intervalMs || 5000) * 100, 0), 100);
+              cpuSum += Math.min(
+                Math.max((delta / (this.options.intervalMs || 5000)) * 100, 0),
+                100,
+              );
             }
             this.lastClock.set(pid, nowTicks);
           }
@@ -155,6 +158,8 @@ export class MetricCollector {
     const cutoff = new Date(Date.now() - retentionMs).toISOString();
     try {
       this.queries.deleteMetricBefore(cutoff);
-    } catch { /* table may not exist yet or schema mismatch — harmless */ }
+    } catch {
+      /* table may not exist yet or schema mismatch — harmless */
+    }
   }
 }

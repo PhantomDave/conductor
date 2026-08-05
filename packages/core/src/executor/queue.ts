@@ -122,7 +122,10 @@ export class SpawnQueue {
     if (!hc) return;
     const label = hc.type !== "none" ? `${hc.retries}` : "";
     if (result.ok) {
-      wrapper.log(`[healthcheck] attempt ${attempt + 1}/${label} healthy (${result.latencyMs}ms)`, "stdout");
+      wrapper.log(
+        `[healthcheck] attempt ${attempt + 1}/${label} healthy (${result.latencyMs}ms)`,
+        "stdout",
+      );
     } else {
       wrapper.log(
         `[healthcheck] attempt ${attempt + 1}/${label} failed: ${result.detail} (${result.latencyMs}ms)`,
@@ -172,12 +175,10 @@ export class SpawnQueue {
       wrapper.log(`[startup] command started (pid ${wrapper.pid})`, "stdout");
 
       // Await healthcheck with per-attempt logging
-      await waitForHealthy(
-        `${this.profile}/${cmd.id}`,
-        cmd.healthcheck,
-        env,
-        { onAttempt: (attempt, result) => this.recordHealthProbeAttempt(wrapper, cmd, attempt, result) },
-      );
+      await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env, {
+        onAttempt: (attempt, result) =>
+          this.recordHealthProbeAttempt(wrapper, cmd, attempt, result),
+      });
 
       // Successful start — if previous version failed → recovered notification
       if (this.failedPids.has(wrapper.pid)) {
@@ -197,9 +198,14 @@ export class SpawnQueue {
         wrapper.log(`[healthcheck] startup failed: ${reason}`, "stdout");
       } else {
         // Healthcheck timed out after retries
-        const label = cmd.healthcheck ? `Healthcheck failed after ${cmd.healthcheck.retries} attempts` : "No healthcheck configured";
+        const label = cmd.healthcheck
+          ? `Healthcheck failed after ${cmd.healthcheck.retries} attempts`
+          : "No healthcheck configured";
         this.recordNotification("healthcheck_failed", cmd.id, `${label}: ${reason}`);
-        wrapper.log(`[healthcheck] failed after all ${cmd.healthcheck?.retries ?? 0} attempts`, "stdout");
+        wrapper.log(
+          `[healthcheck] failed after all ${cmd.healthcheck?.retries ?? 0} attempts`,
+          "stdout",
+        );
       }
     }
 

@@ -111,20 +111,20 @@ usage: conductor stop [profile]
 
 ## CLI Environment Variables
 
-| Variable | Purpose | Default |
-|---|---|---|
-| `CONDUCTOR_API_URL` | Override the HTTP API server URL used by `ps` | `http://localhost:4000` |
-| `BASE_PATH` | Base directory for config resolution (overrides `.conductor.yml`) | `"."` |
+| Variable            | Purpose                                                           | Default                 |
+| ------------------- | ----------------------------------------------------------------- | ----------------------- |
+| `CONDUCTOR_API_URL` | Override the HTTP API server URL used by `ps`                     | `http://localhost:4000` |
+| `BASE_PATH`         | Base directory for config resolution (overrides `.conductor.yml`) | `"."`                   |
 
 ## Exit Codes
 
-| Code | Meaning |
-|---|---|
-| 0 | Success |
-| 1 | Validation error or missing config file |
-| 2 | Profile not found |
-| 3 | Command execution failed |
-| 4 | API connection error (`ps` command) |
+| Code | Meaning                                 |
+| ---- | --------------------------------------- |
+| 0    | Success                                 |
+| 1    | Validation error or missing config file |
+| 2    | Profile not found                       |
+| 3    | Command execution failed                |
+| 4    | API connection error (`ps` command)     |
 
 ## Version Info
 

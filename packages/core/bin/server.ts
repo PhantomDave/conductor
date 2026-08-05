@@ -44,7 +44,10 @@ async function main() {
   // CPU/memory metrics collector — samples process-group totals every 5s
   // and persists them to SQLite for historical query by the UI.
   const collector = new MetricCollector(
-    () => [...store.getQueues().values()].flatMap((q) => q.listSnapshots()).map((s) => ({ pid: s.pid, cpuPercent: s.cpuPercent, memoryBytes: s.memoryBytes })),
+    () =>
+      [...store.getQueues().values()]
+        .flatMap((q) => q.listSnapshots())
+        .map((s) => ({ pid: s.pid, cpuPercent: s.cpuPercent, memoryBytes: s.memoryBytes })),
     queries,
     { intervalMs: 5000, retentionHours: 24 },
   );

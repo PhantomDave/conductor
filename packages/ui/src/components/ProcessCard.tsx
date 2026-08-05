@@ -60,9 +60,7 @@ export function ProcessCard({ process, onSelect }: ProcessCardProps) {
             </Badge>
           </Stack>
           <Group gap={4}>
-            {process.status === "running" && process.pid && (
-              <MetricButton pid={process.pid} />
-            )}
+            {process.status === "running" && process.pid && <MetricButton pid={process.pid} />}
             <Tooltip label={process.status} withArrow>
               <ThemeIcon
                 size="sm"

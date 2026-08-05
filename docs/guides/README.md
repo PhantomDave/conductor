@@ -10,14 +10,14 @@ Root-level commands are started in dependency order using topological sort. Any 
 commands:
   - id: db
     run: docker compose up postgres
-   
+
   - id: api
     run: npm start
-    deps: [db]          # api starts only after db is healthy
-   
+    deps: [db] # api starts only after db is healthy
+
   - id: worker
     run: npm run worker
-    deps: [db]          # also waits for db (but not in any particular order with api)
+    deps: [db] # also waits for db (but not in any particular order with api)
 
 profiles:
   dev:
@@ -36,4 +36,4 @@ profiles:
 Every command can specify a healthcheck to tell Conductor when it's considered "ready":
 
 | Type | When to use | Example |
-|---|---|----
+| ---- | ----------- | ------- |

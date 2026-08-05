@@ -33,7 +33,14 @@ export function CommandLibrary() {
   return (
     <Stack gap="sm">
       {/* Add command button */}
-      <Button leftSection={<IconPlus size={14} />} variant="light" onClick={() => { setFormOpen(true); setEditState(null); }}>
+      <Button
+        leftSection={<IconPlus size={14} />}
+        variant="light"
+        onClick={() => {
+          setFormOpen(true);
+          setEditState(null);
+        }}
+      >
         Add command
       </Button>
 
@@ -51,7 +58,10 @@ export function CommandLibrary() {
               command={cmd}
               isRunning={isRunning(cmd.id)}
               onRun={() => execute.mutate({ profile: "__global__", commandId: cmd.id })}
-              onEdit={() => { setFormOpen(true); setEditState(cmd); }}
+              onEdit={() => {
+                setFormOpen(true);
+                setEditState(cmd);
+              }}
               onDelete={(id) => setDeleteConfirm(id)}
             />
           ))}
@@ -59,16 +69,41 @@ export function CommandLibrary() {
       )}
 
       {formOpen && (
-        <CommandForm opened={true} onClose={() => setFormOpen(false)} profile={undefined} existingCommands={flatCommands} editing={editState ? editState : null} />
+        <CommandForm
+          opened={true}
+          onClose={() => setFormOpen(false)}
+          profile={undefined}
+          existingCommands={flatCommands}
+          editing={editState ? editState : null}
+        />
       )}
 
       {deleteConfirm && (
-        <Modal opened={Boolean(deleteConfirm)} onClose={() => setDeleteConfirm(null)} title="Delete command" centered>
+        <Modal
+          opened={Boolean(deleteConfirm)}
+          onClose={() => setDeleteConfirm(null)}
+          title="Delete command"
+          centered
+        >
           <Stack>
-            <Text size="sm">Are you sure you want to delete command "{flatCommands.find((c) => c.id === deleteConfirm)?.name ?? ""}"? This cannot be undone.</Text>
+            <Text size="sm">
+              Are you sure you want to delete command "
+              {flatCommands.find((c) => c.id === deleteConfirm)?.name ?? ""}"? This cannot be
+              undone.
+            </Text>
             <Group justify="flex-end">
-              <Button variant="subtle" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-              <Button color="red" onClick={() => { deleteItem(deleteConfirm); setDeleteConfirm(null); }}>Delete</Button>
+              <Button variant="subtle" onClick={() => setDeleteConfirm(null)}>
+                Cancel
+              </Button>
+              <Button
+                color="red"
+                onClick={() => {
+                  deleteItem(deleteConfirm);
+                  setDeleteConfirm(null);
+                }}
+              >
+                Delete
+              </Button>
             </Group>
           </Stack>
         </Modal>

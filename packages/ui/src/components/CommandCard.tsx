@@ -28,19 +28,27 @@ export function CommandCard({
             <ThemeIcon size="sm" variant="light" radius="md" color="blue">
               <IconBox size={14} />
             </ThemeIcon>
-            <Text fw={600} size="sm" c="blue">{command.name}</Text>
+            <Text fw={600} size="sm" c="blue">
+              {command.name}
+            </Text>
           </Group>
           {command.healthcheck && command.healthcheck.type !== "none" && (
-            <Badge size="xs" variant="dot" color="blue">health</Badge>
+            <Badge size="xs" variant="dot" color="blue">
+              health
+            </Badge>
           )}
           {command.deps.length > 0 && (
-            <Badge size="xs" variant="light" color="grape">deps: {command.deps.join(", ")}</Badge>
+            <Badge size="xs" variant="light" color="grape">
+              deps: {command.deps.join(", ")}
+            </Badge>
           )}
         </Stack>
 
         {/* Description */}
         {command.description && (
-          <Text size="xs" c="dimmed">{command.description}</Text>
+          <Text size="xs" c="dimmed">
+            {command.description}
+          </Text>
         )}
 
         {/* Action buttons */}
@@ -59,8 +67,25 @@ export function CommandCard({
           </Button>
           {!command.readonly && (
             <>
-              <Button flex={1} size="xs" variant="light" leftSection={<IconEdit size={12} />} onClick={onEdit}>Edit</Button>
-              <Button flex={1} size="xs" color="red" variant="light" leftSection={<IconTrash size={12} />} onClick={() => onDelete?.(command.id)}>Delete</Button>
+              <Button
+                flex={1}
+                size="xs"
+                variant="light"
+                leftSection={<IconEdit size={12} />}
+                onClick={onEdit}
+              >
+                Edit
+              </Button>
+              <Button
+                flex={1}
+                size="xs"
+                color="red"
+                variant="light"
+                leftSection={<IconTrash size={12} />}
+                onClick={() => onDelete?.(command.id)}
+              >
+                Delete
+              </Button>
             </>
           )}
         </Group>
