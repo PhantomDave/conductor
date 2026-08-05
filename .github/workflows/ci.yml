@@ -88,7 +88,7 @@ jobs:
       - name: Validate example config
         run: |
           cp .conductor.example.yml .conductor.yml
-          bun run --cwd packages/cli bin/conductor.ts config validate
+          bun packages/cli/bin/conductor.ts config validate
 
       - name: Run example profile
-        run: bun run --cwd packages/cli bin/conductor.ts run dev
+        run: bun packages/cli/bin/conductor.ts run dev
