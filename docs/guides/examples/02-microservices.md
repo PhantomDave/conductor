@@ -124,7 +124,8 @@ profiles:
     description: "Local development with Docker Compose"
     env:
       COMPOSE_PROJECT_NAME: "myapp-dev"
-    command_ids: [redis, rabbitmq, postgres, mongo, auth-service, api-service, worker-service, gateway]
+    command_ids:
+      [redis, rabbitmq, postgres, mongo, auth-service, api-service, worker-service, gateway]
 ```
 
 ## Running the Application
@@ -210,7 +211,7 @@ Edit `.conductor.yml` and change `stop_timeout_ms`:
 
 ```yaml
 - id: my-service
-  stop_timeout_ms: 2000   # 2 seconds instead of default 5
+  stop_timeout_ms: 2000 # 2 seconds instead of default 5
 ```
 
 ## Notes on Configuration
