@@ -13,6 +13,7 @@ import {
 import { IconPlayerStop, IconRefresh, IconCircleFilled } from "@tabler/icons-react";
 import { useRestartCommand, useStopProcess } from "../hooks/useProcessActions";
 import type { ProcessInfo } from "../lib/api";
+import { MetricButton } from "./MetricPopover";
 
 const STATUS_COLOR: Record<string, string> = {
   running: "green",
@@ -59,6 +60,9 @@ export function ProcessCard({ process, onSelect }: ProcessCardProps) {
             </Badge>
           </Stack>
           <Group gap={4}>
+            {process.status === "running" && process.pid && (
+              <MetricButton pid={process.pid} />
+            )}
             <Tooltip label={process.status} withArrow>
               <ThemeIcon
                 size="sm"

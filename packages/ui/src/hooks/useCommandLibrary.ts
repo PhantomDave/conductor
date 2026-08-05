@@ -21,6 +21,7 @@ export function useCommandLibrary() {
     mutationFn: (input: Omit<CommandInput, "id">) => createStandaloneCommand(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["command-library"] });
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
     },
     onError: (error: Error) => {
       notifications.show({
@@ -36,6 +37,7 @@ export function useCommandLibrary() {
       updateStandaloneCommand(id, patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["command-library"] });
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
     },
     onError: (error: Error) => {
       notifications.show({
@@ -50,6 +52,7 @@ export function useCommandLibrary() {
     mutationFn: (id: string) => deleteStandaloneCommand(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["command-library"] });
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
     },
     onError: (error: Error) => {
       notifications.show({

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Modal,
   Stack,
@@ -46,8 +47,11 @@ export function CommandForm({
 }: CommandFormProps) {
   const isStandalone = !profile;
   const isEditing = Boolean(editing);
+  const queryClient = useQueryClient();
 
-  // Both hooks always called (rules of hooks). In standalone mode they are harmless no-ops.
+  const invCmdLib = () => queryClient.invalidateQueries({ queryKey: ["command-library"] });
+  const invProfiles = () => queryClient.invalidateQueries({ queryKey: ["profiles"] });
+
   const profileCreate = useCreateCommand();
   const profileUpdate = useUpdateCommand();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -133,6 +137,8 @@ export function CommandForm({
         setIsSubmitting(true);
         updateStandaloneCommand(editing.id, input as Partial<CommandInfo>)
           .then(() => {
+            invCmdLib();
+            invProfiles();
             notifications.show({ color: "green", message: `Updated command "${input.name}"` });
             onClose();
           })
@@ -155,6 +161,8 @@ export function CommandForm({
         setIsSubmitting(true);
         createStandaloneCommand(input)
           .then((created) => {
+            invCmdLib();
+            invProfiles();
             notifications.show({ color: "green", message: `Created command "${created.name}"` });
             onClose();
           })
