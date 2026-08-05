@@ -149,9 +149,7 @@ export class MetricCollector {
         cpuSum = Math.min(cpuSum, 100);
 
         this.queries.insertMetric(item.pid, cpuSum, memTotal);
-      } catch {
-
-      }
+      } catch {}
     }
 
     // Retention cleanup
