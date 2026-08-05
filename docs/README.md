@@ -18,6 +18,6 @@ Practical walkthroughs for common scenarios:
 
 | Guide                                                                    | Description                                                                            |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| [Guides Overview](./guides/README.md)                                    | Concepts: dependency ordering, healthchek types, config patterns                       |
+| [Guides Overview](./guides/README.md)                                    | Concepts: dependency ordering, healthcheck types, config patterns                      |
 | [01 Basic Full-Stack App](./guides/examples/01-basic-fullstack.md)       | PostgreSQL + Express API + React frontend on port 3000 with live-reload                |
 | [02 Microservices Docker Compose](./guides/examples/02-microservices.md) | Multi-service architecture via `docker compose` with infra → services → gateway layers |

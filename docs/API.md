@@ -59,20 +59,20 @@ These endpoints manage the relationship between root commands and profiles. A co
 
 The process manager (SpawnQueue) tracks active processes and their snapshots. All endpoints hit `/api/processes`.
 
-| Method | Path                          | Body/Query                         | Description                                                                                                                         |
-| ------ | ----------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/processes`              | —                                  | `queue.listSnapshots()` — returns status of all commands in profile (running, healthy, stopped, failed)                             |
-| DELETE | `/api/processes/:pid`         | —                                  | `queue.stopByPid(pid)` — force-stop a specific process; returns snapshot post-status                                                |
-| GET    | `/api/processes/:pid/metrics` | `?from&to` ISO strings or epoch ms | Time-series metrics (CPU %, memory in bytes). **Currently stubbed** — monitor directory is empty. Returns `{ cpu: [], memory: [] }` |
-| POST   | `/api/profiles/:profile/run`  | —                                  | Start a profile's commands via HTTP API (same as `conductor run`)                                                                   |
-| POST   | `/api/profiles/:profile/stop` | —                                  | Stop all commands in a profile                                                                                                      |
+| Method | Path                          | Body/Query                         | Description                                                                                                                                                             |
+| ------ | ----------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/processes`              | —                                  | `queue.listSnapshots()` — returns status of all commands in profile (`status`: `starting\|running\|stopping\|stopped\|failed`; `health`: `unknown\|healthy\|unhealthy`) |
+| DELETE | `/api/processes/:pid`         | —                                  | `queue.stopByPid(pid)` — force-stop a specific process; returns `{ stopped: true, pid }` or 404                                                                         |
+| GET    | `/api/processes/:pid/metrics` | `?from&to` ISO strings or epoch ms | Time-series metrics (CPU %, memory in bytes). **Currently stubbed** — monitor directory is empty. Returns `{ cpu: [], memory: [] }`                                     |
+| POST   | `/api/profiles/:profile/run`  | —                                  | Start a profile's commands via HTTP API (same as `conductor run`)                                                                                                       |
+| POST   | `/api/profiles/:profile/stop` | —                                  | Stop all commands in a profile                                                                                                                                          |
 
 Command execution/restart endpoints:
 
-| Method | Path                       | Body                   | Description                                                                                                     |
-| ------ | -------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/command/:id/execute` | `{ profile?: string }` | Execute command by ID, optionally within a specific profile context (auto-compiles example templates if needed) |
-| POST   | `/api/command/:id/restart` | `{ profile?: string }` | Restart a command (stops previous instance, relaunches)                                                         |
+| Method | Path                        | Body                   | Description                                                                                                     |
+| ------ | --------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/commands/:id/execute` | `{ profile?: string }` | Execute command by ID, optionally within a specific profile context (auto-compiles example templates if needed) |
+| POST   | `/api/commands/:id/restart` | `{ profile?: string }` | Restart a command (stops previous instance, relaunches)                                                         |
 
 ### Notifications
 
