@@ -62,7 +62,6 @@ export class SpawnQueue {
     if (!snapshot) return false;
     if (snapshot.status === "running") return true;
     return snapshot.status === "stopped" && snapshot.exitCode === 0;
-
   }
 
   /**

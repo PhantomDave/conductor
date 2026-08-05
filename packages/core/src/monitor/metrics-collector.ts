@@ -132,7 +132,10 @@ export class MetricCollector {
               // CPU via delta: /proc/<pid>/stat ticks are in USER_HZ (typically 100 ticks/s = 10ms/tick).
               // To convert to percent: (deltaTicks / USER_HZ) / (intervalMs / 1000) * 100
               // = deltaTicks * 1000 / intervalMs
-              cpuSum += Math.min(Math.max(delta * 1000 / (this.options.intervalMs || 5000), 0), 100);
+              cpuSum += Math.min(
+                Math.max((delta * 1000) / (this.options.intervalMs || 5000), 0),
+                100,
+              );
             }
             this.lastClock.set(pid, nowTicks);
           }
@@ -147,7 +150,7 @@ export class MetricCollector {
 
         this.queries.insertMetric(item.pid, cpuSum, memTotal);
       } catch {
-        continue;
+
       }
     }
 
@@ -156,6 +159,8 @@ export class MetricCollector {
     const cutoff = new Date(Date.now() - retentionMs).toISOString();
     try {
       this.queries.deleteMetricBefore(cutoff);
-    } catch { /* table may not exist yet or schema mismatch — harmless */ }
+    } catch {
+      /* table may not exist yet or schema mismatch — harmless */
+    }
   }
 }
