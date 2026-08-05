@@ -4,7 +4,6 @@
     "outDir": "dist",
     "rootDir": "src",
     "module": "CommonJS",
-    "moduleResolution": "bundler",
     "types": ["node", "electron"]
   },
   "include": ["src/**/*.ts"]

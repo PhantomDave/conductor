@@ -545,3 +545,17 @@ export async function parseDockerCompose(yamlText: string): Promise<SuggestedCom
   const data = await parseJsonOrThrow(res, "Failed to parse docker compose.yml");
   return data.commands ?? [];
 }
+
+// --- Process metrics ------------------------------------------------
+
+export interface MetricPoint {
+  timestamp: string;
+  cpu_percent: number | null;
+  memory_bytes: number | null;
+}
+
+export async function fetchProcessMetrics(pid: number): Promise<MetricPoint[]> {
+  const res = await fetch(`${API_BASE}/processes/${pid}/metrics`);
+  const data = await parseJsonOrThrow(res, `Failed to fetch metrics for PID ${pid}`);
+  return (data.metrics ?? data) as MetricPoint[];
+}

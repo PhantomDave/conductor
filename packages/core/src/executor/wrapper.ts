@@ -13,11 +13,18 @@ export interface ManagedProcess {
   pid: number;
   status: ProcessStatus;
   health: HealthStatus;
+  cpuPercent?: number;
+  memoryBytes?: number;
   startedAt: Date;
   endedAt?: Date;
   exitCode?: number;
   subprocess: Subprocess<"ignore", "pipe", "pipe">;
 }
+
+/** Callback signature for health-state change notifications. */
+export type HealthChangeHandler = (oldHealth: HealthStatus, newHealth: HealthStatus) => void;
+/** Callback signature for status change notifications. */
+export type StatusChangeHandler = (oldStatus: ProcessStatus, newStatus: ProcessStatus) => void;
 
 /**
  * Plain-object snapshot of a process, safe to serialize over the HTTP API
@@ -30,6 +37,8 @@ export interface ProcessSnapshot {
   pid: number;
   status: ProcessStatus;
   health: HealthStatus;
+  cpuPercent?: number;
+  memoryBytes?: number;
   startedAt: string;
   endedAt?: string;
   exitCode?: number;
@@ -131,6 +140,8 @@ async function killTreeAndWait(subprocess: Subprocess, sweepTimeoutMs = 3000): P
 export class ProcessWrapper {
   private process: ManagedProcess | null = null;
   private logHandlers: LogHandler[] = [];
+  private healthObservers: HealthChangeHandler[] = [];
+  private statusObservers: StatusChangeHandler[] = [];
 
   constructor(
     private readonly commandConfig: CommandConfig,
@@ -140,6 +151,45 @@ export class ProcessWrapper {
 
   onLog(handler: LogHandler): void {
     this.logHandlers.push(handler);
+  }
+
+  /** Subscribe to health-state change notifications. */
+  onHealthChange(cb: HealthChangeHandler): () => void {
+    this.healthObservers.push(cb);
+    return () => {
+      const idx = this.healthObservers.indexOf(cb);
+      if (idx !== -1) this.healthObservers.splice(idx, 1);
+    };
+  }
+
+  /** Subscribe to status change notifications. */
+  onStatusChange(cb: StatusChangeHandler): () => void {
+    this.statusObservers.push(cb);
+    return () => {
+      const idx = this.statusObservers.indexOf(cb);
+      if (idx !== -1) this.statusObservers.splice(idx, 1);
+    };
+  }
+
+  private notifyHealth(oldHealth: HealthStatus, newHealth: HealthStatus): void {
+    for (const cb of this.healthObservers) cb(oldHealth, newHealth);
+  }
+
+  private notifyStatus(oldStatus: ProcessStatus, newStatus: ProcessStatus): void {
+    for (const cb of this.statusObservers) cb(oldStatus, newStatus);
+  }
+
+  /** Emit a log entry directly through the wrapper's pipeline. */
+  public log(message: string, stream: "stdout" | "stderr" = "stdout"): void {
+    if (!this.process) return;
+    this.emitLog(message, stream);
+  }
+
+  /** Called by the metrics collector to update CPU/memory for the running process. */
+  updateMetrics(cpuPercent: number, memoryBytes: number): void {
+    if (!this.process) return;
+    this.process.cpuPercent = cpuPercent;
+    this.process.memoryBytes = memoryBytes;
   }
 
   private emitLog(message: string, stream: "stdout" | "stderr"): void {
@@ -176,11 +226,27 @@ export class ProcessWrapper {
    * Transitions the process to "running" after its healthcheck passes.
    * No-op if called when status is not "starting".
    * Also sets `health` in-process — callers no longer need to mutate health separately.
+   * Notifies observers on any health-state flip.
    */
   markHealthy(health: HealthStatus): void {
     if (this.process?.status !== "starting") return;
     this.process.status = "running";
+    const oldHealth = this.process.health;
     this.process.health = health;
+    if (oldHealth !== health) this.notifyHealth(oldHealth, health);
+  }
+
+  /**
+   * Updates health for a process that is already running (e.g. from the
+   * continuous health monitor). Notifies observers on any flip, including
+   * healthy → unhealthy (went-unhealthy) and unhealthy → healthy (recovered).
+   */
+  updateHealth(newHealth: HealthStatus): void {
+    if (!this.process || this.process.status !== "running") return;
+    const oldHealth = this.process.health;
+    if (oldHealth === newHealth) return;
+    this.process.health = newHealth;
+    this.notifyHealth(oldHealth, newHealth);
   }
 
   /**
@@ -189,11 +255,15 @@ export class ProcessWrapper {
    */
   markFailed(): void {
     if (!this.process) return;
+    const oldHealth = this.process.health;
     // Allow starting → failed transition for healthcheck timeouts
     // Ignore redundant transitions from already terminal states
     if (this.process.status === "starting" || this.process.status === "running") {
+      const oldStatus = this.process.status;
       this.process.status = "failed";
       this.process.health = "unhealthy";
+      if (oldHealth !== "unhealthy") this.notifyHealth(oldHealth, "unhealthy");
+      this.notifyStatus(oldStatus, "failed");
     }
   }
 
@@ -211,6 +281,8 @@ export class ProcessWrapper {
       pid: this.process.pid,
       status: this.process.status,
       health: this.process.health,
+      cpuPercent: this.process.cpuPercent,
+      memoryBytes: this.process.memoryBytes,
       startedAt: this.process.startedAt.toISOString(),
       endedAt: this.process.endedAt?.toISOString(),
       exitCode: this.process.exitCode,

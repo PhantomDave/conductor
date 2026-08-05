@@ -160,6 +160,16 @@ export class ConductorQueries {
   }
 
   /**
+   * Purges metric rows older than `cutoff`. Useful for retention cleanup.
+   */
+  deleteMetricBefore(cutoff: string): number {
+    const result = this.db
+      .prepare(`DELETE FROM process_metrics WHERE timestamp < $cutoff`)
+      .run({ $cutoff: cutoff });
+    return result.changes;
+  }
+
+  /**
    * Lists env vars for a scope. Pass `profile: null` for the global scope.
    */
   listEnvVars(scope: "global" | "profile", profile: string | null = null): EnvVarRow[] {

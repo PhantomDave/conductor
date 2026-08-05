@@ -13,3 +13,4 @@ export * from "./logs/broadcaster";
 export * from "./db/init";
 export * from "./db/queries";
 export * from "./api";
+export * from "./monitor";

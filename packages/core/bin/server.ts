@@ -9,6 +9,7 @@ import { ConductorQueries } from "../src/db/queries";
 import { LogBroadcaster } from "../src/logs/broadcaster";
 import type { LogEntry } from "../src/executor/wrapper";
 import { buildApi } from "../src/api";
+import { MetricCollector } from "../src/monitor";
 
 const PORT = Number(process.env.CONDUCTOR_PORT ?? 4000);
 
@@ -40,6 +41,17 @@ async function main() {
 
   const store = new ConfigStore(configPath, config, resolveDbEnv);
 
+  // CPU/memory metrics collector — samples process-group totals every 5s
+  // and persists them to SQLite for historical query by the UI.
+  const collector = new MetricCollector(
+    () =>
+      [...store.getQueues().values()]
+        .flatMap((q) => q.listSnapshots())
+        .map((s) => ({ pid: s.pid, cpuPercent: s.cpuPercent, memoryBytes: s.memoryBytes })),
+    queries,
+    { intervalMs: 5000, retentionHours: 24 },
+  );
+
   // Every log line from any managed process is persisted and broadcast
   // so both the CLI (via `conductor logs`) and the UI's live SSE stream
   // can see it, regardless of who started the process.
@@ -67,6 +79,9 @@ async function main() {
   await app.listen({ port: PORT, host: "0.0.0.0" });
   logger.info(`Conductor core listening on http://localhost:${PORT}`);
 
+  // Start the metrics collector now that the API is running
+  collector.start();
+
   // Stop every managed process cleanly (respecting each command's
   // stop_signal/stop_timeout_ms) before exiting, so killing the server -
   // whether via Ctrl+C, `systemctl stop`, or an Electron shell quitting
@@ -77,6 +92,7 @@ async function main() {
     shuttingDown = true;
     logger.info(`Received ${signal}, stopping all managed processes...`);
     await Promise.all([...store.getQueues().values()].map((queue) => queue.stopAll()));
+    collector.stop();
     await app.close();
     db.close();
     process.exit(0);

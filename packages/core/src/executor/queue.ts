@@ -1,15 +1,15 @@
 import type { CommandConfig } from "../config/schema";
-import { ProcessWrapper, type LogHandler, type ProcessSnapshot } from "./wrapper";
-import { waitForHealthy } from "./healthcheck";
+import { ProcessWrapper, type LogHandler, type HealthChangeHandler } from "./wrapper";
+import { waitForHealthy, type ProbeResult } from "./healthcheck";
 
 /**
  * Represents a failure event in the queue: process start failure,
- * dependency block, or healthcheck timeout.
+ * dependency block, healthcheck timeout, or service recovery.
  */
 export interface Notification {
   id: string;
   timestamp: number;
-  type: "failed_start" | "dependency_failed" | "healthcheck_failed";
+  type: "failed_start" | "dependency_failed" | "healthcheck_failed" | "recovered";
   profile: string;
   commandId: string;
   commandName?: string;
@@ -26,6 +26,11 @@ export class SpawnQueue {
   private wrappers = new Map<string, ProcessWrapper>();
   private notifications: Notification[] = [];
   private readonly MAX_NOTIFICATIONS = 1000;
+
+  // Track pids that have had a failed_start notification to avoid duplicates
+  private failedPids = new Set<number>();
+  // Track command IDs that need recovery detection after restart
+  private pendingRecovery = new Set<string>();
 
   constructor(
     private readonly profile: string,
@@ -49,56 +54,53 @@ export class SpawnQueue {
   /**
    * Checks if a dependency is ready: either currently running,
    * or already ran and completed correctly (stopped with exit code 0).
-   * Manually stopped/killed (exit non-zero) or failed deps re-run.
    */
   private isDependencyReady(depId: string): boolean {
     const wrapper = this.wrappers.get(depId);
     if (!wrapper) return false;
-
     const snapshot = wrapper.getSnapshot();
     if (!snapshot) return false;
-    // Still running - good
     if (snapshot.status === "running") return true;
-    // Already ran and completed correctly (exit 0) - skip
-    if (snapshot.status === "stopped" && snapshot.exitCode === 0) return true;
-    // Failed, stopping, or stopped-with-nonzero (manual stop/killed) - re-run
-    return false;
+    return snapshot.status === "stopped" && snapshot.exitCode === 0;
   }
 
   /**
-   * Waits for a dependency to become ready: either currently running,
-   * or completed with exit code 0. Throws if the dependency fails
-   * (exit code non-zero) or times out.
+   * Waits for a dependency to become ready. Throws on failure or timeout.
    */
   private async waitForDependency(depId: string): Promise<void> {
     const wrapper = this.wrappers.get(depId);
     if (!wrapper) return;
 
-    // Poll every 100ms until the dependency is ready or failed
+    const maxWaitMs = 60_000;
     const startTime = Date.now();
-    const maxWaitMs = 60_000; // 60 second timeout for dependencies
 
     while (Date.now() - startTime < maxWaitMs) {
       const status = wrapper.status;
-
-      // Still running - good
       if (status === "running") return;
 
-      // Snapshot to check exit code before any further state changes
       const snapshot = wrapper.getSnapshot();
 
-      // Stopped with exit 0 - dependency completed successfully
       if (snapshot?.exitCode === 0) return;
 
-      // Stopped with non-zero exit (or explicit failure) - throw immediately
-      // rather than waiting for the poll to see "failed".
-      if (status === "stopped" || status === "failed") {
+      if (["stopped", "failed"].includes(status)) {
+        // Record any unrecorded failed_start for the dependency itself
+        // process may have died between getSnapshot call above and here
+        if (!snapshot) continue;
+        if (!this.failedPids.has(snapshot.pid)) {
+          this.recordNotification(
+            "failed_start",
+            depId,
+            `Dependency exited: code ${snapshot.exitCode ?? "?"}`,
+            snapshot.exitCode,
+          );
+          this.failedPids.add(snapshot.pid);
+        }
+
         const reason = `Dependency failed with exit code ${snapshot?.exitCode ?? "?"}`;
         this.recordNotification("dependency_failed", depId, reason, snapshot?.exitCode);
         throw new Error(reason);
       }
 
-      // Still starting or stopping - wait a bit more
       await new Promise((r) => setTimeout(r, 100));
     }
 
@@ -107,11 +109,116 @@ export class SpawnQueue {
     throw new Error(reason);
   }
 
-  /**
-   * Marks a wrapper as healthy after successful healthcheck.
-   */
-  private markHealthy(wrapper: ProcessWrapper): void {
-    wrapper.markHealthy("healthy");
+  /** Records a probe attempt as a log line through the wrapper's pipeline. */
+  private recordHealthProbeAttempt(
+    wrapper: ProcessWrapper,
+    cmd: CommandConfig,
+    attempt: number,
+    result: ProbeResult,
+  ): void {
+    const hc = cmd.healthcheck;
+    if (!hc) return;
+    const label = hc.type !== "none" ? `${hc.retries}` : "none";
+    if (result.ok) {
+      wrapper.log(
+        `[healthcheck] attempt ${attempt + 1}/${label} healthy (${result.latencyMs}ms)`,
+        "stdout",
+      );
+    } else {
+      wrapper.log(
+        `[healthcheck] attempt ${attempt + 1}/${label} failed: ${result.detail} (${result.latencyMs}ms)`,
+        "stdout",
+      );
+    }
+  }
+
+  /** Sets up health-transition observer for recovery detection. Returns a cleanup function. */
+  private setupHealthObserver(wrapper: ProcessWrapper, cmd: CommandConfig): () => void {
+    let wentUnhealthy = false;
+
+    const onHealthChange: HealthChangeHandler = (_oldHealth, newHealth) => {
+      if (newHealth === "unhealthy") {
+        wentUnhealthy = true;
+      } else if (wentUnhealthy && newHealth === "healthy") {
+        // Recovery detected
+        wentUnhealthy = false;
+        wrapper.log("[healthcheck] service recovered", "stdout");
+        this.recordNotification("recovered", cmd.id, `${cmd.name} is back up`);
+      }
+    };
+
+    return wrapper.onHealthChange(onHealthChange);
+  }
+
+  /** Internal: spawn one process and await its healthcheck. */
+  private async startSingleProcess(
+    cmd: CommandConfig,
+    env: Record<string, string>,
+    onLog?: LogHandler,
+  ): Promise<number | null> {
+    const wrapper = new ProcessWrapper(cmd, this.profile, env);
+    if (onLog) wrapper.onLog(onLog);
+
+    // Track health transitions for recovery detection during restart
+    this.setupHealthObserver(wrapper, cmd);
+
+    this.wrappers.set(cmd.id, wrapper);
+
+    // Attempt a start — if we throw here (e.g. spawn failure), record failed_start
+    try {
+      await wrapper.start();
+      wrapper.log(`[startup] command started (pid ${wrapper.pid})`, "stdout");
+
+      // Await healthcheck with per-attempt logging
+      await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env, {
+        onAttempt: (attempt, result) =>
+          this.recordHealthProbeAttempt(wrapper, cmd, attempt, result),
+      });
+
+      // Successful start — if previous version failed → recovered notification
+      if (this.pendingRecovery.has(cmd.id)) {
+        wrapper.log("[healthcheck] service recovered after restart", "stdout");
+        this.recordNotification("recovered", cmd.id, `${cmd.name} is back up after restart`);
+      }
+
+      // Remove from recovery-pending set on successful start
+      this.pendingRecovery.delete(cmd.id);
+    } catch (err) {
+      wrapper.markFailed();
+      const reason = err instanceof Error ? err.message : String(err);
+      // Determine notification type based on where it failed
+      if (this.isSpawnError(reason)) {
+        // Spawn-level failure: process never started properly at all
+        this.recordNotification("failed_start", cmd.id, `Failed to start: ${reason}`);
+        wrapper.log(`[healthcheck] startup failed: ${reason}`, "stdout");
+      } else {
+        // Healthcheck timed out after retries
+        const label = cmd.healthcheck
+          ? `Healthcheck failed after ${cmd.healthcheck.retries} attempts`
+          : "No healthcheck configured";
+        this.recordNotification("healthcheck_failed", cmd.id, `${label}: ${reason}`);
+        wrapper.log(
+          `[healthcheck] failed after all ${cmd.healthcheck?.retries ?? 0} attempts`,
+          "stdout",
+        );
+      }
+    }
+
+    // Return exit code for use by callers
+    return null;
+  }
+
+  /** Checks if an error is likely a spawn-level failure (process couldn't be created). */
+  private isSpawnError(message: string): boolean {
+    const lower = message.toLowerCase();
+    // These patterns indicate the process couldn't even start (ENOENT, ENOEXEC, etc.)
+    return (
+      lower.includes("enoent") ||
+      lower.includes("spawn") ||
+      lower.includes("no such file") ||
+      lower.includes("permission denied") ||
+      lower.includes("(os error 2)")
+    );
   }
 
   /**
@@ -133,43 +240,23 @@ export class SpawnQueue {
       if (!cmd) return;
 
       visiting.add(id);
-      for (const dep of cmd.deps) {
-        visit(dep);
-      }
+      for (const dep of cmd.deps) visit(dep);
       visiting.delete(id);
       visited.add(id);
       ordered.push(cmd);
     };
 
     for (const cmd of this.commands) {
-      visit(cmd.id);
+      if (cmd.id) visit(cmd.id);
     }
 
     return ordered;
   }
 
-  /**
-   * Starts all commands in dependency order. Commands with no shared
-   * dependency chain still start sequentially in this simple MVP queue;
-   * true parallelism across independent branches is a future enhancement.
-   * Each command waits for its own healthcheck (if configured) to pass
-   * before the loop moves on to commands that depend on it.
-   */
   async startAll(onLog?: LogHandler): Promise<void> {
     const ordered = this.topologicalOrder();
-
     for (const cmd of ordered) {
-      const env = this.resolveEnv(cmd);
-      const wrapper = new ProcessWrapper(cmd, this.profile, env);
-      if (onLog) wrapper.onLog(onLog);
-      this.wrappers.set(cmd.id, wrapper);
-      await wrapper.start();
-      try {
-        await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env);
-        this.markHealthy(wrapper);
-      } catch {
-        wrapper.markFailed();
-      }
+      await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
     }
   }
 
@@ -179,46 +266,43 @@ export class SpawnQueue {
       throw new Error(`Unknown command "${commandId}" in profile "${this.profile}"`);
     }
 
-    // Dependencies are started (and awaited-healthy) first so a single
-    // command can be launched without manually starting its whole chain.
+    // Start dependencies first (recursively). Note: this also awaits their healthchecks.
     for (const depId of cmd.deps) {
+      if (!depId) continue;
       if (!this.isDependencyReady(depId)) {
-        await this.startOne(depId, onLog);
+        await this.startOneInternal_(depId);
       }
-      // Wait for the dependency to reach a stable state (running or stopped successfully)
+      // Wait for the dependency to reach a stable state
       await this.waitForDependency(depId);
     }
 
-    // Before spawning, force-kill any existing orphan for this command (from an overlapping restart)
+    // Before spawning, force-kill any existing orphan for this command
     const orphan = this.wrappers.get(commandId);
     if (orphan != null) {
       await orphan.forceKillAndWait();
-      await new Promise<void>((r) => setTimeout(r, 50)); // brief OS port-release delay
+      await new Promise<void>((r) => setTimeout(r, 50));
     }
 
-    const env = this.resolveEnv(cmd);
-    const wrapper = new ProcessWrapper(cmd, this.profile, env);
-    if (onLog) wrapper.onLog(onLog);
-    this.wrappers.set(cmd.id, wrapper);
-    await wrapper.start();
-    try {
-      await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env);
-      this.markHealthy(wrapper);
-    } catch {
-      wrapper.markFailed();
+    await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
+  }
+
+  /** Internal-only recursive startOne that handles deps without env/onLog noise. */
+  private async startOneInternal_(commandId: string): Promise<void> {
+    const cmd = this.commands.find((c) => c.id === commandId);
+    if (!cmd) return;
+    for (const depId of cmd.deps) {
+      if (!depId) continue;
+      if (!this.isDependencyReady(depId)) {
+        await this.startOneInternal_(depId);
+      }
     }
+    // Actually spawn this dependency so waitForDependency has something to wait on
+    await this.startSingleProcess(cmd, this.resolveEnv(cmd));
   }
 
   /**
-   * Stops a command (if running) and starts it fresh with a new pid -
-   * unlike `stopOne` alone, this leaves the command ready to serve
-   * traffic/logs again immediately. Dependencies are left untouched
-   * (assumed already healthy), matching `startOne`'s behavior of
-   * skipping deps that are already running.
-   *
-   * `stop()` terminates the whole process group (not just the shell
-   * leader) and blocks until every member has exited, so the replacement
-   * never overlaps with the old process or races it for ports.
+   * Stops a command (if running) and starts it fresh with a new pid.
+   * Dependencies are left untouched, matching `startOne`'s behavior.
    */
   async restartOne(commandId: string, onLog?: LogHandler): Promise<void> {
     const cmd = this.commands.find((c) => c.id === commandId);
@@ -226,14 +310,15 @@ export class SpawnQueue {
 
     await this.stopOne(commandId);
 
-    const env = this.resolveEnv(cmd);
-    const newWrapper = new ProcessWrapper(cmd, this.profile, env);
-    if (onLog) newWrapper.onLog(onLog);
-    this.wrappers.set(cmd.id, newWrapper);
-    await newWrapper.start();
+    // Mark command as pending recovery so startSingleProcess can emit the recovered notification
+    const oldWrapper = this.wrappers.get(commandId);
+    if (oldWrapper) {
+      this.pendingRecovery.add(commandId);
+    }
+
+    await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
   }
 
-  /** Alias of startOne: runs a single command standalone, starting (and waiting on) any deps first. */
   async run(commandId: string, onLog?: LogHandler): Promise<void> {
     return this.startOne(commandId, onLog);
   }
@@ -243,6 +328,7 @@ export class SpawnQueue {
     await Promise.all(stops);
   }
 
+  /** Alias of startOne: runs a single command standalone, starting (and waiting on) any deps first. */
   async stopOne(commandId: string): Promise<void> {
     const wrapper = this.wrappers.get(commandId);
     if (wrapper) await wrapper.stop();
@@ -271,10 +357,10 @@ export class SpawnQueue {
    * Returns serializable snapshots for every command that has been
    * started at least once in this queue (running or finished).
    */
-  listSnapshots(): ProcessSnapshot[] {
+  listSnapshots(): import("./wrapper").ProcessSnapshot[] {
     return this.listWrappers()
       .map((w) => w.getSnapshot())
-      .filter((s): s is ProcessSnapshot => s !== null);
+      .filter((s): s is import("./wrapper").ProcessSnapshot => s !== null);
   }
 
   /**
@@ -309,14 +395,14 @@ export class SpawnQueue {
       affectedDownstream,
     };
 
-    this.notifications.push(notification);
-    if (this.notifications.length > this.MAX_NOTIFICATIONS) {
-      this.notifications.shift(); // Remove oldest
+    if (this.notifications.length >= this.MAX_NOTIFICATIONS) {
+      this.notifications.shift();
     }
+    this.notifications.push(notification);
   }
 
   /**
-   * Returns all recorded failure notifications, most recent first.
+   * Returns all recorded notifications, most recent first.
    */
   listNotifications(): Notification[] {
     return [...this.notifications].reverse();

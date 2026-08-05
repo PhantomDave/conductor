@@ -6,10 +6,14 @@ import { resolveShell } from "./shell";
 
 export class HealthcheckError extends Error {}
 
+export interface ProbeResult {
+  ok: boolean;
+  latencyMs: number;
+  detail: string;
+}
+
 /**
  * Polls a TCP port until a connection succeeds or retries are exhausted.
- * Uses node:net (rather than Bun.connect) since we only need a plain
- * connect-then-close probe, no data exchange.
  */
 async function checkPort(port: number): Promise<boolean> {
   return new Promise((resolvePromise) => {
@@ -26,8 +30,7 @@ async function checkPort(port: number): Promise<boolean> {
 }
 
 /**
- * Requests a URL and considers anything below 500 "healthy" (the service
- * is at least responding, even if it 404s on the root path).
+ * Requests a URL and considers anything below 500 "healthy".
  */
 async function checkHttp(url: string): Promise<boolean> {
   try {
@@ -39,9 +42,7 @@ async function checkHttp(url: string): Promise<boolean> {
 }
 
 /**
- * Runs a shell command and considers exit code 0 as healthy. Runs with
- * `cwd` set to BASE_PATH (if present in env) so a relative check command
- * behaves the same as a relative command `run`/`cwd`.
+ * Runs a shell command and considers exit code 0 as healthy.
  */
 async function checkCommand(
   command: string,
@@ -63,53 +64,75 @@ async function checkCommand(
   }
 }
 
-async function runProbe(
+/** Runs exactly one probe and returns structured results. */
+export async function probeOnce(
   healthcheck: HealthcheckConfig,
   env: Record<string, string>,
-): Promise<boolean> {
-  switch (healthcheck.type) {
-    case "port":
-      if (!healthcheck.port) throw new HealthcheckError("healthcheck.port is required");
-      return checkPort(healthcheck.port);
-    case "http":
-      if (!healthcheck.url) throw new HealthcheckError("healthcheck.url is required");
-      return checkHttp(interpolateString(healthcheck.url, env));
-    case "command": {
-      if (!healthcheck.command) throw new HealthcheckError("healthcheck.command is required");
-      const cwd =
-        env.BASE_PATH && isAbsolute(env.BASE_PATH) ? resolvePath(env.BASE_PATH) : undefined;
-      return checkCommand(interpolateString(healthcheck.command, env), cwd, env.CONDUCTOR_SHELL);
+): Promise<ProbeResult> {
+  const start = Date.now();
+  try {
+    switch (healthcheck.type) {
+      case "port": {
+        if (!healthcheck.port)
+          return { ok: false, latencyMs: 0, detail: "healthcheck.port is required" };
+        const ok = await checkPort(healthcheck.port);
+        return { ok, latencyMs: Date.now() - start, detail: `port ${healthcheck.port}` };
+      }
+      case "http": {
+        if (!healthcheck.url) {
+          return { ok: false, latencyMs: 0, detail: "healthcheck.url is required" };
+        }
+        const url = interpolateString(healthcheck.url, env);
+        const ok = await checkHttp(url);
+        return { ok, latencyMs: Date.now() - start, detail: `HTTP ${url}` };
+      }
+      case "command": {
+        if (!healthcheck.command)
+          return { ok: false, latencyMs: 0, detail: "healthcheck.command is required" };
+        const resolvedCmd = interpolateString(healthcheck.command, env);
+        const cwd =
+          env.BASE_PATH && isAbsolute(env.BASE_PATH) ? resolvePath(env.BASE_PATH) : undefined;
+        const ok = await checkCommand(resolvedCmd, cwd, env.CONDUCTOR_SHELL);
+        return { ok, latencyMs: Date.now() - start, detail: `command "${resolvedCmd}"` };
+      }
+      case "none":
+      default:
+        return { ok: true, latencyMs: Date.now() - start, detail: "none" };
     }
-    case "none":
-    default:
-      return true;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return { ok: false, latencyMs: Date.now() - start, detail };
   }
 }
 
 /**
  * Polls the configured healthcheck until it passes, or throws once
  * `retries` attempts (spaced `interval_ms` apart) have all failed.
- * `env` is used to resolve `${VAR}` references in `url`/`command` (e.g. a
- * shared `${APP_DIR}` base path) - pass the same resolved env used to
- * start the command so healthchecks stay in sync with it.
  */
 export async function waitForHealthy(
   commandLabel: string,
   healthcheck: HealthcheckConfig | undefined,
   env: Record<string, string> = {},
+  opts?: { onAttempt?: (attempt: number, result: ProbeResult) => void },
 ): Promise<void> {
   if (!healthcheck || healthcheck.type === "none") return;
 
   const deadline = Date.now() + healthcheck.timeout_ms;
+  let lastDetail = "";
 
   for (let attempt = 0; attempt < healthcheck.retries; attempt++) {
-    if (await runProbe(healthcheck, env)) return;
+    const result = await probeOnce(healthcheck, env);
+
+    if (opts?.onAttempt) opts.onAttempt(attempt, result);
+
+    if (result.ok) return;
+    lastDetail = result.detail;
 
     if (Date.now() >= deadline) break;
     await new Promise((r) => setTimeout(r, healthcheck.interval_ms));
   }
 
   throw new HealthcheckError(
-    `Healthcheck for "${commandLabel}" did not pass within ${healthcheck.timeout_ms}ms`,
+    `Healthcheck for "${commandLabel}" did not pass within ${healthcheck.timeout_ms}ms (${lastDetail})`,
   );
 }
