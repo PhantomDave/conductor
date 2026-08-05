@@ -7,6 +7,7 @@ type Command = ReturnType<typeof useCommandLibrary>["commands"][number];
 interface CommandCardProps {
   readonly command: Command;
   readonly isRunning?: boolean;
+  readonly isExecuting?: boolean;
   readonly onRun?: () => void;
   readonly onEdit?: () => void;
   readonly onDelete?: (commandId: string) => void;
@@ -15,6 +16,7 @@ interface CommandCardProps {
 export function CommandCard({
   command,
   isRunning = false,
+  isExecuting = false,
   onRun,
   onEdit,
   onDelete,
@@ -60,8 +62,8 @@ export function CommandCard({
             color="green"
             variant="light"
             onClick={onRun}
-            loading={isRunning}
-            disabled={isRunning}
+            loading={isExecuting || isRunning}
+            disabled={isExecuting || isRunning}
           >
             Run
           </Button>

@@ -34,6 +34,7 @@ export function MetricButton({ pid }: { pid: number }) {
         <button
           type="button"
           onClick={open}
+          aria-label="View metrics"
           style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
         >
           <IconTrendingUp size={18} color="#82ca9d" />

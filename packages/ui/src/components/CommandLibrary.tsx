@@ -57,6 +57,7 @@ export function CommandLibrary() {
               key={cmd.id}
               command={cmd}
               isRunning={isRunning(cmd.id)}
+              isExecuting={execute.isPending && execute.variables?.commandId === cmd.id}
               onRun={() => execute.mutate({ profile: "__global__", commandId: cmd.id })}
               onEdit={() => {
                 setFormOpen(true);

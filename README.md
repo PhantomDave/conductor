@@ -6,7 +6,7 @@ Run your entire dev stack — databases, servers, workers — with one command.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Built with Bun](https://img.shields.io/badge/runtime-bun-f472b6)](https://bun.sh)
-[![Status: beta](https://img.shields.io/badge/status-beta-orange)](<>)
+[![Status: beta](https://img.shields.io/badge/status-beta-orange)](https://github.com/PhantomDave/conductor)
 
 ## Why Conductor?
 
