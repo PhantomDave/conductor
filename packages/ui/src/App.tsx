@@ -1,4 +1,4 @@
-import { AppShell, Group, Title, Badge, Box, Tabs, Stack, Text } from "@mantine/core";
+import { AppShell, Badge, Box, Group, Stack, Tabs, Text, Title } from "@mantine/core";
 import { LogViewer } from "./components/LogViewer";
 import { EnvironmentManager } from "./components/EnvironmentManager";
 import { ProcessBoard } from "./components/ProcessBoard";
@@ -122,15 +122,7 @@ export default function App() {
           </Tabs.Panel>
 
           <Tabs.Panel value="commands" pt="md">
-            <Stack gap="md">
-              <div>
-                <Title order={2}>Command Library</Title>
-                <Text c="dimmed" size="sm">
-                  Run or stop commands from any profile
-                </Text>
-                <CommandLibrary />
-              </div>
-            </Stack>
+            <CommandLibrary />
           </Tabs.Panel>
 
           <Tabs.Panel value="environment" pt="md">

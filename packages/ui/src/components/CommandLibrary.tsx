@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Modal, Card, Group, Stack, Text } from "@mantine/core";
+import { Button, Card, Group, Modal, SimpleGrid, Stack, Text } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import { useCommandLibrary } from "../hooks/useCommandLibrary";
 import { useProcesses } from "../hooks/useProcesses";
@@ -32,73 +32,43 @@ export function CommandLibrary() {
 
   return (
     <Stack gap="sm">
-      <Button
-        leftSection={<IconPlus size={14} />}
-        variant="light"
-        onClick={() => {
-          setFormOpen(true);
-          setEditState(null);
-        }}
-      >
+      {/* Add command button */}
+      <Button leftSection={<IconPlus size={14} />} variant="light" onClick={() => { setFormOpen(true); setEditState(null); }}>
         Add command
       </Button>
 
       {flatCommands.length === 0 ? (
-        <Card withBorder padding="lg">
-          <Text c="dimmed">No commands yet. Add one to get started.</Text>
-        </Card>
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+          <Card withBorder padding="lg">
+            <Text c="dimmed">No commands yet. Add one to get started.</Text>
+          </Card>
+        </SimpleGrid>
       ) : (
-        flatCommands.map((cmd) => (
-          <CommandCard
-            key={cmd.id}
-            command={cmd}
-            isRunning={isRunning(cmd.id)}
-            onRun={() => execute.mutate({ profile: "__global__", commandId: cmd.id })}
-            onEdit={() => {
-              setFormOpen(true);
-              setEditState(cmd);
-            }}
-            onDelete={(id) => setDeleteConfirm(id)}
-          />
-        ))
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+          {flatCommands.map((cmd) => (
+            <CommandCard
+              key={cmd.id}
+              command={cmd}
+              isRunning={isRunning(cmd.id)}
+              onRun={() => execute.mutate({ profile: "__global__", commandId: cmd.id })}
+              onEdit={() => { setFormOpen(true); setEditState(cmd); }}
+              onDelete={(id) => setDeleteConfirm(id)}
+            />
+          ))}
+        </SimpleGrid>
       )}
 
       {formOpen && (
-        <CommandForm
-          opened={true}
-          onClose={() => setFormOpen(false)}
-          profile={undefined}
-          existingCommands={flatCommands}
-          editing={editState ? editState : null}
-        />
+        <CommandForm opened={true} onClose={() => setFormOpen(false)} profile={undefined} existingCommands={flatCommands} editing={editState ? editState : null} />
       )}
 
       {deleteConfirm && (
-        <Modal
-          opened={Boolean(deleteConfirm)}
-          onClose={() => setDeleteConfirm(null)}
-          title="Delete command"
-          centered
-        >
+        <Modal opened={Boolean(deleteConfirm)} onClose={() => setDeleteConfirm(null)} title="Delete command" centered>
           <Stack>
-            <Text size="sm">
-              Are you sure you want to delete command "
-              {flatCommands.find((c) => c.id === deleteConfirm)?.name ?? ""}"? This cannot be
-              undone.
-            </Text>
+            <Text size="sm">Are you sure you want to delete command "{flatCommands.find((c) => c.id === deleteConfirm)?.name ?? ""}"? This cannot be undone.</Text>
             <Group justify="flex-end">
-              <Button variant="subtle" onClick={() => setDeleteConfirm(null)}>
-                Cancel
-              </Button>
-              <Button
-                color="red"
-                onClick={() => {
-                  deleteItem(deleteConfirm);
-                  setDeleteConfirm(null);
-                }}
-              >
-                Delete
-              </Button>
+              <Button variant="subtle" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+              <Button color="red" onClick={() => { deleteItem(deleteConfirm); setDeleteConfirm(null); }}>Delete</Button>
             </Group>
           </Stack>
         </Modal>
