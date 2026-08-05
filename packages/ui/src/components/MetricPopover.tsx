@@ -2,13 +2,7 @@ import { LineChart } from "@mantine/charts";
 import { Card, Group, Popover, Text, Button } from "@mantine/core";
 import { IconTrendingUp } from "@tabler/icons-react";
 import { useState } from "react";
-import { fetchProcessMetrics } from "../lib/api";
-
-interface MetricPoint {
-  timestamp: string;
-  cpu_percent: number | null;
-  memory_bytes: number | null;
-}
+import { fetchProcessMetrics, type MetricPoint } from "../lib/api";
 
 export function MetricButton({ pid }: { pid: number }) {
   const [visible, setVisible] = useState(false);
@@ -20,7 +14,7 @@ export function MetricButton({ pid }: { pid: number }) {
       setLoading(true);
       try {
         const rows = await fetchProcessMetrics(pid);
-        setData(rows as MetricPoint[]);
+        setData(rows);
       } finally {
         setLoading(false);
       }
@@ -31,7 +25,7 @@ export function MetricButton({ pid }: { pid: number }) {
   return (
     <Popover width={600} position="bottom" withArrow shadow="lg">
       <Popover.Target>
-        <button type="button" onClick={open} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+        <button type="button" onClick={open} aria-label="View process metrics" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
           <IconTrendingUp size={18} color="#82ca9d" />
         </button>
       </Popover.Target>

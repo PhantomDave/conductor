@@ -27,8 +27,10 @@ export class SpawnQueue {
   private notifications: Notification[] = [];
   private readonly MAX_NOTIFICATIONS = 1000;
 
-  // Track per-command health for recovery detection during restarts
+  // Track pids that have had a failed_start notification to avoid duplicates
   private failedPids = new Set<number>();
+  // Track command IDs that need recovery detection after restart
+  private pendingRecovery = new Set<string>();
 
   constructor(
     private readonly profile: string,
@@ -120,7 +122,7 @@ export class SpawnQueue {
   ): void {
     const hc = cmd.healthcheck;
     if (!hc) return;
-    const label = hc.type !== "none" ? `${hc.retries}` : "";
+    const label = hc.type !== "none" ? `${hc.retries}` : "none";
     if (result.ok) {
       wrapper.log(`[healthcheck] attempt ${attempt + 1}/${label} healthy (${result.latencyMs}ms)`, "stdout");
     } else {
@@ -146,8 +148,7 @@ export class SpawnQueue {
       }
     };
 
-    wrapper.onHealthChange(onHealthChange);
-    return () => {}; // cleanup for observer list — not critical for short-lived wrappers
+    return wrapper.onHealthChange(onHealthChange);
   }
 
   /** Internal: spawn one process and await its healthcheck. */
@@ -180,13 +181,13 @@ export class SpawnQueue {
       );
 
       // Successful start — if previous version failed → recovered notification
-      if (this.failedPids.has(wrapper.pid)) {
+      if (this.pendingRecovery.has(cmd.id)) {
         wrapper.log("[healthcheck] service recovered after restart", "stdout");
         this.recordNotification("recovered", cmd.id, `${cmd.name} is back up after restart`);
       }
 
-      // Remove from failed set on successful start
-      this.failedPids.delete(wrapper.pid);
+      // Remove from recovery-pending set on successful start
+      this.pendingRecovery.delete(cmd.id);
     } catch (err) {
       wrapper.markFailed();
       const reason = err instanceof Error ? err.message : String(err);
@@ -294,8 +295,9 @@ export class SpawnQueue {
       if (!this.isDependencyReady(depId)) {
         await this.startOneInternal_(depId);
       }
-      // We already handled the waitForDependency in startOne (caller owns that). Return here instead.
     }
+    // Actually spawn this dependency so waitForDependency has something to wait on
+    await this.startSingleProcess(cmd, this.resolveEnv(cmd));
   }
 
   /**
@@ -308,9 +310,11 @@ export class SpawnQueue {
 
     await this.stopOne(commandId);
 
-    // Clean up the old wrapper — its process is dead now
+    // Mark command as pending recovery so startSingleProcess can emit the recovered notification
     const oldWrapper = this.wrappers.get(commandId);
-    this.failedPids.add(oldWrapper?.pid ?? 0); // track that previous pid failed (for recovery detection)
+    if (oldWrapper) {
+      this.pendingRecovery.add(commandId);
+    }
 
     await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
   }

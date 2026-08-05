@@ -6,8 +6,8 @@ const PAGE_SIZE = 4096;
 /** Recursively expand children of a process group leader into all descendant PID strings. */
 function getGroupPids(leaderPid: number): string[] | null {
   try {
-    // On Linux, read /proc/<pid>/children for direct children
-    const childFile = `/proc/${leaderPid}/children`;
+    // On Linux, direct children are at /proc/<pid>/task/<tid>/children (tid == pid for the main thread)
+    const childFile = `/proc/${leaderPid}/task/${leaderPid}/children`;
     if (!fs.existsSync(childFile)) return null;
     const data = fs.readFileSync(childFile).toString().trim();
     if (!data) return null;
@@ -17,7 +17,7 @@ function getGroupPids(leaderPid: number): string[] | null {
     // Recursively expand grandchildren from each child's children file
     for (const childId of data.split(/\s+/)) {
       if (!childId || isNaN(Number(childId))) continue;
-      const gcFile = `/proc/${childId}/children`;
+      const gcFile = `/proc/${childId}/task/${childId}/children`;
       if (fs.existsSync(gcFile)) {
         const gc = fs.readFileSync(gcFile).toString().trim();
         if (gc) for (const g of gc.split(/\s+/).filter(Boolean)) allPids.add(g);
@@ -112,10 +112,9 @@ export class MetricCollector {
     for (const item of items) {
       try {
         const children = getGroupPids(item.pid);
-        if (!children || children.length === 0) continue;
 
-        // Add leader pid
-        const allPids = [String(item.pid), ...children];
+        // Always include the leader PID; add children when available
+        const allPids = [String(item.pid), ...(children ?? [])];
 
         let cpuSum = 0;
         let memTotal = 0;
@@ -130,8 +129,10 @@ export class MetricCollector {
             const last = this.lastClock.get(pid) ?? 0;
             if (last > 0) {
               const delta = nowTicks - last;
-              // deltaMs approx interval; ticks per ms for CPU % on a single core is 0.1
-              cpuSum += Math.min(Math.max(delta / (this.options.intervalMs || 5000) * 100, 0), 100);
+              // CPU via delta: /proc/<pid>/stat ticks are in USER_HZ (typically 100 ticks/s = 10ms/tick).
+              // To convert to percent: (deltaTicks / USER_HZ) / (intervalMs / 1000) * 100
+              // = deltaTicks * 1000 / intervalMs
+              cpuSum += Math.min(Math.max(delta * 1000 / (this.options.intervalMs || 5000), 0), 100);
             }
             this.lastClock.set(pid, nowTicks);
           }
