@@ -1,12 +1,33 @@
 version: 2
-
 updates:
-  - package-ecosystem: "bun"
-    directory: "/packages/ui"
-    schedule:
-      interval: "weekly"
-
-  - package-ecosystem: "github-actions"
+  # Root workspace manifest
+  - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "daily"
+    open-pull-requests-limit: 10
+
+  # Packages
+  - package-ecosystem: "npm"
+    directory: "/packages/cli"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "npm"
+    directory: "/packages/core"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "npm"
+    directory: "/packages/desktop"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "npm"
+    directory: "/packages/ui"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
