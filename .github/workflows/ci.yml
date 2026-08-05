@@ -90,5 +90,5 @@ jobs:
           cp .conductor.example.yml .conductor.yml
           bun packages/cli/bin/conductor.ts config validate
 
-      - name: Run example profile
-        run: bun packages/cli/bin/conductor.ts run dev
+      - name: Run lightweight profile (task)
+        run: bun packages/cli/bin/conductor.ts run task
