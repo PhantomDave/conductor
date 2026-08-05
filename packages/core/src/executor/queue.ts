@@ -61,8 +61,8 @@ export class SpawnQueue {
     const snapshot = wrapper.getSnapshot();
     if (!snapshot) return false;
     if (snapshot.status === "running") return true;
-    if (snapshot.status === "stopped" && snapshot.exitCode === 0) return true;
-    return false;
+    return snapshot.status === "stopped" && snapshot.exitCode === 0;
+
   }
 
   /**
@@ -85,6 +85,8 @@ export class SpawnQueue {
 
       if (["stopped", "failed"].includes(status)) {
         // Record any unrecorded failed_start for the dependency itself
+        // process may have died between getSnapshot call above and here
+        if (!snapshot) continue;
         if (!this.failedPids.has(snapshot.pid)) {
           this.recordNotification(
             "failed_start",
@@ -106,11 +108,6 @@ export class SpawnQueue {
     const reason = `Dependency did not become ready within ${maxWaitMs}ms`;
     this.recordNotification("dependency_failed", depId, reason);
     throw new Error(reason);
-  }
-
-  /** Marks a wrapper as healthy after successful healthcheck. */
-  private markHealthy(wrapper: ProcessWrapper): void {
-    wrapper.markHealthy("healthy");
   }
 
   /** Records a probe attempt as a log line through the wrapper's pipeline. */
@@ -167,8 +164,6 @@ export class SpawnQueue {
     this.setupHealthObserver(wrapper, cmd);
 
     this.wrappers.set(cmd.id, wrapper);
-
-    let exitCode: number | null = null;
 
     // Attempt a start — if we throw here (e.g. spawn failure), record failed_start
     try {
