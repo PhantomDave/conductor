@@ -91,12 +91,12 @@ Each spawned process is wrapped in `ProcessWrapper` which tracks: pid, status, e
 
 ### Health Check Types
 
-| Type | Implementation | Timeout | Success Criteria |
-|---|---|---|---|
-| port | `node:net` socket connect probe on specified port | 2 s socket timeout | TCP connection succeeds within timeout |
-| http | native fetch with AbortSignal.timeout(2000) to full URL | 2 s fetch timeout | response.status < 500 |
-| command | Shell execution via resolveShell | Per config | Exit code === 0 |
-| none | Immediate success after spawn | N/A | Process successfully spawned in starting state |
+| Type    | Implementation                                          | Timeout            | Success Criteria                               |
+| ------- | ------------------------------------------------------- | ------------------ | ---------------------------------------------- |
+| port    | `node:net` socket connect probe on specified port       | 2 s socket timeout | TCP connection succeeds within timeout         |
+| http    | native fetch with AbortSignal.timeout(2000) to full URL | 2 s fetch timeout  | response.status < 500                          |
+| command | Shell execution via resolveShell                        | Per config         | Exit code === 0                                |
+| none    | Immediate success after spawn                           | N/A                | Process successfully spawned in starting state |
 
 ### SSE Log Streaming
 
@@ -104,14 +104,14 @@ The broadcaster at `packages/core/src/logs/broadcaster.ts` uses a pub/sub patter
 
 ## SQLite Schema Overview
 
-| Table | Key fields | Purpose |
-|---|---|---|
-| execution_history | id, command_id, profile, start_time, end_time, exit_code, duration_ms | Audit of every run attempt per command |
-| logs | id, process_id, command_id, profile, timestamp, level, stream, message | All captured stdout/stderr + error output; index by command_id and timestamp |
-| process_metadata | pid (composite PK), command_id, profile, created_at, ended_at, exit_code | Snapshot of each started process for recovery & ps queries |
-| process_metrics | id, pid, timestamp, cpu_percent, memory_bytes | Time-series CPU/memory (schema-ready; monitor/ not wired) |
-| env_vars | id (PK), scope, profile, key, value, secret | Managed env vars: global or per-profile; kept separate from .conductor.yml |
-| audit_log | id (PK), timestamp, action, actor, details | Every mutation event for auditing/debugging |
+| Table             | Key fields                                                               | Purpose                                                                      |
+| ----------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| execution_history | id, command_id, profile, start_time, end_time, exit_code, duration_ms    | Audit of every run attempt per command                                       |
+| logs              | id, process_id, command_id, profile, timestamp, level, stream, message   | All captured stdout/stderr + error output; index by command_id and timestamp |
+| process_metadata  | pid (composite PK), command_id, profile, created_at, ended_at, exit_code | Snapshot of each started process for recovery & ps queries                   |
+| process_metrics   | id, pid, timestamp, cpu_percent, memory_bytes                            | Time-series CPU/memory (schema-ready; monitor/ not wired)                    |
+| env_vars          | id (PK), scope, profile, key, value, secret                              | Managed env vars: global or per-profile; kept separate from .conductor.yml   |
+| audit_log         | id (PK), timestamp, action, actor, details                               | Every mutation event for auditing/debugging                                  |
 
 ## Configuration Store vs Config File
 
@@ -149,21 +149,21 @@ Tests live in `packages/core/test/`: five test files covering config loading/val
 
 ## CI/CD (.github/workflows)
 
-| Workflow | When it runs | What it does |
-|---|---|---|
-| `ci.yml` | Every push / PR to main branches | lint-and-typecheck (format:check + typecheck), test (ubuntu/macos/windows matrix), build (core → cli → ui), cli-smoke-test (cp .conductor.example.yml → .conductor.yml; config validate; run dev) |
-| `release.yml` | On release published | Per-OS compile of sidecar + electron-builder upload to same GitHub Release |
-| `dependabot.yml` | Automatic dependency bumps | Dependabot bot config for Bun ecosystem |
+| Workflow         | When it runs                     | What it does                                                                                                                                                                                      |
+| ---------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`         | Every push / PR to main branches | lint-and-typecheck (format:check + typecheck), test (ubuntu/macos/windows matrix), build (core → cli → ui), cli-smoke-test (cp .conductor.example.yml → .conductor.yml; config validate; run dev) |
+| `release.yml`    | On release published             | Per-OS compile of sidecar + electron-builder upload to same GitHub Release                                                                                                                        |
+| `dependabot.yml` | Automatic dependency bumps       | Dependabot bot config for Bun ecosystem                                                                                                                                                           |
 
 ## CLI vs API Comparison
 
-| Feature | Standalone (CLI only — no server) | With API running |
-|---|---|---|
-| run/list/config validate/env get/set | Full functionality via `.conductor.yml` | Same logic, also via REST/HTTP |
-| ps | Stub — prints note to Ctrl+C | Returns process snapshots from Store + SQLite |
-| logs | Stub — TODO message about SQL layer | SQL-backed query + SSE stream via EventSource API |
-| stop | Ctrl+C only (SIGKILL) | POST /api/profiles/:profile/stop |
-| configure | CLI auto-runs before run | Standalone command `configure [profile] [-f]` via API POST /api/configure |
+| Feature                              | Standalone (CLI only — no server)       | With API running                                                          |
+| ------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------- |
+| run/list/config validate/env get/set | Full functionality via `.conductor.yml` | Same logic, also via REST/HTTP                                            |
+| ps                                   | Stub — prints note to Ctrl+C            | Returns process snapshots from Store + SQLite                             |
+| logs                                 | Stub — TODO message about SQL layer     | SQL-backed query + SSE stream via EventSource API                         |
+| stop                                 | Ctrl+C only (SIGKILL)                   | POST /api/profiles/:profile/stop                                          |
+| configure                            | CLI auto-runs before run                | Standalone command `configure [profile] [-f]` via API POST /api/configure |
 
 ## Component Communication Pattern
 

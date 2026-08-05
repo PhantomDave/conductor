@@ -74,10 +74,14 @@ starting → running → healthy / stopped / failed
 ```typescript
 interface ConductorConfigSchema {
   version: string; // default "1"
-  name?: string; description?: string; author?: string; keywords?: string[]; tags?: string[];
-  env_secrets: string[];              // vars to mask in logs and UI
-  base_path: string;                  // default ".", relative to cwd + $BASE_PATH override
-  default_shell?: string;             // shell for non-shell commands
+  name?: string;
+  description?: string;
+  author?: string;
+  keywords?: string[];
+  tags?: string[];
+  env_secrets: string[]; // vars to mask in logs and UI
+  base_path: string; // default ".", relative to cwd + $BASE_PATH override
+  default_shell?: string; // shell for non-shell commands
   global_env: Record<string, string>; // merged into every command's env
 
   // ROOT-LEVEL commands (single source of truth)
@@ -105,17 +109,17 @@ Fastify server on port 4000; CORS scoped to localhost any port.
 
 ### Key Endpoints by Group
 
-| Group | Methods + Route | Notes |
-|---|---|---|
-| System health | `GET /api/health` | Pong check |
-| Profiles CRUD | `GET/POST /api/profiles`; `PUT/DELETE/:profile`; `POST/:profile/duplicate`; `GET/:profile/export` | Full management; store-backed |
-| Commands (root) | `GET/POST /api/command`; `PUT/:id`; `DELETE/:id` | Root commands; delete touches all profiles |
-| Profile↔Command links | `POST/:profile/commands` (create root cmd + add); `PUT/:profile/commands/:id`; `POST/:profile/commands/sync {add?,remove?}`; `POST/:profile/commands/:id/duplicate {targetProfile?}`; `POST/:profile/commands/:id/move {targetProfile}` | Full linking graph |
-| Processes | `GET /api/processes` (queue.listSnapshots); `DELETE /:pid`; `GET /:pid/metrics?from&to` (stubbed) | Active runs |
-| Notifications | `GET /api/notifications?limit&offset` | Events from executor |
-| Env vars | `GET/PUT /api/env` (scope global\|profile); `DELETE/:id`; `POST /env/import {scope, profile, text}` | SQLite persisted; looksSecret auto-detect |
-| Logs + SSE | `GET /logs?pid&commandId&profile&limit` returns reversed; `GET /logs/stream/:pid` (SSE) | 500-line replay + live tail + 15 s heartbeats |
-| Config | `POST /api/configure {profile?, force?}`; `POST /config/import {yaml}`; `GET /config/export`; `GET/PUT /base-path`; `GET/PUT /shells`; `POST /docker compose/parse {yaml}` (parses docker-compose → suggested commands) | All mutating ops write audit entries |
+| Group                 | Methods + Route                                                                                                                                                                                                                         | Notes                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| System health         | `GET /api/health`                                                                                                                                                                                                                       | Pong check                                    |
+| Profiles CRUD         | `GET/POST /api/profiles`; `PUT/DELETE/:profile`; `POST/:profile/duplicate`; `GET/:profile/export`                                                                                                                                       | Full management; store-backed                 |
+| Commands (root)       | `GET/POST /api/command`; `PUT/:id`; `DELETE/:id`                                                                                                                                                                                        | Root commands; delete touches all profiles    |
+| Profile↔Command links | `POST/:profile/commands` (create root cmd + add); `PUT/:profile/commands/:id`; `POST/:profile/commands/sync {add?,remove?}`; `POST/:profile/commands/:id/duplicate {targetProfile?}`; `POST/:profile/commands/:id/move {targetProfile}` | Full linking graph                            |
+| Processes             | `GET /api/processes` (queue.listSnapshots); `DELETE /:pid`; `GET /:pid/metrics?from&to` (stubbed)                                                                                                                                       | Active runs                                   |
+| Notifications         | `GET /api/notifications?limit&offset`                                                                                                                                                                                                   | Events from executor                          |
+| Env vars              | `GET/PUT /api/env` (scope global\|profile); `DELETE/:id`; `POST /env/import {scope, profile, text}`                                                                                                                                     | SQLite persisted; looksSecret auto-detect     |
+| Logs + SSE            | `GET /logs?pid&commandId&profile&limit` returns reversed; `GET /logs/stream/:pid` (SSE)                                                                                                                                                 | 500-line replay + live tail + 15 s heartbeats |
+| Config                | `POST /api/configure {profile?, force?}`; `POST /config/import {yaml}`; `GET /config/export`; `GET/PUT /base-path`; `GET/PUT /shells`; `POST /docker compose/parse {yaml}` (parses docker-compose → suggested commands)                 | All mutating ops write audit entries          |
 
 ### UI Serving
 
@@ -170,15 +174,15 @@ packages/core/src/monitor/ is an empty directory — CPU/memory polling does not
 
 ## Monorepo Scripts
 
-| Script | What it runs |
-|---|---|
-| `dev:core` | @conductor/core dev server |
-| `dev:ui` | Vite dev on port 3000 |
-| `dev:cli` | CLI dev (run directly) |
-| `dev:desktop` | Builds sidecar + UI, starts Electron |
-| `build` | Core build → CLI build → UI build |
+| Script          | What it runs                         |
+| --------------- | ------------------------------------ |
+| `dev:core`      | @conductor/core dev server           |
+| `dev:ui`        | Vite dev on port 3000                |
+| `dev:cli`       | CLI dev (run directly)               |
+| `dev:desktop`   | Builds sidecar + UI, starts Electron |
+| `build`         | Core build → CLI build → UI build    |
 | `build:desktop` | Sidecar + UI + electron-builder dist |
-| `test` | bun test |
-| `typecheck` | TypeScript across all packages |
+| `test`          | bun test                             |
+| `typecheck`     | TypeScript across all packages       |
 
 ==================end of section===============================================

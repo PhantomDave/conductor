@@ -20,7 +20,6 @@ global_env:
 # A command's id is what other commands (in deps[]) and profiles use to refer to it.
 
 commands:
-
   # ───────────── service: background job —————————————
   - id: echo-hello
     name: "Hello World"
@@ -42,10 +41,10 @@ commands:
     description: "PostgreSQL container for local development."
     run: docker compose up -d postgres
     healthcheck:
-      type: port           # wait for a TCP port to accept connections
+      type: port # wait for a TCP port to accept connections
       port: 5432
-      interval_ms: 1000   # probe every second
-      timeout_ms: 30000   # give 30 seconds total
+      interval_ms: 1000 # probe every second
+      timeout_ms: 30000 # give 30 seconds total
       retries: 30
 
   # ───────── service that depends on the dataabase ————–
@@ -53,12 +52,12 @@ commands:
     name: "Example API"
     description: "Node.js Express API server."
     run: npm run dev
-    cwd: ./api            # working dir, resolved relative to base_path
-    deps: [db]            # wait for db to be healthy before this starts
-    env_overrides:        # per-command overrides on top of global_env + profile env
+    cwd: ./api # working dir, resolved relative to base_path
+    deps: [db] # wait for db to be healthy before this starts
+    env_overrides: # per-command overrides on top of global_env + profile env
       NODE_ENV: development
     healthcheck:
-      type: http          # poll an HTTP endpoint until it responds with 2xx/3xx
+      type: http # poll an HTTP endpoint until it responds with 2xx/3xx
       url: "http://localhost:3001/health"
       interval_ms: 500
       timeout_ms: 30000
@@ -74,9 +73,9 @@ profiles:
     description: "Local development"
     env:
       NODE_ENV: development
-    command_ids: [db, api]       # runs db → api (deps enforced)
+    command_ids: [db, api] # runs db → api (deps enforced)
     # Note: echo-hello and echo-world are not included; run them separately with 'conductor run <profile> echo-hello'
 
-  task:                          # a second profile that only runs non-web commands
+  task: # a second profile that only runs non-web commands
     description: "Simple tasks without a database"
     command_ids: [echo-hello, echo-world]

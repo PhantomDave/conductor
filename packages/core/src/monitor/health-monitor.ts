@@ -6,7 +6,10 @@ export interface HealthMonitorOptions {
 }
 
 export interface HealthCheckFn {
-  (healthcheck: HealthcheckConfig, env: Record<string, string>): Promise<{ ok: boolean; detail: string }>;
+  (
+    healthcheck: HealthcheckConfig,
+    env: Record<string, string>,
+  ): Promise<{ ok: boolean; detail: string }>;
 }
 
 /**
