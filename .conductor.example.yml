@@ -47,7 +47,7 @@ commands:
       timeout_ms: 30000 # give 30 seconds total
       retries: 30
 
-  # ───────── service that depends on the dataabase ————–
+  # ───────── service that depends on the database ————–
   - id: api
     name: "Example API"
     description: "Node.js Express API server."

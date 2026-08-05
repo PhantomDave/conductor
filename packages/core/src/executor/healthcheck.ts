@@ -74,18 +74,13 @@ export async function probeOnce(
     switch (healthcheck.type) {
       case "port": {
         if (!healthcheck.port)
-          return {
-            ok: false,
-            latencyMs: start - start,
-            detail: "healthcheck.port is required" as never,
-          };
+          return { ok: false, latencyMs: 0, detail: "healthcheck.port is required" };
         const ok = await checkPort(healthcheck.port);
         return { ok, latencyMs: Date.now() - start, detail: `port ${healthcheck.port}` };
       }
       case "http": {
         if (!healthcheck.url) {
-          console.error("probeOnce bug: url required");
-          return { ok: false, latencyMs: start - start, detail: "url required" };
+          return { ok: false, latencyMs: 0, detail: "healthcheck.url is required" };
         }
         const url = interpolateString(healthcheck.url, env);
         const ok = await checkHttp(url);
@@ -93,11 +88,7 @@ export async function probeOnce(
       }
       case "command": {
         if (!healthcheck.command)
-          return {
-            ok: false,
-            latencyMs: start - start,
-            detail: "healthcheck.command is required" as never,
-          };
+          return { ok: false, latencyMs: 0, detail: "healthcheck.command is required" };
         const resolvedCmd = interpolateString(healthcheck.command, env);
         const cwd =
           env.BASE_PATH && isAbsolute(env.BASE_PATH) ? resolvePath(env.BASE_PATH) : undefined;

@@ -18,6 +18,7 @@ export interface HealthCheckFn {
  */
 export class HealthMonitor {
   private intervalId?: ReturnType<typeof setInterval>;
+  private lastHealthy: boolean | undefined = undefined;
 
   constructor(
     /** Command healthcheck config to repeatedly probe */
@@ -40,7 +41,10 @@ export class HealthMonitor {
 
         // Only flip state on changes to avoid unnecessary noise
         const isHealthy = result.ok;
-        this.onHealthFlip(isHealthy);
+        if (isHealthy !== this.lastHealthy) {
+          this.lastHealthy = isHealthy;
+          this.onHealthFlip(isHealthy);
+        }
       } catch {
         // probeOnce should always return. If it throws, keep previous state.
       }

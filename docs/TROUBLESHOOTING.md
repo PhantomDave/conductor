@@ -33,7 +33,7 @@ taskkill /pid <PID> /f      # Windows
 To run on a different port, set the `PORT` environment variable before starting:
 
 ```bash
-PORT=4001 bun run server.ts   # from packages/core
+PORT=4001 bun run bin/server.ts   # from packages/core
 ```
 
 ### Config file not found or YAML parse error
@@ -136,7 +136,7 @@ When running `conductor configure <profile>`, variables listed as `$VAR_NAME` in
 
 ### Ctrl+C doesn't stop running processes
 
-For now, the only way to stop all processes is pressing Ctrl+C in the terminal window that launched `conductor run`. The process manager sends SIGKILL immediately with no graceful shutdown. A future feature will add per-command configurable timeout-based graceful shutdown (SIGTERM → wait → SIGKILL).
+For now, the only way to stop all processes is pressing Ctrl+C in the terminal window that launched `conductor run`. Conductor's shutdown handler calls `queue.stopAll()`, which sends each process its configured `stop_signal` (or runs `stop_command` if set) and waits up to `stop_timeout_ms` before escalating to SIGKILL.
 
 ### Stuck process (process still running but UI shows "stopped")
 

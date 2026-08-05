@@ -263,7 +263,7 @@ export class ProcessWrapper {
       this.process.status = "failed";
       this.process.health = "unhealthy";
       if (oldHealth !== "unhealthy") this.notifyHealth(oldHealth, "unhealthy");
-      if (oldStatus !== "failed") this.notifyStatus(oldStatus, "failed");
+      this.notifyStatus(oldStatus, "failed");
     }
   }
 

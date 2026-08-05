@@ -6,7 +6,7 @@ Run your entire dev stack — databases, servers, workers — with one command.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Built with Bun](https://img.shields.io/badge/runtime-bun-f472b6)](https://bun.sh)
-[![Status: beta](https://img.shields.io/badge/status-beta-orange)](https://github.com/PhantomDave/conductor)
+[![Status: beta](https://img.shields.io/badge/status-beta-orange)](https://github.com/PhantomDave/conductor/releases)
 
 ## Why Conductor?
 
@@ -104,8 +104,7 @@ Then:
 
 ```bash
 conductor run dev          # starts postgres → api → web, in order
-conductor ps                # see what's running
-conductor logs --follow    # tail everything in real-time
+conductor ps               # see what's running (requires API server on :4000)
 ```
 
 ## Configuration Reference
@@ -139,7 +138,7 @@ Conductor tracks **process status** and **health**:
 | ---------- | --------------------------------------------------- |
 | `starting` | Process spawned, awaiting health check              |
 | `running`  | No explicit healthcheck yet, or polling in progress |
-| `healthy`  | Health check passed (`port`, `http`, or `command`)  |
+| `stopping` | Graceful shutdown in progress                       |
 | `stopped`  | Exited gracefully (code 0)                          |
 | `failed`   | Exited with error (code ≠ 0)                        |
 
@@ -186,7 +185,7 @@ The desktop app checks for updates automatically on launch via GitHub Releases. 
 - ✅ Fastify HTTP API + SSE log stream
 - ✅ React + Mantine dashboard (single page, all panels)
 - ✅ Desktop app (Electron 43 + electron-builder, auto-update)
-- ✅ Docker Compose import (`POST /api/docker compose/parse`)
+- ✅ Docker Compose import (`POST /api/docker%20compose/parse`)
 - `configure` command — compiles `.env` and `appsettings.json` from `.example` templates
 - 🔄 Live log wiring in UI LogViewer via SSE (server-side ready)
 - 🔲 Process CPU/memory metrics collection (`packages/core/src/monitor/` empty)

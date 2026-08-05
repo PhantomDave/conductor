@@ -81,30 +81,31 @@ profiles:
 # Start the entire stack in order
 conductor run dev
 
-# In another terminal, watch logs
-conductor logs --follow
-
-# Check what's running
+# Check what's running (requires API server on :4000)
 conductor ps
 ```
 
 ### Expected `ps` output
 
+```json
+[
+  {
+    "pid": 42123,
+    "commandId": "postgres",
+    "status": "running",
+    "health": "healthy",
+    "startedAt": "..."
+  },
+  {
+    "pid": 42456,
+    "commandId": "api",
+    "status": "running",
+    "health": "healthy",
+    "startedAt": "..."
+  },
+  { "pid": 42789, "commandId": "web", "status": "running", "health": "healthy", "startedAt": "..." }
+]
 ```
-PID    COMMAND    STATUS     HEALTH      STARTED
-42123  postgres   healthy    healthy     30s
-42456  api        healthy    healthy     20s
-42789  web        healthy    healthy     10s
-```
-
-### Expected `logs --follow` output
-
-```
-[api] Listening on http://localhost:3001
-[web] VITE v4.5.0 ready in 120ms
-```
-
-(Actual output depends on your services' standard output.)
 
 ## How It Works
 
