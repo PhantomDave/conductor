@@ -180,15 +180,17 @@ The desktop app checks for updates automatically on launch via GitHub Releases. 
 
 - ✅ Config engine + YAML validation (Zod)
 - ✅ Command executor with dependency resolution
+- ✅ Health checks (`port` / `http` / `command`) with retries & timeouts
+- ✅ Continuous health monitoring — services that crash or go unhealthy are flagged, and recovery is detected on restart
 - ✅ CLI (`run`, `configure`, `list`, `config validate`, `env get/set`)
 - ✅ SQLite persistence (execution history, logs, env vars, audit log)
 - ✅ Fastify HTTP API + SSE log stream
 - ✅ React + Mantine dashboard (single page, all panels)
 - ✅ Desktop app (Electron 43 + electron-builder, auto-update)
 - ✅ Docker Compose import (`POST /api/docker%20compose/parse`)
-- `configure` command — compiles `.env` and `appsettings.json` from `.example` templates
+- ✅ `configure` command — compiles `.env` and `appsettings.json` from `.example` templates
+- ✅ Process CPU/memory metrics collection + live dashboard charts
 - 🔄 Live log wiring in UI LogViewer via SSE (server-side ready)
-- 🔲 Process CPU/memory metrics collection (`packages/core/src/monitor/` empty)
 - 🔲 Community template registry
 - 🔲 Standalone CLI binary distribution (npm, Homebrew)
 
