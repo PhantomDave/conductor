@@ -1,6 +1,7 @@
 import type { CommandConfig } from "../config/schema";
 import { ProcessWrapper, type LogHandler, type HealthChangeHandler } from "./wrapper";
 import { waitForHealthy, type ProbeResult } from "./healthcheck";
+import { HealthMonitor } from "../monitor";
 
 /**
  * Represents a failure event in the queue: process start failure,
@@ -31,6 +32,8 @@ export class SpawnQueue {
   private failedPids = new Set<number>();
   // Track command IDs that need recovery detection after restart
   private pendingRecovery = new Set<string>();
+  // Continuous health monitors per command (running services probed on interval)
+  private monitors = new Map<string, HealthMonitor>();
 
   constructor(
     private readonly profile: string,
@@ -175,6 +178,13 @@ export class SpawnQueue {
           this.recordHealthProbeAttempt(wrapper, cmd, attempt, result),
       });
 
+      // Mark wrapper running once the healthcheck (or its absence) has passed
+      wrapper.markHealthy("healthy");
+
+      // Start continuous monitoring so the service going unhealthy after
+      // startup (crash, port loss, OOM) is detected and health flips.
+      this.startHealthMonitor(cmd, wrapper, env);
+
       // Successful start — if previous version failed → recovered notification
       if (this.pendingRecovery.has(cmd.id)) {
         wrapper.log("[healthcheck] service recovered after restart", "stdout");
@@ -206,6 +216,44 @@ export class SpawnQueue {
 
     // Return exit code for use by callers
     return null;
+  }
+
+  /**
+   * Starts a continuous health monitor for a running command so that the
+   * service going unhealthy after startup (crash, port loss, OOM killer)
+   * flips the wrapper's health and emits logs. Probes stop when the
+   * process terminates for any reason (stop, restart, natural exit).
+   */
+  private startHealthMonitor(
+    cmd: CommandConfig,
+    wrapper: ProcessWrapper,
+    env: Record<string, string>,
+  ): void {
+    const hc = cmd.healthcheck;
+    if (!hc || hc.type === "none") return;
+
+    // Stop any monitor from a previous lifecycle of this command
+    this.monitors.get(cmd.id)?.stop();
+
+    const monitor = new HealthMonitor(
+      hc,
+      () => env,
+      (isHealthy, detail) => {
+        wrapper.updateHealth(isHealthy ? "healthy" : "unhealthy");
+        wrapper.log(
+          isHealthy
+            ? "[healthcheck] service healthy"
+            : `[healthcheck] service unhealthy: ${detail}`,
+          "stdout",
+        );
+      },
+      { intervalMs: hc.interval_ms },
+    );
+    monitor.start();
+    this.monitors.set(cmd.id, monitor);
+
+    // Stop probing once this process terminates for any reason
+    wrapper.onExit(() => monitor.stop());
   }
 
   /** Checks if an error is likely a spawn-level failure (process couldn't be created). */
@@ -324,12 +372,16 @@ export class SpawnQueue {
   }
 
   async stopAll(): Promise<void> {
+    for (const monitor of this.monitors.values()) monitor.stop();
+    this.monitors.clear();
     const stops = [...this.wrappers.values()].map((w) => w.stop());
     await Promise.all(stops);
   }
 
   /** Alias of startOne: runs a single command standalone, starting (and waiting on) any deps first. */
   async stopOne(commandId: string): Promise<void> {
+    this.monitors.get(commandId)?.stop();
+    this.monitors.delete(commandId);
     const wrapper = this.wrappers.get(commandId);
     if (wrapper) await wrapper.stop();
   }

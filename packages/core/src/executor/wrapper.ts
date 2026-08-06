@@ -142,6 +142,7 @@ export class ProcessWrapper {
   private logHandlers: LogHandler[] = [];
   private healthObservers: HealthChangeHandler[] = [];
   private statusObservers: StatusChangeHandler[] = [];
+  private exitHandlers: Array<(exitCode: number) => void> = [];
 
   constructor(
     private readonly commandConfig: CommandConfig,
@@ -169,6 +170,14 @@ export class ProcessWrapper {
       const idx = this.statusObservers.indexOf(cb);
       if (idx !== -1) this.statusObservers.splice(idx, 1);
     };
+  }
+
+  /**
+   * Subscribe to subprocess exit (fires once when the managed process
+   * terminates for any reason: natural exit, stop, or kill).
+   */
+  onExit(cb: (exitCode: number) => void): void {
+    this.exitHandlers.push(cb);
   }
 
   private notifyHealth(oldHealth: HealthStatus, newHealth: HealthStatus): void {
@@ -268,6 +277,19 @@ export class ProcessWrapper {
   }
 
   /**
+   * Marks the process as down: sets health to "unhealthy" so the UI and
+   * health observers reflect that the service is no longer serving.
+   * No-op when there is no process or it is already unhealthy.
+   */
+  private markUnhealthy(): void {
+    if (!this.process) return;
+    const oldHealth = this.process.health;
+    if (oldHealth === "unhealthy") return;
+    this.process.health = "unhealthy";
+    this.notifyHealth(oldHealth, "unhealthy");
+  }
+
+  /**
    * Returns a serializable snapshot of the current process state, or
    * null if the process has never been started.
    */
@@ -360,7 +382,9 @@ export class ProcessWrapper {
         this.process.status = exitCode === 0 ? "stopped" : "failed";
         this.process.exitCode = exitCode;
         this.process.endedAt = new Date();
+        this.markUnhealthy();
       }
+      for (const cb of this.exitHandlers) cb(exitCode);
     });
   }
 
@@ -470,6 +494,7 @@ export class ProcessWrapper {
       this.process.status = "stopped";
       this.process.exitCode ??= -1;
       this.process.endedAt = new Date();
+      this.markUnhealthy();
       return;
     }
 
@@ -481,6 +506,7 @@ export class ProcessWrapper {
             this.process.status = "stopped";
             this.process.exitCode ??= code;
             this.process.endedAt = new Date();
+            this.markUnhealthy();
           }
           resolve(true);
         });
@@ -493,6 +519,7 @@ export class ProcessWrapper {
       this.process.status = "stopped";
       this.process.exitCode ??= -1;
       this.process.endedAt = new Date();
+      this.markUnhealthy();
       return;
     }
 

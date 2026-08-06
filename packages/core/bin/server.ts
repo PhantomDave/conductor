@@ -1,15 +1,15 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { discoverConfigPath, loadConfig, createDefaultConfig } from "../src/config/loader";
-import { saveConfig } from "../src/config/writer";
-import { ConfigStore } from "../src/config/store";
-import { createLogger } from "../src/logger/pino";
-import { openDatabase, DEFAULT_DB_PATH } from "../src/db/init";
-import { ConductorQueries } from "../src/db/queries";
-import { LogBroadcaster } from "../src/logs/broadcaster";
-import type { LogEntry } from "../src/executor/wrapper";
-import { buildApi } from "../src/api";
-import { MetricCollector } from "../src/monitor";
+import { discoverConfigPath, loadConfig, createDefaultConfig } from "../src";
+import { saveConfig } from "../src";
+import { ConfigStore } from "../src";
+import { createLogger } from "../src";
+import { openDatabase, DEFAULT_DB_PATH } from "../src";
+import { ConductorQueries } from "../src";
+import { LogBroadcaster } from "../src";
+import type { LogEntry } from "../src";
+import { buildApi } from "../src";
+import { MetricCollector } from "../src";
 
 const PORT = Number(process.env.CONDUCTOR_PORT ?? 4000);
 
@@ -47,9 +47,24 @@ async function main() {
     () =>
       [...store.getQueues().values()]
         .flatMap((q) => q.listSnapshots())
-        .map((s) => ({ pid: s.pid, cpuPercent: s.cpuPercent, memoryBytes: s.memoryBytes })),
+        .filter((s) => s.status === "running")
+        .map((s) => ({ pid: s.pid })),
     queries,
-    { intervalMs: 5000, retentionHours: 24 },
+    {
+      intervalMs: 5000,
+      retentionHours: 24,
+      // Write live values back into the wrapper so snapshots served by
+      // /api/processes carry current CPU/memory for the UI's live columns.
+      onSample: (pid, cpuPercent, memoryBytes) => {
+        for (const queue of store.getQueues().values()) {
+          const wrapper = queue.findByPid(pid);
+          if (wrapper) {
+            wrapper.updateMetrics(cpuPercent, memoryBytes);
+            break;
+          }
+        }
+      },
+    },
   );
 
   // Every log line from any managed process is persisted and broadcast

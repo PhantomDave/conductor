@@ -67,6 +67,8 @@ function readRssBytes(pid: number): number | null {
 export interface MetricCollectorOptions {
   intervalMs?: number;
   retentionHours?: number;
+  /** Called with each freshly-computed sample so callers can write live values back to running wrappers. */
+  onSample?: (pid: number, cpuPercent: number, memoryBytes: number) => void;
 }
 
 /** A single process CPU/memory sample keyed by pid. */
@@ -81,7 +83,7 @@ export class MetricCollector {
   private lastClock = new Map<number, number>();
 
   constructor(
-    private getRunningPids: () => Array<{ pid: number; cpuPercent?: number; memoryBytes?: number }>,
+    private getRunningPids: () => Array<{ pid: number }>,
     private queries: ConductorQueries,
     private options: MetricCollectorOptions,
   ) {}
@@ -149,6 +151,7 @@ export class MetricCollector {
         cpuSum = Math.min(cpuSum, 100);
 
         this.queries.insertMetric(item.pid, cpuSum, memTotal);
+        this.options.onSample?.(item.pid, cpuSum, memTotal);
       } catch {}
     }
 

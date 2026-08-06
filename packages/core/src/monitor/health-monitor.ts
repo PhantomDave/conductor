@@ -5,12 +5,8 @@ export interface HealthMonitorOptions {
   intervalMs?: number;
 }
 
-export interface HealthCheckFn {
-  (
-    healthcheck: HealthcheckConfig,
-    env: Record<string, string>,
-  ): Promise<{ ok: boolean; detail: string }>;
-}
+/** Fired on each health-flip with the new state and the probe detail (e.g. "port 8080"). */
+export type HealthFlipHandler = (isHealthy: boolean, detail: string) => void;
 
 /**
  * Periodically re-runs a health probe so running services that go unhealthy
@@ -25,8 +21,8 @@ export class HealthMonitor {
     private readonly healthcheck: HealthcheckConfig,
     /** Environment used to resolve variables in the healthcheck URL/command */
     private readonly getEnv: () => Record<string, string>,
-    /** Called on each health-flip with (healthStatus) — must update wrapper state + emit logs */
-    private readonly onHealthFlip: (isHealthy: boolean) => void,
+    /** Called on each health-flip with (isHealthy, detail) — must update wrapper state + emit logs */
+    private readonly onHealthFlip: HealthFlipHandler,
     /** Options (default 5000ms interval = same as configured interval_ms) */
     private options: HealthMonitorOptions = {},
   ) {}
@@ -43,7 +39,7 @@ export class HealthMonitor {
         const isHealthy = result.ok;
         if (isHealthy !== this.lastHealthy) {
           this.lastHealthy = isHealthy;
-          this.onHealthFlip(isHealthy);
+          this.onHealthFlip(isHealthy, result.detail);
         }
       } catch {
         // probeOnce should always return. If it throws, keep previous state.
