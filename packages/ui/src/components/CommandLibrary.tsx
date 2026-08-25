@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Badge,
   Box,
@@ -17,6 +17,7 @@ import { useProcesses } from "../hooks/useProcesses";
 import { CommandForm } from "./CommandForm";
 import { CommandCard } from "./CommandCard";
 import { useExecuteCommand } from "../hooks/useProcessActions";
+import { useUiStore } from "../store/ui";
 
 const DEFAULT_CATEGORY = "General";
 
@@ -36,6 +37,7 @@ export function CommandLibrary() {
   const { commands, isLoading: loadingCommands, error, deleteItem } = useCommandLibrary();
   const processes = useProcesses();
   const execute = useExecuteCommand();
+  const { pendingAction, clearPendingAction } = useUiStore();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editState, setEditState] = useState<
@@ -43,6 +45,15 @@ export function CommandLibrary() {
   >(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Auto-open the add form when the sidebar's "New Command" quick action navigates here.
+  useEffect(() => {
+    if (pendingAction === "newCommand") {
+      setFormOpen(true);
+      setEditState(null);
+      clearPendingAction();
+    }
+  }, [pendingAction, clearPendingAction]);
 
   if (loadingCommands || processes.isLoading)
     return <Text c="dimmed">Loading command library...</Text>;

@@ -92,12 +92,10 @@ export function useStopAllProcesses() {
   const invalidate = useInvalidateProcesses();
 
   return useMutation({
-    mutationFn: async (processes?: ProcessInfo[]) => {
-      const targets = (
-        processes ??
-        queryClient.getQueryData<ProcessInfo[]>(["processes"]) ??
-        []
-      ).filter((process) => process.status === "running" || process.status === "starting");
+    mutationFn: async () => {
+      const targets = (queryClient.getQueryData<ProcessInfo[]>(["processes"]) ?? []).filter(
+        (process) => process.status === "running" || process.status === "starting",
+      );
       await Promise.all(targets.map((process) => stopProcess(process.pid)));
       return targets.length;
     },

@@ -1,4 +1,14 @@
-import { Badge, Button, Card, Group, Stack, Text, ThemeIcon } from "@mantine/core";
+import {
+  Badge,
+  Button,
+  Card,
+  Group,
+  Stack,
+  Text,
+  ThemeIcon,
+  ActionIcon,
+  Tooltip,
+} from "@mantine/core";
 import { IconBox, IconEdit, IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import type { useCommandLibrary } from "../hooks/useCommandLibrary";
 
@@ -38,15 +48,20 @@ export function CommandCard({
   const categories = commandCategories(command);
 
   return (
-    <Card withBorder p="md" radius="md" style={{ flex: "1 1 280px", minWidth: 280 }}>
-      <Stack gap="lg">
+    <Card
+      withBorder
+      p="md"
+      radius="md"
+      style={{ flex: "1 1 280px", minWidth: 280, display: "flex", flexDirection: "column" }}
+    >
+      <Stack gap="lg" flex={1}>
         {/* Header */}
         <Stack gap={4}>
           <Group gap={6} wrap="nowrap">
             <ThemeIcon size="sm" variant="light" radius="md" color="blue">
               <IconBox size={14} />
             </ThemeIcon>
-            <Text fw={600} size="sm" c="blue">
+            <Text fw={600} size="sm" c="blue" lineClamp={1}>
               {command.name}
             </Text>
           </Group>
@@ -73,50 +88,47 @@ export function CommandCard({
 
         {/* Description */}
         {command.description && (
-          <Text size="xs" c="dimmed">
+          <Text size="xs" c="dimmed" lineClamp={3}>
             {command.description}
           </Text>
         )}
+      </Stack>
 
-        {/* Action buttons */}
-        <Group gap="xs">
-          <Button
-            flex={1}
-            size="xs"
-            leftSection={<IconPlayerPlay size={12} />}
-            color="green"
-            variant="light"
-            onClick={onRun}
-            loading={isExecuting || isRunning}
-            disabled={isExecuting || isRunning}
-          >
-            Run
-          </Button>
-          {!command.readonly && (
-            <>
-              <Button
-                flex={1}
-                size="xs"
-                variant="light"
-                leftSection={<IconEdit size={12} />}
-                onClick={onEdit}
-              >
-                Edit
-              </Button>
-              <Button
-                flex={1}
-                size="xs"
+      {/* Action buttons */}
+      <Group gap="xs" wrap="nowrap" mt="md">
+        <Button
+          flex={1}
+          size="xs"
+          leftSection={<IconPlayerPlay size={12} />}
+          color="green"
+          variant="light"
+          onClick={onRun}
+          loading={isExecuting || isRunning}
+          disabled={isExecuting || isRunning}
+        >
+          Run
+        </Button>
+        {!command.readonly && (
+          <>
+            <Tooltip label="Edit" withArrow>
+              <ActionIcon size="lg" variant="light" onClick={onEdit} aria-label="Edit command">
+                <IconEdit size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Delete" withArrow>
+              <ActionIcon
+                size="lg"
                 color="red"
                 variant="light"
-                leftSection={<IconTrash size={12} />}
                 onClick={() => onDelete?.(command.id)}
+                aria-label="Delete command"
               >
-                Delete
-              </Button>
-            </>
-          )}
-        </Group>
-      </Stack>
+                <IconTrash size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </>
+        )}
+      </Group>
     </Card>
   );
 }
