@@ -136,7 +136,6 @@ export function Sidebar() {
                 key={name}
                 label={name}
                 leftSection={<IconUsersGroup size={16} />}
-                active={view === "profiles" && !selectedProcessKey}
                 onClick={() => setView("profiles")}
                 rightSection={
                   <ActionIcon

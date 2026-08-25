@@ -1,4 +1,14 @@
-import { Badge, Button, Card, Group, Stack, Text, ThemeIcon, ActionIcon, Tooltip } from "@mantine/core";
+import {
+  Badge,
+  Button,
+  Card,
+  Group,
+  Stack,
+  Text,
+  ThemeIcon,
+  ActionIcon,
+  Tooltip,
+} from "@mantine/core";
 import { IconBox, IconEdit, IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import type { useCommandLibrary } from "../hooks/useCommandLibrary";
 
