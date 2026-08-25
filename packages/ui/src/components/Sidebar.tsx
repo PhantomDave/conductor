@@ -1,13 +1,18 @@
-import { NavLink, ScrollArea, Text, Badge, Stack, Divider, Group } from "@mantine/core";
+import { NavLink, ScrollArea, Text, Badge, Stack, Divider, Group, ActionIcon } from "@mantine/core";
 import {
   IconBolt,
   IconCircleFilled,
   IconLayoutDashboard,
+  IconPlayerPlay,
+  IconPlayerStop,
+  IconPlus,
   IconSettings,
   IconTerminal2,
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { useProcesses } from "../hooks/useProcesses";
+import { useProfiles } from "../hooks/useProfiles";
+import { useRunProfile, useStopAllProcesses } from "../hooks/useProcessActions";
 import { useUiStore } from "../store/ui";
 import type { ProcessInfo } from "../lib/api";
 
@@ -21,10 +26,14 @@ const STATUS_COLOR: Record<string, string> = {
 
 export function Sidebar() {
   const { data: processes } = useProcesses();
-  const { view, setView, selectedProcessKey, selectProcess } = useUiStore();
+  const { data: profiles } = useProfiles();
+  const { view, setView, selectedProcessKey, selectProcess, triggerAction } = useUiStore();
+  const runProfile = useRunProfile();
+  const stopAll = useStopAllProcesses();
 
   const active = processes?.filter((p) => p.status === "running" || p.status === "starting") ?? [];
   const finished = processes?.filter((p) => p.status === "stopped" || p.status === "failed") ?? [];
+  const profileNames = profiles ? Object.keys(profiles).sort((a, b) => a.localeCompare(b)) : [];
 
   const isSelected = (p: ProcessInfo) =>
     selectedProcessKey?.profile === p.profile && selectedProcessKey?.commandId === p.commandId;
@@ -96,6 +105,57 @@ export function Sidebar() {
           leftSection={<IconBolt size={16} />}
           onClick={() => setView("commands")}
         />
+        <NavLink
+          label="New profile"
+          description="Create a new profile"
+          leftSection={<IconPlus size={16} />}
+          onClick={() => triggerAction("profiles", "newProfile")}
+        />
+        <NavLink
+          label="New command"
+          description="Add a command to the library"
+          leftSection={<IconPlus size={16} />}
+          onClick={() => triggerAction("commands", "newCommand")}
+        />
+        <NavLink
+          label="Stop all"
+          description="Stop every running process"
+          leftSection={<IconPlayerStop size={16} />}
+          disabled={active.length === 0 || stopAll.isPending}
+          onClick={() => stopAll.mutate()}
+        />
+
+        {profileNames.length > 0 && (
+          <>
+            <Divider my="xs" />
+            <Text size="xs" fw={700} c="dimmed" px="xs" pt="xs">
+              PROFILES
+            </Text>
+            {profileNames.map((name) => (
+              <NavLink
+                key={name}
+                label={name}
+                leftSection={<IconUsersGroup size={16} />}
+                active={view === "profiles" && !selectedProcessKey}
+                onClick={() => setView("profiles")}
+                rightSection={
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    aria-label={`Run ${name}`}
+                    loading={runProfile.isPending && runProfile.variables === name}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      runProfile.mutate(name);
+                    }}
+                  >
+                    <IconPlayerPlay size={14} />
+                  </ActionIcon>
+                }
+              />
+            ))}
+          </>
+        )}
 
         {finished.length > 0 && (
           <>

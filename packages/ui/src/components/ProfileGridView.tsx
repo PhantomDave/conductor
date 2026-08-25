@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Stack,
   Text,
@@ -26,10 +26,12 @@ import {
 } from "../hooks/useConfig";
 import { useCommandLibrary } from "../hooks/useCommandLibrary";
 import { ProfileCard } from "./ProfileCard";
+import { useUiStore } from "../store/ui";
 
 export function ProfileGridView() {
   const { data: profiles, isLoading, error } = useProfiles();
   const { commands: allCommands } = useCommandLibrary();
+  const { pendingAction, clearPendingAction } = useUiStore();
 
   // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -62,6 +64,14 @@ export function ProfileGridView() {
   const exportMutation = useExportProfile();
   const runMutation = useRunProfile();
   const syncMutation = useSyncCommandsToProfile();
+
+  // Auto-open the create modal when the sidebar's "New Profile" quick action navigates here.
+  useEffect(() => {
+    if (pendingAction === "newProfile") {
+      setCreateModalOpen(true);
+      clearPendingAction();
+    }
+  }, [pendingAction, clearPendingAction]);
 
   // Helpers
   const handleCreateProfile = async () => {

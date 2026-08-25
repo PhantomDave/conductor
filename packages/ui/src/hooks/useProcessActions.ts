@@ -69,6 +69,40 @@ export function useStopProfile() {
   });
 }
 
+export function useStopAllProcesses() {
+  const invalidate = useInvalidateProcesses();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const processes = queryClient.getQueryData<ProcessInfo[]>(["processes"]) ?? [];
+      const profiles = Array.from(
+        new Set(
+          processes
+            .filter((p) => p.status === "running" || p.status === "starting")
+            .map((p) => p.profile),
+        ),
+      );
+      await Promise.all(profiles.map((profile) => stopProfile(profile)));
+      return profiles;
+    },
+    onSuccess: (profiles) => {
+      notifications.show({
+        color: profiles.length > 0 ? "green" : "gray",
+        message:
+          profiles.length > 0 ? `Stopped ${profiles.length} profile(s)` : "Nothing to stop",
+      });
+      invalidate();
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to stop all processes",
+        message: error.message,
+      });
+    },
+  });
+}
+
 export function useStopProcess() {
   const invalidate = useInvalidateProcesses();
   return useMutation({
