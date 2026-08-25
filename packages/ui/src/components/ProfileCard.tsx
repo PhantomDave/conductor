@@ -16,6 +16,7 @@ import {
   IconDots,
   IconDownload,
   IconEdit,
+  IconEye,
   IconPlayerPlay,
   IconSettings,
   IconTrash,
@@ -50,8 +51,13 @@ export function ProfileCard({
   onExport,
 }: ProfileCardProps) {
   return (
-    <Card withBorder p="md" radius="md" style={{ flex: "1 1 280px", minWidth: 280 }}>
-      <Stack gap="sm">
+    <Card
+      withBorder
+      p="md"
+      radius="md"
+      style={{ flex: "1 1 280px", minWidth: 280, display: "flex", flexDirection: "column" }}
+    >
+      <Stack gap="sm" flex={1}>
         {/* Header */}
         <Group justify="space-between" align="flex-start">
           <Stack gap={2} flex={1}>
@@ -149,38 +155,46 @@ export function ProfileCard({
             </Stack>
           </Stack>
         )}
+      </Stack>
 
-        {/* Action buttons */}
-        <Group grow gap="xs">
-          {onView && (
-            <Button flex={1} size="xs" variant="light" onClick={() => onView?.(name)}>
-              View
-            </Button>
-          )}
-          <Button
-            flex={1}
-            size="xs"
-            leftSection={<IconPlayerPlay size={12} />}
-            color="green"
-            variant="light"
-            onClick={onRun}
-            loading={isRunning}
-            disabled={isRunning}
-          >
-            Run
-          </Button>
-          <Button
-            flex={1}
-            size="xs"
-            leftSection={<IconSettings size={12} />}
+      {/* Action buttons */}
+      <Group gap="xs" wrap="nowrap" mt="md">
+        <Button
+          flex={1}
+          size="xs"
+          leftSection={<IconPlayerPlay size={12} />}
+          color="green"
+          variant="light"
+          onClick={onRun}
+          loading={isRunning}
+          disabled={isRunning}
+        >
+          Run
+        </Button>
+        {onView && (
+          <Tooltip label="View commands" withArrow>
+            <ActionIcon
+              size="lg"
+              variant="light"
+              onClick={() => onView?.(name)}
+              aria-label="View profile commands"
+            >
+              <IconEye size={16} />
+            </ActionIcon>
+          </Tooltip>
+        )}
+        <Tooltip label="Manage commands" withArrow>
+          <ActionIcon
+            size="lg"
             variant="light"
             color="blue"
             onClick={() => onManageCommands?.(name)}
+            aria-label="Manage profile commands"
           >
-            Edit Commands
-          </Button>
-        </Group>
-      </Stack>
+            <IconSettings size={16} />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
     </Card>
   );
 }
