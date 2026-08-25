@@ -1,6 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
-import { executeCommand, restartCommand, runProfile, stopProfile, stopProcess } from "../lib/api";
+import {
+  executeCommand,
+  restartCommand,
+  runProfile,
+  stopProfile,
+  stopProcess,
+  type ProcessInfo,
+} from "../lib/api";
 
 function useInvalidateProcesses() {
   const queryClient = useQueryClient();
@@ -74,6 +81,37 @@ export function useStopProcess() {
       notifications.show({
         color: "red",
         title: "Failed to stop process",
+        message: error.message,
+      });
+    },
+  });
+}
+
+export function useStopAllProcesses() {
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateProcesses();
+
+  return useMutation({
+    mutationFn: async (processes?: ProcessInfo[]) => {
+      const targets = (
+        processes ??
+        queryClient.getQueryData<ProcessInfo[]>(["processes"]) ??
+        []
+      ).filter((process) => process.status === "running" || process.status === "starting");
+      await Promise.all(targets.map((process) => stopProcess(process.pid)));
+      return targets.length;
+    },
+    onSuccess: (count) => {
+      notifications.show({
+        color: "green",
+        message: `Stopped ${count} process${count === 1 ? "" : "es"}`,
+      });
+      invalidate();
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to stop processes",
         message: error.message,
       });
     },

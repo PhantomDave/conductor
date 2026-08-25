@@ -22,7 +22,7 @@ export type HealthcheckConfig = z.infer<typeof HealthcheckSchema>;
 export const CommandSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  category: z.string().min(1).optional(),
+  category: z.string().optional(),
   description: z.string().optional(),
   run: z.string().min(1),
   cwd: z.string().default("."),

@@ -112,7 +112,8 @@ export function CommandForm({
   const categoryOptions = Array.from(
     new Set(
       existingCommands
-        .map((c) => c.category?.trim())
+        .flatMap((c) => c.category?.split(",") ?? [])
+        .map((category) => category.trim())
         .filter((category): category is string => Boolean(category)),
     ),
   ).sort((a, b) => a.localeCompare(b));
@@ -130,7 +131,7 @@ export function CommandForm({
 
     const input: Omit<CommandInput, "id"> = {
       name: name.trim(),
-      category: category.trim() || undefined,
+      category: category.trim() || null,
       run: run.trim(),
       cwd,
       shell,

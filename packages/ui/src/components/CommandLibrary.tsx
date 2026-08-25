@@ -20,8 +20,16 @@ import { useExecuteCommand } from "../hooks/useProcessActions";
 
 const DEFAULT_CATEGORY = "General";
 
-function commandCategory(command: ReturnType<typeof useCommandLibrary>["commands"][number]) {
-  return command.category?.trim() || DEFAULT_CATEGORY;
+function commandCategories(command: ReturnType<typeof useCommandLibrary>["commands"][number]) {
+  const reservedCategory = DEFAULT_CATEGORY.toLowerCase();
+  return Array.from(
+    new Set(
+      (command.category ?? "")
+        .split(",")
+        .map((category) => category.trim())
+        .filter((category) => category && category.toLowerCase() !== reservedCategory),
+    ),
+  );
 }
 
 export function CommandLibrary() {
@@ -42,17 +50,27 @@ export function CommandLibrary() {
 
   // Flatten commands into a deduplicated array
   const flatCommands = Object.values(commands).sort((a, b) => a.name.localeCompare(b.name));
-  const categoryCounts = flatCommands.reduce<Record<string, number>>((acc, command) => {
-    const category = commandCategory(command);
-    acc[category] = (acc[category] ?? 0) + 1;
-    return acc;
-  }, {});
-  const categories = Object.keys(categoryCounts).sort((a, b) => a.localeCompare(b));
+  const categoryCounts = flatCommands.reduce<Record<string, number>>(
+    (acc, command) => {
+      for (const category of commandCategories(command)) {
+        acc[category] = (acc[category] ?? 0) + 1;
+      }
+      return acc;
+    },
+    { [DEFAULT_CATEGORY]: flatCommands.length },
+  );
+  const categories = [
+    DEFAULT_CATEGORY,
+    ...Object.keys(categoryCounts)
+      .filter((category) => category !== DEFAULT_CATEGORY)
+      .sort((a, b) => a.localeCompare(b)),
+  ];
   const activeCategory =
-    selectedCategory && categories.includes(selectedCategory) ? selectedCategory : categories[0];
-  const visibleCommands = activeCategory
-    ? flatCommands.filter((command) => commandCategory(command) === activeCategory)
-    : flatCommands;
+    selectedCategory && categories.includes(selectedCategory) ? selectedCategory : DEFAULT_CATEGORY;
+  const visibleCommands =
+    activeCategory === DEFAULT_CATEGORY
+      ? flatCommands
+      : flatCommands.filter((command) => commandCategories(command).includes(activeCategory));
 
   const isRunning = (commandId: string): boolean =>
     processes.data?.some(
