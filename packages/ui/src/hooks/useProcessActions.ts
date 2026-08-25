@@ -115,6 +115,9 @@ export function useStopAllProcesses() {
         message: error.message,
       });
     },
+    onSettled: () => {
+      invalidate();
+    },
   });
 }
 

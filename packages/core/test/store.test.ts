@@ -158,3 +158,34 @@ describe("ConfigStore.duplicateProfile", () => {
     expect(onDisk).toContain("test");
   });
 });
+
+describe("ConfigStore command categories", () => {
+  test("omits category when adding a command with an empty category", () => {
+    const store = makeStore();
+
+    const command = store.addCommand({ name: "Build", run: "npm run build", category: "" });
+
+    expect(command.category).toBeUndefined();
+    expect(store.getCommand(command.id)?.category).toBeUndefined();
+    expect(readFileSync(configPath, "utf-8")).not.toContain("category:");
+  });
+
+  test("preserves category when updating a command without category in the patch", () => {
+    const store = makeStore();
+    const command = store.addCommand({ name: "API", run: "npm run api", category: "backend" });
+
+    const updated = store.updateCommand(command.id, { run: "npm run api:dev" });
+
+    expect(updated.category).toBe("backend");
+  });
+
+  test("removes category when update patch explicitly clears it", () => {
+    const store = makeStore();
+    const command = store.addCommand({ name: "UI", run: "npm run ui", category: "frontend" });
+
+    const updated = store.updateCommand(command.id, { category: undefined });
+
+    expect(updated.category).toBeUndefined();
+    expect(readFileSync(configPath, "utf-8")).not.toContain("category:");
+  });
+});

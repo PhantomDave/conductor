@@ -4,13 +4,16 @@ import type { useCommandLibrary } from "../hooks/useCommandLibrary";
 
 type Command = ReturnType<typeof useCommandLibrary>["commands"][number];
 
+const DEFAULT_CATEGORY = "General";
+
 function commandCategories(command: Command) {
+  const reservedCategory = DEFAULT_CATEGORY.toLowerCase();
   return Array.from(
     new Set(
       (command.category ?? "")
         .split(",")
         .map((category) => category.trim())
-        .filter((category) => category && category.toLowerCase() !== "general"),
+        .filter((category) => category && category.toLowerCase() !== reservedCategory),
     ),
   );
 }

@@ -148,7 +148,7 @@ export function CommandForm({
     if (isEditing && editing) {
       if (isStandalone) {
         setIsSubmitting(true);
-        updateStandaloneCommand(editing.id, input as Partial<CommandInfo>)
+        updateStandaloneCommand(editing.id, input)
           .then(() => {
             invCmdLib();
             invProfiles();

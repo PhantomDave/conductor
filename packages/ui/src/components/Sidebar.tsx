@@ -94,7 +94,6 @@ export function Sidebar() {
           label="Command library"
           description="Run or edit saved commands"
           leftSection={<IconBolt size={16} />}
-          active={view === "commands" && !selectedProcessKey}
           onClick={() => setView("commands")}
         />
 
