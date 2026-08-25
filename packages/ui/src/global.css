@@ -108,10 +108,8 @@ li {
   margin-bottom: 4px;
 }
 
-/* Form input consistency */
-input,
-textarea,
-select {
+/* Form input consistency for native (non-Mantine) controls */
+:where(input, textarea, select):not([class*="mantine-"]) {
   background-color: rgba(13, 17, 23, 0.5);
   border: 1px solid rgba(208, 215, 222, 0.15);
   color: rgb(230, 237, 243);
@@ -122,16 +120,13 @@ select {
     background-color 200ms ease;
 }
 
-input:focus,
-textarea:focus,
-select:focus {
+:where(input, textarea, select):not([class*="mantine-"]):focus {
   border-color: rgba(88, 166, 255, 0.5);
   background-color: rgba(13, 17, 23, 0.8);
   outline: none;
 }
 
-input::placeholder,
-textarea::placeholder {
+:where(input, textarea):not([class*="mantine-"])::placeholder {
   color: rgba(139, 148, 155, 0.6);
 }
 
@@ -159,9 +154,7 @@ tr:hover {
 }
 
 /* Accessibility: ensure interactive elements have minimum size */
-button,
-a[role="button"],
-[role="button"] {
+:where(button, a[role="button"], [role="button"]):not([class*="mantine-"]) {
   min-height: 36px;
   min-width: 36px;
   display: inline-flex;
