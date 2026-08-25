@@ -34,6 +34,11 @@ export function CommandCard({
               {command.name}
             </Text>
           </Group>
+          {command.category && (
+            <Badge size="xs" variant="light" color="cyan">
+              {command.category}
+            </Badge>
+          )}
           {command.healthcheck && command.healthcheck.type !== "none" && (
             <Badge size="xs" variant="dot" color="blue">
               health

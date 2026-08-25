@@ -26,6 +26,7 @@ export interface ApiDependencies {
 const CommandInputSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1),
+  category: z.string().min(1).optional(),
   description: z.string().optional(),
   run: z.string().min(1),
   cwd: z.string().optional(),

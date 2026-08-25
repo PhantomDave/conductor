@@ -1,11 +1,28 @@
 import { useState } from "react";
-import { Button, Card, Group, Modal, SimpleGrid, Stack, Text } from "@mantine/core";
-import { IconPlus } from "@tabler/icons-react";
+import {
+  Badge,
+  Box,
+  Button,
+  Card,
+  Group,
+  Modal,
+  NavLink,
+  SimpleGrid,
+  Stack,
+  Text,
+} from "@mantine/core";
+import { IconFolder, IconPlus } from "@tabler/icons-react";
 import { useCommandLibrary } from "../hooks/useCommandLibrary";
 import { useProcesses } from "../hooks/useProcesses";
 import { CommandForm } from "./CommandForm";
 import { CommandCard } from "./CommandCard";
 import { useExecuteCommand } from "../hooks/useProcessActions";
+
+const DEFAULT_CATEGORY = "General";
+
+function commandCategory(command: ReturnType<typeof useCommandLibrary>["commands"][number]) {
+  return command.category?.trim() || DEFAULT_CATEGORY;
+}
 
 export function CommandLibrary() {
   const { commands, isLoading: loadingCommands, error, deleteItem } = useCommandLibrary();
@@ -17,6 +34,7 @@ export function CommandLibrary() {
     ReturnType<typeof useCommandLibrary>["commands"][number] | null
   >(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   if (loadingCommands || processes.isLoading)
     return <Text c="dimmed">Loading command library...</Text>;
@@ -24,6 +42,17 @@ export function CommandLibrary() {
 
   // Flatten commands into a deduplicated array
   const flatCommands = Object.values(commands).sort((a, b) => a.name.localeCompare(b.name));
+  const categoryCounts = flatCommands.reduce<Record<string, number>>((acc, command) => {
+    const category = commandCategory(command);
+    acc[category] = (acc[category] ?? 0) + 1;
+    return acc;
+  }, {});
+  const categories = Object.keys(categoryCounts).sort((a, b) => a.localeCompare(b));
+  const activeCategory =
+    selectedCategory && categories.includes(selectedCategory) ? selectedCategory : categories[0];
+  const visibleCommands = activeCategory
+    ? flatCommands.filter((command) => commandCategory(command) === activeCategory)
+    : flatCommands;
 
   const isRunning = (commandId: string): boolean =>
     processes.data?.some(
@@ -51,22 +80,58 @@ export function CommandLibrary() {
           </Card>
         </SimpleGrid>
       ) : (
-        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
-          {flatCommands.map((cmd) => (
-            <CommandCard
-              key={cmd.id}
-              command={cmd}
-              isRunning={isRunning(cmd.id)}
-              isExecuting={execute.isPending && execute.variables?.commandId === cmd.id}
-              onRun={() => execute.mutate({ profile: "__global__", commandId: cmd.id })}
-              onEdit={() => {
-                setFormOpen(true);
-                setEditState(cmd);
-              }}
-              onDelete={(id) => setDeleteConfirm(id)}
-            />
-          ))}
-        </SimpleGrid>
+        <Group align="flex-start" gap="md" wrap="nowrap">
+          <Box w={220} style={{ flexShrink: 0 }}>
+            <Stack gap={4}>
+              <Text size="xs" fw={700} c="dimmed" tt="uppercase" px="xs">
+                Categories
+              </Text>
+              {categories.map((category) => (
+                <NavLink
+                  key={category}
+                  active={category === activeCategory}
+                  label={category}
+                  leftSection={<IconFolder size={16} />}
+                  rightSection={
+                    <Badge size="xs" variant="light">
+                      {categoryCounts[category]}
+                    </Badge>
+                  }
+                  onClick={() => setSelectedCategory(category)}
+                />
+              ))}
+            </Stack>
+          </Box>
+
+          <Box flex={1} style={{ minWidth: 0 }}>
+            <Stack gap="sm">
+              <Group justify="space-between" align="center">
+                <div>
+                  <Text fw={700}>{activeCategory}</Text>
+                  <Text size="xs" c="dimmed">
+                    {visibleCommands.length} command{visibleCommands.length === 1 ? "" : "s"}
+                  </Text>
+                </div>
+              </Group>
+              <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+                {visibleCommands.map((cmd) => (
+                  <CommandCard
+                    key={cmd.id}
+                    command={cmd}
+                    isRunning={isRunning(cmd.id)}
+                    isExecuting={execute.isPending && execute.variables?.commandId === cmd.id}
+                    onRun={() => execute.mutate({ profile: "__global__", commandId: cmd.id })}
+                    onEdit={() => {
+                      setFormOpen(true);
+                      setEditState(cmd);
+                    }}
+                    onDelete={(id) => setDeleteConfirm(id)}
+                  />
+                ))}
+              </SimpleGrid>
+            </Stack>
+          </Box>
+        </Group>
       )}
 
       {formOpen && (
@@ -75,7 +140,7 @@ export function CommandLibrary() {
           onClose={() => setFormOpen(false)}
           profile={undefined}
           existingCommands={flatCommands}
-          editing={editState ? editState : null}
+          editing={editState}
         />
       )}
 

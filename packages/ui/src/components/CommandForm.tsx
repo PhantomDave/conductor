@@ -57,6 +57,7 @@ export function CommandForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
   const [run, setRun] = useState("");
   const [cwd, setCwd] = useState(".");
   const [shell, setShell] = useState(true);
@@ -73,6 +74,7 @@ export function CommandForm({
     if (!opened) return;
     if (editing) {
       setName(editing.name);
+      setCategory(editing.category ?? "");
       setRun(editing.run);
       setCwd(editing.cwd || ".");
       setShell(editing.shell);
@@ -88,6 +90,7 @@ export function CommandForm({
       setHealthcheck(editing.healthcheck ?? DEFAULT_HEALTHCHECK);
     } else {
       setName("");
+      setCategory("");
       setRun("");
       setCwd(".");
       setShell(true);
@@ -106,6 +109,14 @@ export function CommandForm({
     .filter((c) => c.id !== editing?.id)
     .map((c: CommandInfo) => ({ value: c.id, label: c.name }));
 
+  const categoryOptions = Array.from(
+    new Set(
+      existingCommands
+        .map((c) => c.category?.trim())
+        .filter((category): category is string => Boolean(category)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+
   const submit = () => {
     if (!name.trim() || !run.trim()) return;
 
@@ -119,6 +130,7 @@ export function CommandForm({
 
     const input: Omit<CommandInput, "id"> = {
       name: name.trim(),
+      category: category.trim() || undefined,
       run: run.trim(),
       cwd,
       shell,
@@ -198,6 +210,18 @@ export function CommandForm({
           onChange={(e) => setName(e.currentTarget.value)}
           required
         />
+        <TextInput
+          label="Category"
+          placeholder="frontend"
+          value={category}
+          onChange={(e) => setCategory(e.currentTarget.value)}
+          list="command-category-options"
+        />
+        <datalist id="command-category-options">
+          {categoryOptions.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
         <Textarea
           label="Command"
           placeholder="bun run start"

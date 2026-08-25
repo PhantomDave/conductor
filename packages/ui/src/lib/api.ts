@@ -25,6 +25,7 @@ export interface HealthcheckInfo {
 export interface CommandInfo {
   id: string;
   name: string;
+  category?: string;
   description?: string;
   run: string;
   cwd: string;
