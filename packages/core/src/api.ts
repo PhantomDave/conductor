@@ -69,6 +69,33 @@ const EnvImportSchema = z.object({
   secret: z.boolean().optional(),
 });
 
+const NotificationsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(1000).optional().default(100),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+});
+
+const LogsQuerySchema = z.object({
+  pid: z.coerce.number().int().positive().optional(),
+  commandId: z.string().min(1).optional(),
+  profile: z.string().min(1).optional(),
+  level: z.enum(["debug", "info", "warn", "error"]).optional(),
+  grep: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(2000).optional(),
+});
+
+const LogStreamQuerySchema = LogsQuerySchema.omit({ limit: true }).extend({
+  limit: z.coerce.number().int().min(1).max(500).optional().default(500),
+});
+
+const PidParamSchema = z.object({
+  pid: z.coerce.number().int().positive(),
+});
+
+const MetricsQuerySchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
 /** Parses `.env`-style text ("KEY=VALUE" per line, `#` comments, blank lines ignored). */
 function parseDotenv(text: string): Array<{ key: string; value: string }> {
   const entries: Array<{ key: string; value: string }> = [];
@@ -252,7 +279,10 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     yaml: z.string().min(1),
   });
 
-  app.post<{ Body: unknown }>("/api/docker compose/parse", async (request, reply) => {
+  async function parseDockerComposeRequest(
+    request: { body: unknown },
+    reply: { status: (code: number) => { send: (body: unknown) => unknown } },
+  ) {
     const parsed = DockerComposeParseSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply
@@ -268,7 +298,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     } catch (err) {
       return reply.status(400).send({ error: `Failed to parse YAML: ${(err as Error).message}` });
     }
-  });
+  }
+
+  app.post<{ Body: unknown }>("/api/docker-compose/parse", parseDockerComposeRequest);
+  // Legacy route kept for backward compatibility.
+  app.post<{ Body: unknown }>("/api/docker compose/parse", parseDockerComposeRequest);
 
   // --- Profiles & commands (write, persisted to .conductor.yml) ---------
 
@@ -615,10 +649,15 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
 
   app.get<{ Querystring: { limit?: string; offset?: string } }>(
     "/api/notifications",
-    async (request) => {
+    async (request, reply) => {
+      const parsed = NotificationsQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: parsed.error.issues[0]?.message ?? "Invalid query params" });
+      }
       const queue = deps.store.getQueue();
-      const limit = Math.min(parseInt(request.query.limit ?? "100"), 1000);
-      const offset = Math.max(parseInt(request.query.offset ?? "0"), 0);
+      const { limit, offset } = parsed.data;
       const notifications = queue.getNotifications(limit, offset);
       return { notifications };
     },
@@ -732,7 +771,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   );
 
   app.delete<{ Params: { pid: string } }>("/api/processes/:pid", async (request, reply) => {
-    const pid = Number(request.params.pid);
+    const parsed = PidParamSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid pid" });
+    }
+    const { pid } = parsed.data;
 
     const queue = deps.store.getQueue();
     const stopped = await queue.stopByPid(pid);
@@ -746,10 +789,19 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
 
   app.get<{ Params: { pid: string }; Querystring: { from?: string; to?: string } }>(
     "/api/processes/:pid/metrics",
-    async (request) => {
-      const pid = Number(request.params.pid);
-      const { from, to } = request.query;
-      return deps.queries.queryMetrics(pid, from, to);
+    async (request, reply) => {
+      const params = PidParamSchema.safeParse(request.params);
+      if (!params.success) {
+        return reply.status(400).send({ error: params.error.issues[0]?.message ?? "Invalid pid" });
+      }
+      const query = MetricsQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply
+          .status(400)
+          .send({ error: query.error.issues[0]?.message ?? "Invalid query params" });
+      }
+      const { from, to } = query.data;
+      return deps.queries.queryMetrics(params.data.pid, from, to);
     },
   );
 
@@ -792,9 +844,19 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     return { var: row };
   });
 
-  app.delete<{ Params: { id: string } }>("/api/env/:id", async (request) => {
-    deps.queries.deleteEnvVar(Number(request.params.id));
+  app.delete<{ Params: { id: string } }>("/api/env/:id", async (request, reply) => {
+    const idParsed = z.coerce.number().int().positive().safeParse(request.params.id);
+    if (!idParsed.success) {
+      return reply.status(400).send({ error: idParsed.error.issues[0]?.message ?? "Invalid id" });
+    }
+    const id = idParsed.data;
+    const row = deps.queries.getEnvVarById(id);
+    deps.queries.deleteEnvVar(id);
     deps.store.refreshEnv();
+    deps.queries.insertAuditEntry(
+      "delete-env",
+      row ? `${row.scope}${row.profile ? `/${row.profile}` : ""}/${row.key}` : String(id),
+    );
     return { removed: true };
   });
 
@@ -830,13 +892,21 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
 
   app.get<{
     Querystring: { pid?: string; commandId?: string; profile?: string; limit?: string };
-  }>("/api/logs", async (request) => {
-    const { pid, commandId, profile, limit } = request.query;
+  }>("/api/logs", async (request, reply) => {
+    const parsed = LogsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: parsed.error.issues[0]?.message ?? "Invalid query params" });
+    }
+    const { pid, commandId, profile, level, grep, limit } = parsed.data;
     const logs = deps.queries.queryLogs({
-      processId: pid,
+      processId: pid ? String(pid) : undefined,
       commandId,
       profile,
-      limit: limit ? Number(limit) : undefined,
+      level,
+      grep,
+      limit,
     });
     return { logs: logs.reverse() };
   });
@@ -845,7 +915,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   // single pid. Replays recent history first so a client that connects
   // mid-run still sees earlier output, then tails new lines live.
   app.get<{ Querystring: { pid?: string } }>("/api/logs/stream", (request, reply) => {
-    const pid = request.query.pid ? Number(request.query.pid) : undefined;
+    const parsed = LogStreamQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid query" });
+    }
+    const { pid, commandId, profile, level, grep, limit } = parsed.data;
 
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -854,7 +928,23 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     });
 
     if (pid) {
-      const history = deps.queries.queryLogs({ processId: String(pid), limit: 500 }).reverse();
+      const history = deps.queries
+        .queryLogs({
+          processId: String(pid),
+          commandId,
+          profile,
+          level,
+          grep,
+          limit,
+        })
+        .reverse();
+      for (const row of history) {
+        reply.raw.write(`event: log\ndata: ${JSON.stringify(row)}\n\n`);
+      }
+    } else {
+      const history = deps.queries
+        .queryLogs({ commandId, profile, level, grep, limit })
+        .reverse();
       for (const row of history) {
         reply.raw.write(`event: log\ndata: ${JSON.stringify(row)}\n\n`);
       }
@@ -862,6 +952,10 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
 
     const unsubscribe = deps.broadcaster.subscribe((entry) => {
       if (pid && Number(entry.process_id) !== pid) return;
+      if (commandId && entry.command_id !== commandId) return;
+      if (profile && entry.profile !== profile) return;
+      if (level && entry.level !== level) return;
+      if (grep && !entry.message.includes(grep)) return;
       reply.raw.write(`event: log\ndata: ${JSON.stringify(entry)}\n\n`);
     });
 

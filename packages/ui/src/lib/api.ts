@@ -543,7 +543,7 @@ export interface SuggestedCommand {
 }
 
 export async function parseDockerCompose(yamlText: string): Promise<SuggestedCommand[]> {
-  const res = await fetch(`${API_BASE}/docker compose/parse`, {
+  const res = await fetch(`${API_BASE}/docker-compose/parse`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ yaml: yamlText }),

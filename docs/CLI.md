@@ -82,23 +82,26 @@ The `--force` flag bypasses the interactive prompt. This command is particularly
 
 ### conductor logs
 
-View process logs (stub — SQL layer exists via ConductorQueries.queryLogs(), SSE wire needed for terminal tailing).
+Query or stream process logs from the core API.
 
 ```
-usage: conductor logs [--follow] [--grep <pattern>] [--level <debug|info|warn|error>]
+usage: conductor logs [--follow] [--grep <pattern>] [--level <debug|info|warn|error>] [--pid <pid>] [--command <id>] [--profile <name>] [--limit <n>]
 ```
 
-- `--follow` — tail continuously (same as `logs -f`)
-- `--grep` — regex filter matching the command name, log level, or message text
-- `--level` — minimum severity level; defaults to `info`
+- `--follow` — tail continuously via SSE (`/api/logs/stream`)
+- `--grep` — substring filter against log message text
+- `--level` — exact log level filter (`debug`, `info`, `warn`, `error`)
+- `--pid` — filter by process id
+- `--command` — filter by command id
+- `--profile` — filter by profile name
+- `--limit` — maximum history lines fetched before follow starts
 
 ### conductor stop
 
-Stubbed CLI command. For now, Ctrl+C is the primary way to stop a running profile (immediate SIGKILL). A graceful shutdown option that respects each command's `stop_command`, `stop_signal`, and `stop_timeout_ms` fields is planned but not yet wired into the CLI.
+Stop all running commands in a profile through the core API endpoint.
 
 ```
-usage: conductor stop [profile]
-# For now, use Ctrl+C — sends SIGKILL immediately to all active commands.
+usage: conductor stop <profile>
 ```
 
 ## Configuration Resolution Order (highest → lowest)

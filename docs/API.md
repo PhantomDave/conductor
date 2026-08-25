@@ -99,8 +99,8 @@ Log querying returns the latest entries in reverse chronological order, capped a
 
 | Method | Path                    | Query Params                   | Description                                                                                                                                                                                                                                                     |
 | ------ | ----------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/logs`             | `?pid&commandId&profile&limit` | Returns `{ logs: [...reversed...] }` — query filtered by PID, command ID, or profile name; limit defaults to 500. Use the browser's EventSource API for real-time updates.                                                                                      |
-| GET    | `/api/logs/stream/:pid` | SSE (Server-Sent Events)       | `EventSource("http://localhost:4000/api/logs/stream/{pid}")` replays up to last-500 lines immediately, then tails live log lines as they arrive via the broadcaster. Heartbeat pings every 15 seconds keep the connection alive through proxies/load balancers. |
+| GET    | `/api/logs`             | `?pid&commandId&profile&level&grep&limit` | Returns `{ logs: [...] }` filtered by PID, command ID, profile, level, and/or grep substring; invalid numeric params return 400. |
+| GET    | `/api/logs/stream`      | SSE (Server-Sent Events)       | `EventSource("http://localhost:4000/api/logs/stream?pid=123")` replays recent history first (default 500, configurable via `limit`) and then tails live log events; supports `pid`, `commandId`, `profile`, `level`, and `grep` filters. |
 
 ### Configuration Management
 
@@ -115,11 +115,12 @@ Config and schema-level operations include import/export of `.conductor.yml` fil
 | PUT    | `/api/base-path`            | `{ value: string }`                     | Change `base_path` at runtime (no reload)                                                                                                                                                                             |
 | GET    | `/api/shells`               | —                                       | Return available shell info (POSIX `$SHELL` or Windows `%COMSPEC%`)                                                                                                                                                   |
 | PUT    | `/api/shells`               | `{ default: string }`                   | Override the system shell for spawned subprocesses                                                                                                                                                                    |
-| POST   | `/api/docker compose/parse` | `{ yaml }`                              | Parse docker-compose YAML → suggest matching `commands[]` array (one command per service, with healthchecks auto-generated as `port` or `http` based on exposed port ranges)                                          |
+| POST   | `/api/docker-compose/parse` | `{ yaml }`                              | Parse docker-compose YAML → suggest matching `commands[]` array (one command per service, with healthchecks auto-generated as `port` or `http` based on exposed port ranges)                                          |
+| POST   | `/api/docker compose/parse` | `{ yaml }`                              | Legacy alias for backward compatibility (use `/api/docker-compose/parse` for new clients)                                                                                                                               |
 
 ## WebSocket Note
 
-Conductor's documentation mentions a WebSocket feature for real-time updates. The actual implementation today uses Server-Sent Events (SSE) via `/api/logs/stream/:pid`. There is no WebSocket endpoint currently implemented — the SSE approach replaces it and is built into Fastify without extra dependencies. In future versions, we expect the API to add optional WSS support with automatic fallback from HTTP to WSS.
+Conductor's documentation mentions a WebSocket feature for real-time updates. The actual implementation today uses Server-Sent Events (SSE) via `/api/logs/stream`. There is no WebSocket endpoint currently implemented — the SSE approach replaces it and is built into Fastify without extra dependencies. In future versions, we expect the API to add optional WSS support with automatic fallback from HTTP to WSS.
 
 ## SPA / Static Assets Serving
 

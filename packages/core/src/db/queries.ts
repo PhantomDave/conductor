@@ -217,4 +217,9 @@ export class ConductorQueries {
   deleteEnvVar(id: number): void {
     this.db.prepare(`DELETE FROM env_vars WHERE id = $id`).run({ $id: id });
   }
+
+  getEnvVarById(id: number): EnvVarRow | null {
+    return (this.db.prepare(`SELECT * FROM env_vars WHERE id = $id`).get({ $id: id }) ??
+      null) as EnvVarRow | null;
+  }
 }
