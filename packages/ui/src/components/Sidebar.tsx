@@ -1,5 +1,12 @@
 import { NavLink, ScrollArea, Text, Badge, Stack, Divider, Group } from "@mantine/core";
-import { IconLayoutDashboard, IconSettings, IconCircleFilled } from "@tabler/icons-react";
+import {
+  IconBolt,
+  IconCircleFilled,
+  IconLayoutDashboard,
+  IconSettings,
+  IconTerminal2,
+  IconUsersGroup,
+} from "@tabler/icons-react";
 import { useProcesses } from "../hooks/useProcesses";
 import { useUiStore } from "../store/ui";
 import type { ProcessInfo } from "../lib/api";
@@ -26,10 +33,22 @@ export function Sidebar() {
     <Stack h="100%" gap={0}>
       <Stack gap={4} p="xs">
         <NavLink
-          label="Dashboard"
+          label="Processes"
           leftSection={<IconLayoutDashboard size={16} />}
-          active={view === "dashboard" && !selectedProcessKey}
-          onClick={() => setView("dashboard")}
+          active={view === "processes" && !selectedProcessKey}
+          onClick={() => setView("processes")}
+        />
+        <NavLink
+          label="Profiles"
+          leftSection={<IconUsersGroup size={16} />}
+          active={view === "profiles" && !selectedProcessKey}
+          onClick={() => setView("profiles")}
+        />
+        <NavLink
+          label="Commands"
+          leftSection={<IconTerminal2 size={16} />}
+          active={view === "commands" && !selectedProcessKey}
+          onClick={() => setView("commands")}
         />
         <NavLink
           label="Environment"
@@ -65,6 +84,18 @@ export function Sidebar() {
             onClick={() => selectProcess(p)}
           />
         ))}
+
+        <Divider my="xs" />
+
+        <Text size="xs" fw={700} c="dimmed" px="xs" pt="xs">
+          QUICK ACTIONS
+        </Text>
+        <NavLink
+          label="Command library"
+          description="Run or edit saved commands"
+          leftSection={<IconBolt size={16} />}
+          onClick={() => setView("commands")}
+        />
 
         {finished.length > 0 && (
           <>

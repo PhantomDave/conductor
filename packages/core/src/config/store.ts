@@ -329,6 +329,7 @@ export class ConfigStore {
     }
 
     const command = { ...input, id } as CommandConfig;
+    if (!command.category) delete command.category;
     const nextConfig: ConductorConfig = {
       ...this.config,
       commands: [...this.config.commands, command],
@@ -349,6 +350,7 @@ export class ConfigStore {
     }
 
     const updated = { ...existing, ...patch, id: commandId };
+    if ("category" in patch && !patch.category) delete updated.category;
     const nextConfig: ConductorConfig = {
       ...this.config,
       commands: this.config.commands.map((c) => (c.id === commandId ? updated : c)),

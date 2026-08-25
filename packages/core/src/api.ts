@@ -26,6 +26,11 @@ export interface ApiDependencies {
 const CommandInputSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1),
+  category: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value?.trim() || undefined),
   description: z.string().optional(),
   run: z.string().min(1),
   cwd: z.string().optional(),
@@ -41,6 +46,13 @@ const CommandInputSchema = z.object({
 });
 
 const CommandPatchSchema = CommandInputSchema.omit({ id: true }).partial();
+
+function normalizeCommandPatch(body: unknown, patch: z.infer<typeof CommandPatchSchema>) {
+  if (typeof body === "object" && body !== null && "category" in body && !patch.category) {
+    return { ...patch, category: undefined };
+  }
+  return patch;
+}
 
 const EnvVarInputSchema = z.object({
   scope: z.enum(["global", "profile"]),
@@ -416,7 +428,10 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
           .send({ error: parsed.error.issues[0]?.message ?? "Invalid command" });
       }
       try {
-        const command = deps.store.updateCommand(request.params.id, parsed.data);
+        const command = deps.store.updateCommand(
+          request.params.id,
+          normalizeCommandPatch(request.body, parsed.data),
+        );
         deps.queries.insertAuditEntry(
           "update-command",
           `${request.params.profile}/${request.params.id}`,
@@ -568,7 +583,10 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
         .send({ error: parsed.error.issues[0]?.message ?? "Invalid command" });
     }
     try {
-      const command = deps.store.updateCommand(request.params.id, parsed.data);
+      const command = deps.store.updateCommand(
+        request.params.id,
+        normalizeCommandPatch(request.body, parsed.data),
+      );
       deps.queries.insertAuditEntry("update-command-standalone", request.params.id);
       return { command };
     } catch (err) {

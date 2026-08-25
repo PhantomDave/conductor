@@ -4,6 +4,20 @@ import type { useCommandLibrary } from "../hooks/useCommandLibrary";
 
 type Command = ReturnType<typeof useCommandLibrary>["commands"][number];
 
+const DEFAULT_CATEGORY = "General";
+
+function commandCategories(command: Command) {
+  const reservedCategory = DEFAULT_CATEGORY.toLowerCase();
+  return Array.from(
+    new Set(
+      (command.category ?? "")
+        .split(",")
+        .map((category) => category.trim())
+        .filter((category) => category && category.toLowerCase() !== reservedCategory),
+    ),
+  );
+}
+
 interface CommandCardProps {
   readonly command: Command;
   readonly isRunning?: boolean;
@@ -21,6 +35,8 @@ export function CommandCard({
   onEdit,
   onDelete,
 }: CommandCardProps) {
+  const categories = commandCategories(command);
+
   return (
     <Card withBorder p="md" radius="md" style={{ flex: "1 1 280px", minWidth: 280 }}>
       <Stack gap="lg">
@@ -34,6 +50,15 @@ export function CommandCard({
               {command.name}
             </Text>
           </Group>
+          {categories.length > 0 && (
+            <Group gap={4}>
+              {categories.map((category) => (
+                <Badge key={category} size="xs" variant="light" color="cyan">
+                  {category}
+                </Badge>
+              ))}
+            </Group>
+          )}
           {command.healthcheck && command.healthcheck.type !== "none" && (
             <Badge size="xs" variant="dot" color="blue">
               health

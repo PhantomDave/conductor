@@ -25,6 +25,7 @@ export interface HealthcheckInfo {
 export interface CommandInfo {
   id: string;
   name: string;
+  category?: string;
   description?: string;
   run: string;
   cwd: string;
@@ -159,10 +160,15 @@ export async function exportProfile(profile: string): Promise<string> {
   return data.yaml;
 }
 
-export type CommandInput = Partial<Omit<CommandInfo, "id">> & {
+export type CommandInput = Partial<Omit<CommandInfo, "id" | "category">> & {
   id?: string;
   name: string;
+  category?: string | null;
   run: string;
+};
+
+export type CommandPatch = Partial<Omit<CommandInfo, "id" | "category">> & {
+  category?: string | null;
 };
 
 export async function createCommand(profile: string, input: CommandInput): Promise<CommandInfo> {
@@ -246,7 +252,7 @@ export async function createStandaloneCommand(
 
 export async function updateStandaloneCommand(
   id: string,
-  patch: Partial<Omit<CommandInfo, "id">>,
+  patch: CommandPatch,
 ): Promise<CommandInfo> {
   const res = await fetch(`${API_BASE}/command/${id}`, {
     method: "PUT",
@@ -265,7 +271,7 @@ export async function deleteStandaloneCommand(id: string): Promise<void> {
 export async function updateCommand(
   profile: string,
   commandId: string,
-  patch: Partial<Omit<CommandInfo, "id">>,
+  patch: CommandPatch,
 ): Promise<CommandInfo> {
   const res = await fetch(`${API_BASE}/profiles/${profile}/commands/${commandId}`, {
     method: "PUT",
