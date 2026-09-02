@@ -3,6 +3,7 @@ import { resolve as resolvePath, isAbsolute } from "node:path";
 import type { CommandConfig } from "../config/schema";
 import { interpolateString } from "../env/masker";
 import { resolveShell } from "./shell";
+import { splitShellWords } from "./shell-words";
 
 export type ProcessStatus = "starting" | "running" | "stopping" | "stopped" | "failed";
 export type HealthStatus = "unknown" | "healthy" | "unhealthy";
@@ -203,12 +204,26 @@ export class ProcessWrapper {
 
   private emitLog(message: string, stream: "stdout" | "stderr"): void {
     if (!this.process) return;
+    this.emitLogFor(this.process, message, stream);
+  }
 
+  /**
+   * Emits a log entry tagged with a specific `ManagedProcess`'s identity
+   * (commandId/profile/pid), rather than whatever `this.process` currently
+   * points to. `pumpStream` uses this with the process it was started
+   * against: on a fast restart, a stream from the *previous* subprocess can
+   * still be draining its last buffered lines after `start()` has already
+   * reassigned `this.process` to the new one — reading identity from
+   * `this.process` at emit time would mislabel those trailing lines (and
+   * the SSE channel they're broadcast on, which is keyed by pid) as
+   * belonging to the new process.
+   */
+  private emitLogFor(owner: ManagedProcess, message: string, stream: "stdout" | "stderr"): void {
     const entry: LogEntry = {
-      commandId: this.process.commandId,
+      commandId: owner.commandId,
       commandName: this.commandConfig.name,
-      profile: this.process.profile,
-      pid: this.process.pid,
+      profile: owner.profile,
+      pid: owner.pid,
       stream,
       message,
       timestamp: new Date().toISOString(),
@@ -347,9 +362,10 @@ export class ProcessWrapper {
       const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
       cmd = [bin, flag, this.commandConfig.run];
     } else {
-      // Split on any run of whitespace so leading/trailing spaces and tabs
-      // don't produce empty tokens.
-      cmd = this.commandConfig.run.trim().split(/\s+/);
+      // No shell in the middle to do word-splitting for us, so do it
+      // ourselves — quote-aware, so e.g. `node "my script.js"` or
+      // `--name="a b"` isn't torn apart on the space inside the quotes.
+      cmd = splitShellWords(this.commandConfig.run);
     }
 
     const subprocess = spawn({
@@ -374,8 +390,8 @@ export class ProcessWrapper {
       subprocess,
     };
 
-    this.pumpStream(subprocess.stdout, "stdout");
-    this.pumpStream(subprocess.stderr, "stderr");
+    this.pumpStream(subprocess.stdout, "stdout", this.process);
+    this.pumpStream(subprocess.stderr, "stderr", this.process);
 
     subprocess.exited.then((exitCode) => {
       if (this.process) {
@@ -391,6 +407,7 @@ export class ProcessWrapper {
   private async pumpStream(
     stream: ReadableStream<Uint8Array>,
     kind: "stdout" | "stderr",
+    owner: ManagedProcess,
   ): Promise<void> {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
@@ -405,28 +422,31 @@ export class ProcessWrapper {
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
-        this.emitLog(line, kind);
+        this.emitLogFor(owner, line, kind);
       }
     }
 
     if (buffer.length > 0) {
-      this.emitLog(buffer, kind);
+      this.emitLogFor(owner, buffer, kind);
     }
   }
 
   /**
-   * Waits for the current subprocess to fully terminate (SIGTERM + SIGKILL),
-   * updating wrapper state when it does. If no process is running, returns immediately.
-   */
-  /**
    * Force-kill the current subprocess's whole process group and wait until
-   * everything has exited. This is used by the restart logic which owns
-   * wrapper lifecycle across boundaries — it needs a plain "terminate now"
-   * that doesn't inspect process state/flags.
+   * everything has exited. Used by orphan cleanup before a respawn and by
+   * the restart logic — callers that own the wrapper's lifecycle across a
+   * boundary and just need a plain "terminate now".
+   *
+   * SIGKILL usually produces a non-zero (or platform-dependent null) exit
+   * code, which the `exited` handler registered in `start()` would
+   * otherwise read as a crash and mark "failed" — but a force-kill here is
+   * always an intentional teardown, never a crash, so it's corrected to
+   * "stopped" once the kill completes.
    */
   async forceKillAndWait(): Promise<void> {
     if (!this.process || this.process.subprocess == null) return;
     await killTreeAndWait(this.process.subprocess);
+    if (this.process) this.process.status = "stopped";
   }
 
   async stop(): Promise<void> {
