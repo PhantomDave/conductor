@@ -1,18 +1,34 @@
 import { describe, test, expect } from "bun:test";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SpawnQueue } from "../src/executor/queue";
 import { CommandSchema, type CommandConfig } from "../src/config/schema";
 
-// Same portability note as wrapper.test.ts: every command shells out to
-// `bun -e "<script>"` so behavior is identical across the ubuntu/macos/windows
-// CI matrix.
+// Same portability note as wrapper.test.ts: every command runs
+// `bun -e "<script>"` and defaults to `shell: false` (routed through our own
+// tokenizer, no cmd.exe in the middle) so behavior is identical across the
+// ubuntu/macos/windows CI matrix. A healthcheck `command` always runs
+// through a real shell (no shell:false option there), so the one test that
+// needs a scripted healthcheck writes it to a temp file and runs
+// `bun "<path>"` instead - a single unquoted-content argument survives
+// cmd.exe's quote parsing where an inline `bun -e "..."` does not.
 
 function makeCommand(
   overrides: Partial<CommandConfig> & { id: string; name: string; run: string },
 ): CommandConfig {
-  return CommandSchema.parse(overrides);
+  return CommandSchema.parse({ shell: false, ...overrides });
+}
+
+/** Writes a JS script to a temp file and returns a `bun "<path>"` command string. */
+function writeScript(code: string): { command: string; cleanup: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), "conductor-queue-script-"));
+  const scriptPath = join(dir, "script.js");
+  writeFileSync(scriptPath, code);
+  return {
+    command: `bun "${scriptPath}"`,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
 }
 
 function testEnv(extra: Record<string, string> = {}): Record<string, string> {
@@ -161,35 +177,40 @@ describe("SpawnQueue.startAll - concurrency", () => {
     // successful attempt, so `retries` never matters). Two independent
     // commands run serially would take ~400ms+; run concurrently, close to
     // one 200ms healthcheck.
-    const slowHealthcheck = {
-      type: "command" as const,
-      command: `bun -e "Bun.sleepSync(200)"`,
-      interval_ms: 50,
-      timeout_ms: 5000,
-      retries: 1,
-    };
-    const a = makeCommand({
-      id: "a",
-      name: "A",
-      run: `bun -e "setInterval(() => {}, 1000)"`,
-      healthcheck: slowHealthcheck,
-    });
-    const b = makeCommand({
-      id: "b",
-      name: "B",
-      run: `bun -e "setInterval(() => {}, 1000)"`,
-      healthcheck: slowHealthcheck,
-    });
-    const queue = new SpawnQueue("test", [a, b], () => testEnv());
+    const sleepScript = writeScript("Bun.sleepSync(200)");
+    try {
+      const slowHealthcheck = {
+        type: "command" as const,
+        command: sleepScript.command,
+        interval_ms: 50,
+        timeout_ms: 5000,
+        retries: 1,
+      };
+      const a = makeCommand({
+        id: "a",
+        name: "A",
+        run: `bun -e "setInterval(() => {}, 1000)"`,
+        healthcheck: slowHealthcheck,
+      });
+      const b = makeCommand({
+        id: "b",
+        name: "B",
+        run: `bun -e "setInterval(() => {}, 1000)"`,
+        healthcheck: slowHealthcheck,
+      });
+      const queue = new SpawnQueue("test", [a, b], () => testEnv());
 
-    const start = Date.now();
-    await queue.startAll();
-    const elapsed = Date.now() - start;
+      const start = Date.now();
+      await queue.startAll();
+      const elapsed = Date.now() - start;
 
-    expect(queue.listSnapshots().every((s) => s.status === "running")).toBe(true);
-    expect(elapsed).toBeLessThan(350);
+      expect(queue.listSnapshots().every((s) => s.status === "running")).toBe(true);
+      expect(elapsed).toBeLessThan(350);
 
-    await queue.stopAll();
+      await queue.stopAll();
+    } finally {
+      sleepScript.cleanup();
+    }
   });
 
   test("one branch failing doesn't block an unrelated branch from starting", async () => {

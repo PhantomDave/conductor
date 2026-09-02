@@ -1,5 +1,8 @@
 import { describe, test, expect } from "bun:test";
 import { createServer, type Server } from "node:net";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { probeOnce, waitForHealthy, HealthcheckError } from "../src/executor/healthcheck";
 import type { HealthcheckConfig } from "../src/config/schema";
 
@@ -20,6 +23,24 @@ function testEnv(extra: Record<string, string> = {}): Record<string, string> {
     if (value !== undefined) env[key] = value;
   }
   return { ...env, ...extra };
+}
+
+/**
+ * Writes a JS script to a temp file and returns a `bun "<path>"` command
+ * string. A command-type healthcheck always runs through a real shell (no
+ * shell:false option), and on Windows that shell is `cmd.exe /c` - an
+ * inline `bun -e "<script>"` gets its quoting mangled in that round trip
+ * (even a single, simple quoted argument), silently turning the probe into
+ * a no-op. A single unquoted-content `bun "<path>"` argument survives it.
+ */
+function writeScript(code: string): { command: string; cleanup: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), "conductor-healthcheck-script-"));
+  const scriptPath = join(dir, "script.js");
+  writeFileSync(scriptPath, code);
+  return {
+    command: `bun "${scriptPath}"`,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
 }
 
 /** Binds to an OS-assigned free port and returns the live server + port. */
@@ -151,14 +172,16 @@ describe("probeOnce - type: command", () => {
     // pass even if the child process's own env were never forwarded. This
     // checks process.env inside the *spawned* probe, which only works if
     // `env` actually reaches Bun.spawn.
-    const result = await probeOnce(
-      healthcheck({
-        type: "command",
-        command: `bun -e "process.exit(process.env.PROBE_MARKER === 'expected' ? 0 : 1)"`,
-      }),
-      testEnv({ PROBE_MARKER: "expected" }),
-    );
-    expect(result.ok).toBe(true);
+    const script = writeScript("process.exit(process.env.PROBE_MARKER === 'expected' ? 0 : 1)");
+    try {
+      const result = await probeOnce(
+        healthcheck({ type: "command", command: script.command }),
+        testEnv({ PROBE_MARKER: "expected" }),
+      );
+      expect(result.ok).toBe(true);
+    } finally {
+      script.cleanup();
+    }
   });
 });
 
