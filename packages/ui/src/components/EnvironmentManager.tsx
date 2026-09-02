@@ -401,6 +401,7 @@ function EnvVarTable({ scope, profile }: { scope: "global" | "profile"; profile?
   const [importOpen, importHandlers] = useDisclosure(false);
   const [form, setForm] = useState({ key: "", value: "", secret: false });
   const [importText, setImportText] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<EnvVarRow | null>(null);
 
   const toggleReveal = (id: number) => {
     setRevealed((prev) => {
@@ -505,7 +506,7 @@ function EnvVarTable({ scope, profile }: { scope: "global" | "profile"; profile?
                     color="red"
                     variant="subtle"
                     loading={remove.isPending && remove.variables === v.id}
-                    onClick={() => remove.mutate(v.id)}
+                    onClick={() => setDeleteTarget(v)}
                   >
                     <IconTrash size={14} />
                   </ActionIcon>
@@ -556,6 +557,33 @@ function EnvVarTable({ scope, profile }: { scope: "global" | "profile"; profile?
           <Button loading={importVars.isPending} onClick={submitImport}>
             Import
           </Button>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete environment variable"
+      >
+        <Stack>
+          <Text size="sm">
+            Are you sure you want to delete <Code>{deleteTarget?.key}</Code>? This cannot be undone.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              loading={remove.isPending}
+              onClick={() => {
+                if (!deleteTarget) return;
+                remove.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
+              }}
+            >
+              Delete
+            </Button>
+          </Group>
         </Stack>
       </Modal>
     </Stack>
