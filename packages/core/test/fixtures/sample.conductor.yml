@@ -1,0 +1,59 @@
+version: "1"
+
+# ——————————————————— config metadata ———————————————————
+# Used across the core test suite (loader, executor, queue). Every command
+# shells out to `bun -e "<script>"` instead of platform shell builtins
+# (echo/sleep/etc.) so this fixture behaves identically on Linux, macOS and
+# Windows in CI — bun is guaranteed to be on PATH since it's the runtime
+# running the tests.
+name: "Conductor Test Fixture"
+description: "Minimal, portable config for automated tests"
+author: "conductor-tests"
+keywords: [test, fixture]
+tags: [ci]
+
+env_secrets:
+  - FIXTURE_SECRET
+
+global_env:
+  FIXTURE_GLOBAL: "global-value"
+
+base_path: "."
+
+commands:
+  - id: hello
+    name: "Hello"
+    description: "Prints a line and exits 0 immediately."
+    run: bun -e "console.log('hello from conductor test fixture')"
+    shell: true
+
+  - id: world
+    name: "World"
+    description: "Runs after `hello` completes."
+    run: bun -e "console.log('world')"
+    shell: true
+    deps: [hello]
+
+  - id: failer
+    name: "Always Fails"
+    description: "Exits non-zero on purpose, for testing failure handling."
+    run: bun -e "process.exit(1)"
+    shell: true
+
+  - id: sleeper
+    name: "Long Runner"
+    description: "Stays alive until stopped, for testing stop/restart."
+    run: bun -e "setInterval(() => {}, 1000)"
+    shell: true
+    stop_timeout_ms: 2000
+
+profiles:
+  dev:
+    description: "Default test profile"
+    env:
+      FIXTURE_PROFILE: "dev-value"
+    command_ids: [hello, world]
+
+  broken:
+    description: "Profile containing a command that always fails"
+    command_ids: [failer]
