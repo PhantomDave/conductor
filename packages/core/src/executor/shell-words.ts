@@ -11,6 +11,11 @@
  * command substitution) — it only reproduces the *quoting/escaping* rules,
  * which is all that's needed to correctly tokenize a fixed argv.
  */
+// Inside double quotes, POSIX only treats backslash as an escape before
+// these characters — before anything else the backslash is literal, so
+// e.g. a Windows path like "C:\Users\name" survives intact.
+const DOUBLE_QUOTE_ESCAPABLE = new Set(["$", "`", '"', "\\", "\n"]);
+
 export function splitShellWords(input: string): string[] {
   const words: string[] = [];
   let current = "";
@@ -24,7 +29,13 @@ export function splitShellWords(input: string): string[] {
       if (ch === quote) {
         quote = null;
       } else if (ch === "\\" && quote === '"' && i + 1 < input.length) {
-        current += input[++i];
+        const next = input[i + 1];
+        if (DOUBLE_QUOTE_ESCAPABLE.has(next)) {
+          current += next;
+          i++;
+        } else {
+          current += ch;
+        }
       } else {
         current += ch;
       }
@@ -54,6 +65,12 @@ export function splitShellWords(input: string): string[] {
 
     current += ch;
     hasContent = true;
+  }
+
+  if (quote) {
+    throw new Error(
+      `Unterminated ${quote === '"' ? "double" : "single"} quote in command: ${input}`,
+    );
   }
 
   if (hasContent) words.push(current);

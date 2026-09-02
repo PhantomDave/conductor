@@ -188,6 +188,32 @@ describe("ProcessWrapper.stop", () => {
     expect(wrapper.status).toBe("stopped");
   });
 
+  test("forceKillAndWait preserves failed status for a process that already crashed on its own", async () => {
+    const cmd = makeCommand({
+      id: "already-crashed",
+      name: "Already Crashed",
+      run: `bun -e "process.exit(1)"`,
+    });
+    const wrapper = new ProcessWrapper(cmd, "test", testEnv());
+    await wrapper.start();
+
+    // Let the process actually crash and its exit handler run before we
+    // issue a kill against it — simulates orphan cleanup/restart racing an
+    // independent crash rather than causing it.
+    await new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (wrapper.status === "failed") {
+          clearInterval(check);
+          resolve(undefined);
+        }
+      }, 5);
+    });
+
+    await wrapper.forceKillAndWait();
+
+    expect(wrapper.status).toBe("failed");
+  });
+
   test("runs a custom stop_command instead of signalling the process directly", async () => {
     const dir = mkdtempSync(join(tmpdir(), "conductor-wrapper-stopcmd-"));
     const markerPath = join(dir, "stopped.txt");

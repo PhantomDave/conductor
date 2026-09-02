@@ -38,6 +38,20 @@ describe("splitShellWords", () => {
     expect(splitShellWords('bash -c "echo \\"hi\\""')).toEqual(["bash", "-c", 'echo "hi"']);
   });
 
+  test("keeps a backslash literal inside double quotes when not before an escapable character", () => {
+    // POSIX only treats \ as an escape inside "..." before $ ` " \ <newline>;
+    // before anything else (e.g. a Windows path separator) it's literal.
+    expect(splitShellWords('node "C:\\Users\\name"')).toEqual(["node", "C:\\Users\\name"]);
+  });
+
+  test("throws on an unterminated double quote", () => {
+    expect(() => splitShellWords('node "unterminated')).toThrow(/unterminated/i);
+  });
+
+  test("throws on an unterminated single quote", () => {
+    expect(() => splitShellWords("node 'unterminated")).toThrow(/unterminated/i);
+  });
+
   test("returns an empty array for an empty or whitespace-only string", () => {
     expect(splitShellWords("")).toEqual([]);
     expect(splitShellWords("   ")).toEqual([]);

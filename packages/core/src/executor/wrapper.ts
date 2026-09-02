@@ -439,14 +439,18 @@ export class ProcessWrapper {
    *
    * SIGKILL usually produces a non-zero (or platform-dependent null) exit
    * code, which the `exited` handler registered in `start()` would
-   * otherwise read as a crash and mark "failed" — but a force-kill here is
-   * always an intentional teardown, never a crash, so it's corrected to
-   * "stopped" once the kill completes.
+   * otherwise read as a crash and mark "failed" — but a force-kill we
+   * initiate is intentional teardown, not a crash, so it's corrected to
+   * "stopped" once the kill completes. That correction only applies if the
+   * process was still alive when we started killing it, though: if it had
+   * already crashed on its own beforehand, "failed" is the real outcome and
+   * must not be overwritten just because a kill was also issued.
    */
   async forceKillAndWait(): Promise<void> {
     if (!this.process || this.process.subprocess == null) return;
+    const alreadyTerminal = this.process.status === "failed" || this.process.status === "stopped";
     await killTreeAndWait(this.process.subprocess);
-    if (this.process) this.process.status = "stopped";
+    if (this.process && !alreadyTerminal) this.process.status = "stopped";
   }
 
   async stop(): Promise<void> {
