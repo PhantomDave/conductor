@@ -8,7 +8,10 @@ interface ConductorMarkProps {
  * Matches packages/desktop/build/icon.png and public/favicon.svg — keep
  * all three in sync if the glyph changes.
  */
-export function ConductorMark({ size = 20, color = "var(--mantine-color-green-5)" }: ConductorMarkProps) {
+export function ConductorMark({
+  size = 20,
+  color = "var(--mantine-color-green-5)",
+}: ConductorMarkProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path

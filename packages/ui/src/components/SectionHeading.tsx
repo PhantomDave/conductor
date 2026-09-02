@@ -10,7 +10,12 @@ interface SectionHeadingProps {
 export function SectionHeading({ children, right }: SectionHeadingProps) {
   return (
     <Group gap="sm" wrap="nowrap" align="center">
-      <Text component="span" fw={600} size="sm" style={{ flexShrink: 0, textTransform: "lowercase" }}>
+      <Text
+        component="span"
+        fw={600}
+        size="sm"
+        style={{ flexShrink: 0, textTransform: "lowercase" }}
+      >
         <span style={{ color: "var(--mantine-color-green-5)" }}>#</span> {children}
       </Text>
       <div style={{ flex: 1, height: 1, background: "var(--mantine-color-dark-5)" }} />

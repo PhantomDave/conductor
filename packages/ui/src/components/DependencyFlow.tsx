@@ -97,7 +97,12 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
         const el = nodeRefs.current.get(id);
         if (!el) return null;
         const r = el.getBoundingClientRect();
-        return { left: r.left - containerRect.left, top: r.top - containerRect.top, width: r.width, height: r.height };
+        return {
+          left: r.left - containerRect.left,
+          top: r.top - containerRect.top,
+          width: r.width,
+          height: r.height,
+        };
       };
 
       const nextEdges: { id: string; d: string }[] = [];
@@ -111,7 +116,10 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
           const x2 = to.left;
           const y2 = to.top + to.height / 2;
           const midX = (x1 + x2) / 2;
-          nextEdges.push({ id: `${depId}->${node.command.id}`, d: `M ${x1} ${y1} H ${midX} V ${y2} H ${x2}` });
+          nextEdges.push({
+            id: `${depId}->${node.command.id}`,
+            d: `M ${x1} ${y1} H ${midX} V ${y2} H ${x2}`,
+          });
         }
       }
       setEdges(nextEdges);
@@ -149,14 +157,23 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
       </Group>
 
       <div style={{ overflowX: "auto", paddingBottom: 4 }}>
-        <div ref={containerRef} style={{ position: "relative", display: "inline-block", minWidth: "100%" }}>
+        <div
+          ref={containerRef}
+          style={{ position: "relative", display: "inline-block", minWidth: "100%" }}
+        >
           <svg
             width={svgSize.width}
             height={svgSize.height}
             style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
           >
             {edges.map((e) => (
-              <path key={e.id} d={e.d} stroke="var(--mantine-color-dark-4)" strokeWidth={1.5} fill="none" />
+              <path
+                key={e.id}
+                d={e.d}
+                stroke="var(--mantine-color-dark-4)"
+                strokeWidth={1.5}
+                fill="none"
+              />
             ))}
           </svg>
 
@@ -253,8 +270,8 @@ export function DependencyFlow() {
       <div>
         <SectionHeading>flow</SectionHeading>
         <Text c="dimmed" size="sm" mt={4}>
-          Every command across every profile, and what it waits on — an edge means "must be healthy before this
-          starts." Solid boxes are live right now; dashed ones aren't running.
+          Every command across every profile, and what it waits on — an edge means "must be healthy
+          before this starts." Solid boxes are live right now; dashed ones aren't running.
         </Text>
       </div>
 

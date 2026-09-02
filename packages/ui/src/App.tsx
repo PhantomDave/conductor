@@ -86,9 +86,7 @@ export default function App() {
 
   return (
     <AppShell header={{ height: 52 }} navbar={{ width: 260, breakpoint: "sm" }} padding="sm">
-      <AppShell.Header
-        style={{ borderBottom: "1px solid var(--mantine-color-dark-6)" }}
-      >
+      <AppShell.Header style={{ borderBottom: "1px solid var(--mantine-color-dark-6)" }}>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="xs">
             <ConductorMark size={20} />
