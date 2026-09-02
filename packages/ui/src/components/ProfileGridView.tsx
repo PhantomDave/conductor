@@ -11,7 +11,7 @@ import {
   TextInput,
   Textarea,
 } from "@mantine/core";
-import { IconPlayerPlay, IconSettings } from "@tabler/icons-react";
+import { IconPlus, IconSettings } from "@tabler/icons-react";
 import { Checkbox } from "@mantine/core";
 import type { CommandInfo } from "../lib/api";
 import { useProfiles } from "../hooks/useProfiles";
@@ -185,7 +185,7 @@ export function ProfileGridView() {
           <Button
             size="xs"
             variant="light"
-            leftSection={<IconPlayerPlay size={14} />}
+            leftSection={<IconPlus size={14} />}
             onClick={() => setCreateModalOpen(true)}
           >
             New Profile
@@ -197,7 +197,7 @@ export function ProfileGridView() {
             <Stack gap="md">
               <Text c="dimmed">No profiles configured yet. Create one to get started.</Text>
               <Button
-                leftSection={<IconPlayerPlay size={16} />}
+                leftSection={<IconPlus size={16} />}
                 fullWidth
                 onClick={() => setCreateModalOpen(true)}
               >
@@ -230,6 +230,7 @@ export function ProfileGridView() {
                 onDelete={(profileName) => setConfirmTarget(profileName)}
                 onExport={handleExportProfile}
                 onRun={() => handleRunProfile(name)}
+                isRunning={runMutation.isPending && runMutation.variables === name}
               />
             ))}
           </SimpleGrid>

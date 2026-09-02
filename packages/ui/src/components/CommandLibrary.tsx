@@ -10,8 +10,9 @@ import {
   SimpleGrid,
   Stack,
   Text,
+  TextInput,
 } from "@mantine/core";
-import { IconFolder, IconPlus } from "@tabler/icons-react";
+import { IconFolder, IconPlus, IconSearch } from "@tabler/icons-react";
 import { useCommandLibrary } from "../hooks/useCommandLibrary";
 import { useProcesses } from "../hooks/useProcesses";
 import { CommandForm } from "./CommandForm";
@@ -45,6 +46,7 @@ export function CommandLibrary() {
   >(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   // Auto-open the add form when the sidebar's "New Command" quick action navigates here.
   useEffect(() => {
@@ -78,10 +80,20 @@ export function CommandLibrary() {
   ];
   const activeCategory =
     selectedCategory && categories.includes(selectedCategory) ? selectedCategory : DEFAULT_CATEGORY;
-  const visibleCommands =
+  const query = search.trim().toLowerCase();
+  const categoryCommands =
     activeCategory === DEFAULT_CATEGORY
       ? flatCommands
       : flatCommands.filter((command) => commandCategories(command).includes(activeCategory));
+  // A search query searches every command regardless of the selected category.
+  const visibleCommands = query
+    ? flatCommands.filter(
+        (cmd) =>
+          cmd.name.toLowerCase().includes(query) ||
+          cmd.id.toLowerCase().includes(query) ||
+          cmd.description?.toLowerCase().includes(query),
+      )
+    : categoryCommands;
 
   const isRunning = (commandId: string): boolean =>
     processes.data?.some(
@@ -90,17 +102,28 @@ export function CommandLibrary() {
 
   return (
     <Stack gap="sm">
-      {/* Add command button */}
-      <Button
-        leftSection={<IconPlus size={14} />}
-        variant="light"
-        onClick={() => {
-          setFormOpen(true);
-          setEditState(null);
-        }}
-      >
-        Add command
-      </Button>
+      <Group justify="space-between" wrap="wrap">
+        <Button
+          leftSection={<IconPlus size={14} />}
+          variant="light"
+          onClick={() => {
+            setFormOpen(true);
+            setEditState(null);
+          }}
+        >
+          Add command
+        </Button>
+
+        {flatCommands.length > 0 && (
+          <TextInput
+            placeholder="Search commands..."
+            leftSection={<IconSearch size={14} />}
+            value={search}
+            onChange={(e) => setSearch(e.currentTarget.value)}
+            w={{ base: "100%", xs: 280 }}
+          />
+        )}
+      </Group>
 
       {flatCommands.length === 0 ? (
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
@@ -136,28 +159,34 @@ export function CommandLibrary() {
             <Stack gap="sm">
               <Group justify="space-between" align="center">
                 <div>
-                  <Text fw={700}>{activeCategory}</Text>
+                  <Text fw={700}>{query ? "Search results" : activeCategory}</Text>
                   <Text size="xs" c="dimmed">
                     {visibleCommands.length} command{visibleCommands.length === 1 ? "" : "s"}
                   </Text>
                 </div>
               </Group>
-              <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
-                {visibleCommands.map((cmd) => (
-                  <CommandCard
-                    key={cmd.id}
-                    command={cmd}
-                    isRunning={isRunning(cmd.id)}
-                    isExecuting={execute.isPending && execute.variables?.commandId === cmd.id}
-                    onRun={() => execute.mutate({ profile: "__global__", commandId: cmd.id })}
-                    onEdit={() => {
-                      setFormOpen(true);
-                      setEditState(cmd);
-                    }}
-                    onDelete={(id) => setDeleteConfirm(id)}
-                  />
-                ))}
-              </SimpleGrid>
+              {visibleCommands.length === 0 ? (
+                <Card withBorder padding="lg">
+                  <Text c="dimmed">No commands match "{search}".</Text>
+                </Card>
+              ) : (
+                <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+                  {visibleCommands.map((cmd) => (
+                    <CommandCard
+                      key={cmd.id}
+                      command={cmd}
+                      isRunning={isRunning(cmd.id)}
+                      isExecuting={execute.isPending && execute.variables?.commandId === cmd.id}
+                      onRun={() => execute.mutate({ profile: "__global__", commandId: cmd.id })}
+                      onEdit={() => {
+                        setFormOpen(true);
+                        setEditState(cmd);
+                      }}
+                      onDelete={(id) => setDeleteConfirm(id)}
+                    />
+                  ))}
+                </SimpleGrid>
+              )}
             </Stack>
           </Box>
         </Group>

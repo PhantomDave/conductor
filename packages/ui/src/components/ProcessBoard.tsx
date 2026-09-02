@@ -140,9 +140,15 @@ export function ProcessBoard() {
     );
   }
 
-  // Filter processes by status
+  // Filter processes by status. "failed" gets its own tab rather than being
+  // lumped into "queued" (starting/stopping) — a crashed service belongs
+  // next to a badge you'd actually notice, not one that reads as "about to
+  // start."
   const runningProcesses = processes.filter((p) => p.status === "running");
-  const queuedProcesses = processes.filter((p) => p.status !== "running" && p.status !== "stopped");
+  const queuedProcesses = processes.filter(
+    (p) => p.status === "starting" || p.status === "stopping",
+  );
+  const failedProcesses = processes.filter((p) => p.status === "failed");
   const stoppedProcesses = processes.filter((p) => p.status === "stopped");
 
   return (
@@ -153,6 +159,16 @@ export function ProcessBoard() {
         </Tabs.Tab>
         <Tabs.Tab value="queued" rightSection={<Badge>{queuedProcesses.length}</Badge>}>
           Queued
+        </Tabs.Tab>
+        <Tabs.Tab
+          value="failed"
+          rightSection={
+            <Badge color={failedProcesses.length > 0 ? "red" : undefined}>
+              {failedProcesses.length}
+            </Badge>
+          }
+        >
+          Failed
         </Tabs.Tab>
         <Tabs.Tab value="stopped" rightSection={<Badge>{stoppedProcesses.length}</Badge>}>
           Recent
@@ -170,6 +186,14 @@ export function ProcessBoard() {
       <Tabs.Panel value="queued" pt="md">
         <ProcessTable
           processes={queuedProcesses}
+          stopProcess={stopProcess}
+          restartCommand={restartCommand}
+        />
+      </Tabs.Panel>
+
+      <Tabs.Panel value="failed" pt="md">
+        <ProcessTable
+          processes={failedProcesses}
           stopProcess={stopProcess}
           restartCommand={restartCommand}
         />
