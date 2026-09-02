@@ -30,7 +30,7 @@ async function fetchLogs(params: URLSearchParams): Promise<LogEntry[]> {
   try {
     const res = await fetch(`${CORE_URL}/api/logs?${params.toString()}`);
     if (!res.ok) {
-      const body = await res.json().catch(() => null);
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
       throw new Error(body?.error ?? `HTTP ${res.status}`);
     }
     const data = (await res.json()) as { logs?: LogEntry[] };
@@ -79,8 +79,17 @@ export function registerLogsCommand(program: import("commander").Command) {
 
         if (!opts.follow) return;
 
-        const streamParams = new URLSearchParams(params);
-        const source = new EventSource(`${CORE_URL}/api/logs/stream?${streamParams.toString()}`);
+        // The global EventSource constructor's argument count varies depending
+        // on which of the workspace's several @types/node / bun-types versions
+        // ends up resolved for this file, so type it explicitly here rather
+        // than fight that ambient overload resolution - Bun provides a real
+        // EventSource at runtime regardless of which types package "wins".
+        const EventSourceCtor = EventSource as unknown as new (url: string) => {
+          addEventListener(type: "log", listener: (event: MessageEvent) => void): void;
+          onerror: (() => void) | null;
+          close(): void;
+        };
+        const source = new EventSourceCtor(`${CORE_URL}/api/logs/stream?${params.toString()}`);
 
         source.addEventListener("log", (event) => {
           try {

@@ -6,7 +6,7 @@ async function fetchJson(path: string, init?: RequestInit) {
   try {
     const res = await fetch(`${CORE_URL}${path}`, init);
     if (!res.ok) {
-      const body = await res.json().catch(() => null);
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
       throw new Error(body?.error ?? `HTTP ${res.status}`);
     }
     return await res.json();

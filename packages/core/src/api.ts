@@ -942,9 +942,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
         reply.raw.write(`event: log\ndata: ${JSON.stringify(row)}\n\n`);
       }
     } else {
-      const history = deps.queries
-        .queryLogs({ commandId, profile, level, grep, limit })
-        .reverse();
+      const history = deps.queries.queryLogs({ commandId, profile, level, grep, limit }).reverse();
       for (const row of history) {
         reply.raw.write(`event: log\ndata: ${JSON.stringify(row)}\n\n`);
       }

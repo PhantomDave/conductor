@@ -97,10 +97,10 @@ All env vars are stored in SQLite's `env_vars` table. The API supports per-scope
 
 Log querying returns the latest entries in reverse chronological order, capped at 500 lines per PID. The SSE stream replays those last 500 lines first (so the UI doesn't start empty), then tails new lines in real-time with 15-second heartbeats for connection health checking.
 
-| Method | Path                    | Query Params                   | Description                                                                                                                                                                                                                                                     |
-| ------ | ----------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/logs`             | `?pid&commandId&profile&level&grep&limit` | Returns `{ logs: [...] }` filtered by PID, command ID, profile, level, and/or grep substring; invalid numeric params return 400. |
-| GET    | `/api/logs/stream`      | SSE (Server-Sent Events)       | `EventSource("http://localhost:4000/api/logs/stream?pid=123")` replays recent history first (default 500, configurable via `limit`) and then tails live log events; supports `pid`, `commandId`, `profile`, `level`, and `grep` filters. |
+| Method | Path               | Query Params                              | Description                                                                                                                                                                                                                              |
+| ------ | ------------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/logs`        | `?pid&commandId&profile&level&grep&limit` | Returns `{ logs: [...] }` filtered by PID, command ID, profile, level, and/or grep substring; invalid numeric params return 400.                                                                                                         |
+| GET    | `/api/logs/stream` | SSE (Server-Sent Events)                  | `EventSource("http://localhost:4000/api/logs/stream?pid=123")` replays recent history first (default 500, configurable via `limit`) and then tails live log events; supports `pid`, `commandId`, `profile`, `level`, and `grep` filters. |
 
 ### Configuration Management
 
@@ -116,7 +116,7 @@ Config and schema-level operations include import/export of `.conductor.yml` fil
 | GET    | `/api/shells`               | —                                       | Return available shell info (POSIX `$SHELL` or Windows `%COMSPEC%`)                                                                                                                                                   |
 | PUT    | `/api/shells`               | `{ default: string }`                   | Override the system shell for spawned subprocesses                                                                                                                                                                    |
 | POST   | `/api/docker-compose/parse` | `{ yaml }`                              | Parse docker-compose YAML → suggest matching `commands[]` array (one command per service, with healthchecks auto-generated as `port` or `http` based on exposed port ranges)                                          |
-| POST   | `/api/docker compose/parse` | `{ yaml }`                              | Legacy alias for backward compatibility (use `/api/docker-compose/parse` for new clients)                                                                                                                               |
+| POST   | `/api/docker compose/parse` | `{ yaml }`                              | Legacy alias for backward compatibility (use `/api/docker-compose/parse` for new clients)                                                                                                                             |
 
 ## WebSocket Note
 
