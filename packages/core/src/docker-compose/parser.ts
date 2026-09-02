@@ -36,10 +36,19 @@ export interface SuggestedCommand {
  * nothing in the string matches a recognized unit.
  */
 function parseDurationToMs(duration?: string): number | undefined {
-  if (!duration) return undefined;
+  if (!duration || duration.trim().startsWith("-")) return undefined;
 
-  const unitMs: Record<string, number> = { h: 3_600_000, m: 60_000, s: 1_000 };
-  const re = /(\d+(?:\.\d+)?)(h|m|s)/g;
+  // Longer unit suffixes ("ms", "us", "ns") must be checked before their
+  // single-character prefixes ("m", "s", "n") or "500ms" would match "500m".
+  const unitMs: Record<string, number> = {
+    h: 3_600_000,
+    m: 60_000,
+    s: 1_000,
+    ms: 1,
+    us: 0.001,
+    ns: 0.000001,
+  };
+  const re = /(\d+(?:\.\d+)?)(ms|us|ns|h|m|s)/g;
   let totalMs = 0;
   let matchedAny = false;
   let match: RegExpExecArray | null;

@@ -143,6 +143,21 @@ describe("suggestCommand - explicit healthcheck", () => {
     expect(suggestion.healthcheck?.interval_ms).toBe(1000);
   });
 
+  test("does not mistake a 'ms' suffix for minutes", () => {
+    const suggestion = suggestCommand("api", {
+      healthcheck: { test: ["CMD", "true"], interval: "500ms", timeout: "1s500ms" },
+    });
+    expect(suggestion.healthcheck?.interval_ms).toBe(500);
+    expect(suggestion.healthcheck?.timeout_ms).toBe(1_500);
+  });
+
+  test("falls back to defaults for a negative duration instead of throwing", () => {
+    const suggestion = suggestCommand("api", {
+      healthcheck: { test: ["CMD", "true"], interval: "-5s" },
+    });
+    expect(suggestion.healthcheck?.interval_ms).toBe(1000);
+  });
+
   test("defaults retries to 30 when the compose service doesn't specify one", () => {
     const suggestion = suggestCommand("api", {
       healthcheck: { test: ["CMD", "true"] },
