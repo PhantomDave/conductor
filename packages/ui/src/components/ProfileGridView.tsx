@@ -26,6 +26,7 @@ import {
 } from "../hooks/useConfig";
 import { useCommandLibrary } from "../hooks/useCommandLibrary";
 import { ProfileCard } from "./ProfileCard";
+import { SectionHeading } from "./SectionHeading";
 import { useUiStore } from "../store/ui";
 
 export function ProfileGridView() {
@@ -179,9 +180,9 @@ export function ProfileGridView() {
     <>
       <Stack gap="lg">
         <Group justify="space-between" align="center">
-          <Text fw={600} size="md">
-            Profiles ({profileEntries.length})
-          </Text>
+          <div style={{ flex: 1 }}>
+            <SectionHeading right={`${profileEntries.length}`}>profiles</SectionHeading>
+          </div>
           <Button
             size="xs"
             variant="light"
@@ -499,7 +500,7 @@ function CommandsModal({
         {commands.length === 0 ? (
           <Text c="dimmed">This profile has no commands yet.</Text>
         ) : (
-          <Table withTableBorder withColumnBorders striped variant="cover">
+          <Table withTableBorder withColumnBorders highlightOnHover variant="cover">
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>ID</Table.Th>

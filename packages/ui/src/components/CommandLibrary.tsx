@@ -17,6 +17,7 @@ import { useCommandLibrary } from "../hooks/useCommandLibrary";
 import { useProcesses } from "../hooks/useProcesses";
 import { CommandForm } from "./CommandForm";
 import { CommandCard } from "./CommandCard";
+import { SectionHeading } from "./SectionHeading";
 import { useExecuteCommand } from "../hooks/useProcessActions";
 import { useUiStore } from "../store/ui";
 
@@ -102,6 +103,7 @@ export function CommandLibrary() {
 
   return (
     <Stack gap="sm">
+      <SectionHeading>commands</SectionHeading>
       <Group justify="space-between" wrap="wrap">
         <Button
           leftSection={<IconPlus size={14} />}

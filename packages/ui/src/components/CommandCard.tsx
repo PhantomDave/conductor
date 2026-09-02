@@ -58,10 +58,10 @@ export function CommandCard({
         {/* Header */}
         <Stack gap={4}>
           <Group gap={6} wrap="nowrap">
-            <ThemeIcon size="sm" variant="light" radius="md" color="blue">
+            <ThemeIcon size="sm" variant="light" radius="md" color="green">
               <IconBox size={14} />
             </ThemeIcon>
-            <Text fw={600} size="sm" c="blue" lineClamp={1}>
+            <Text fw={600} size="sm" c="green" lineClamp={1}>
               {command.name}
             </Text>
           </Group>
@@ -75,7 +75,7 @@ export function CommandCard({
             </Group>
           )}
           {command.healthcheck && command.healthcheck.type !== "none" && (
-            <Badge size="xs" variant="dot" color="blue">
+            <Badge size="xs" variant="dot" color="green">
               health
             </Badge>
           )}

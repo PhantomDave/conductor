@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ProcessInfo } from "../lib/api";
 
-export type UiView = "processes" | "profiles" | "commands" | "environment";
+export type UiView = "processes" | "flow" | "profiles" | "commands" | "environment";
 
 /** Identifies a command's process regardless of its current pid, so the
  * selection survives a restart (which always assigns a new pid). */

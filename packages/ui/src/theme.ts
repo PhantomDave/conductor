@@ -1,31 +1,32 @@
 import type { MantineThemeOverride } from "@mantine/core";
 
 /**
- * Dark theme customization for Conductor UI.
- * Provides a modern, professional appearance inspired by GitHub and VSCode with:
- * - System font stack (no web fonts)
- * - Increased spacing and padding
- * - 8px border radius for modern cards
+ * Terminal-inspired theme for Conductor UI.
+ * - Monospace stack throughout (this is a process/log tool — lean into it)
+ * - Sharp, near-zero corners
  * - WCAG AA contrast compliance (4.5:1 for normal text, 3:1 for large text)
- * - Subtle shadows and transitions for depth
- * - GitHub/VSCode-inspired color palette
+ * - Phosphor-green primary, amber/red status accents
  */
-export const conductorTheme: MantineThemeOverride = {
-  primaryColor: "blue",
+const MONO_STACK =
+  'ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace';
 
-  fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
+export const conductorTheme: MantineThemeOverride = {
+  primaryColor: "green",
+  primaryShade: { light: 6, dark: 5 },
+
+  fontFamily: MONO_STACK,
 
   headings: {
-    fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
+    fontFamily: MONO_STACK,
     fontWeight: "600",
   },
 
   fontSizes: {
     xs: "11px",
     sm: "12px",
-    md: "14px",
-    lg: "16px",
-    xl: "20px",
+    md: "13px",
+    lg: "15px",
+    xl: "19px",
   },
 
   lineHeights: {
@@ -45,13 +46,13 @@ export const conductorTheme: MantineThemeOverride = {
     xl: "32px",
   },
 
-  // 8px border radius for modern cards
+  // Sharp, terminal-window corners instead of soft cards
   radius: {
-    xs: "4px",
-    sm: "6px",
-    md: "8px",
-    lg: "12px",
-    xl: "16px",
+    xs: "0px",
+    sm: "0px",
+    md: "2px",
+    lg: "3px",
+    xl: "5px",
   },
 
   shadows: {
@@ -67,16 +68,13 @@ export const conductorTheme: MantineThemeOverride = {
       defaultProps: {
         radius: "md",
         p: "md",
-        shadow: "sm",
+        shadow: "none",
       },
       styles: {
         root: {
-          borderColor: "rgba(208, 215, 222, 0.1)",
+          borderColor: "var(--mantine-color-dark-5)",
           borderWidth: 1,
-          transition: "box-shadow 200ms ease, border-color 200ms ease",
-          "&:hover": {
-            boxShadow: "0 3px 12px rgba(0, 0, 0, 0.45)",
-          },
+          transition: "border-color 200ms ease",
         },
       },
     },
@@ -88,21 +86,21 @@ export const conductorTheme: MantineThemeOverride = {
         root: {
           fontWeight: 500,
           transition: "all 200ms ease",
-          "&:active": {
-            transform: "translateY(1px)",
-          },
         },
       },
     },
     Badge: {
       defaultProps: {
-        radius: "md",
+        radius: "sm",
         size: "sm",
       },
       styles: {
         root: {
           fontWeight: 500,
           fontSize: "11px",
+          textTransform: "none",
+          letterSpacing: 0,
+          padding: "2px 8px",
         },
       },
     },
@@ -112,16 +110,9 @@ export const conductorTheme: MantineThemeOverride = {
       },
       styles: {
         input: {
-          borderColor: "rgba(208, 215, 222, 0.15)",
-          backgroundColor: "rgba(13, 17, 23, 0.5)",
+          borderColor: "var(--mantine-color-dark-4)",
+          backgroundColor: "var(--mantine-color-dark-9)",
           transition: "border-color 200ms ease, background-color 200ms ease",
-          "&:focus": {
-            borderColor: "rgba(88, 166, 255, 0.5)",
-            backgroundColor: "rgba(13, 17, 23, 0.8)",
-          },
-          "&::placeholder": {
-            color: "rgba(139, 148, 155, 0.6)",
-          },
         },
       },
     },
@@ -150,84 +141,134 @@ export const conductorTheme: MantineThemeOverride = {
         },
       },
     },
+    Table: {
+      defaultProps: {
+        verticalSpacing: 6,
+        horizontalSpacing: "sm",
+      },
+      styles: {
+        table: {
+          fontSize: "13px",
+        },
+        th: {
+          borderColor: "var(--mantine-color-dark-6)",
+          color: "var(--mantine-color-dark-3)",
+          fontWeight: 600,
+          fontSize: "11px",
+          textTransform: "uppercase",
+          letterSpacing: "0.03em",
+        },
+        td: {
+          borderColor: "var(--mantine-color-dark-6)",
+        },
+        tr: {
+          transition: "background-color 150ms ease",
+        },
+      },
+    },
+    Modal: {
+      defaultProps: {
+        radius: "md",
+        centered: true,
+        overlayProps: { backgroundOpacity: 0.7, blur: 0 },
+      },
+      styles: {
+        content: {
+          border: "1px solid var(--mantine-color-dark-5)",
+        },
+        header: {
+          borderBottom: "1px solid var(--mantine-color-dark-6)",
+        },
+      },
+    },
+    Menu: {
+      defaultProps: {
+        radius: "md",
+      },
+      styles: {
+        dropdown: {
+          border: "1px solid var(--mantine-color-dark-5)",
+        },
+      },
+    },
+    Tooltip: {
+      defaultProps: {
+        radius: "sm",
+      },
+    },
+    Notification: {
+      styles: {
+        root: {
+          border: "1px solid var(--mantine-color-dark-5)",
+        },
+      },
+    },
   },
 
-  // GitHub Dark-inspired color palette
-  // Base: #0d1117, Secondary: #161b22, Tertiary: #21262d
+  // Terminal-inspired palette. Base: #080a08, phosphor accent: #4ade80
   colors: {
     dark: [
-      "#e6edf3", // 0 - very light text, high contrast
-      "#c9d1d9", // 1 - secondary text
-      "#8b949e", // 2 - tertiary text
-      "#6e7681", // 3 - muted text
-      "#484f58", // 4 - border/subtle
-      "#30363d", // 5 - secondary bg
-      "#21262d", // 6 - tertiary bg
-      "#161b22", // 7 - secondary bg (used for raised elements)
-      "#0d1117", // 8 - main bg
-      "#010409", // 9 - darkest
+      "#e8f0e8", // 0 - very light text, high contrast
+      "#c9d1c9", // 1 - secondary text
+      "#a8b5a8", // 2 - tertiary text
+      "#7d8a7d", // 3 - muted text (~5.5:1 on base bg, passes AA)
+      "#3a453a", // 4 - border/subtle
+      "#232923", // 5 - secondary bg
+      "#1a1f1a", // 6 - hairlines / tertiary bg
+      "#0f130f", // 7 - raised bg (sidebar, cards, hover)
+      "#080a08", // 8 - main bg
+      "#040504", // 9 - darkest
     ],
-    // VSCode-inspired blue for primary action
-    blue: [
-      "#ddf4ff",
-      "#b6e3ff",
-      "#80c7ff",
-      "#54aeff",
-      "#3898ff",
-      "#1f6feb",
-      "#1158ca",
-      "#0860ca",
-      "#033d8b",
-      "#0a3069",
-    ],
-    // Status colors with WCAG AA compliance
+    // Phosphor green — primary accent and "healthy/running" status
     green: [
-      "#d3f688",
-      "#b3e635",
-      "#94d82d",
-      "#74c000",
-      "#5c940d",
-      "#4c6e1f",
-      "#3c5a1f",
-      "#2f4f20",
-      "#234d1e",
-      "#1a3a1a",
+      "#eafff2",
+      "#c9f9dc",
+      "#a3f0c0",
+      "#7de8a4",
+      "#5ee08c",
+      "#4ade80", // 5 - primary shade (dark scheme)
+      "#34bf6a",
+      "#239954",
+      "#147a3f",
+      "#0a5c2d",
     ],
-    red: [
-      "#ffdcd7",
-      "#ffb4af",
-      "#ff7674",
-      "#ff5757",
-      "#f85149",
-      "#da3633",
-      "#b62324",
-      "#8b2c2c",
-      "#67060c",
-      "#490202",
-    ],
+    // Amber — "starting/queued" status
     yellow: [
-      "#fff8c5",
-      "#fff3a3",
-      "#ffd960",
-      "#f9c513",
-      "#eac54f",
-      "#d29922",
-      "#a97700",
-      "#845c0f",
-      "#6c4410",
-      "#4d2d0c",
+      "#fff6df",
+      "#ffe7ad",
+      "#ffd67a",
+      "#ffc44a",
+      "#fbb52e",
+      "#f5a623", // 5
+      "#d38a15",
+      "#a86c10",
+      "#7d500c",
+      "#523408",
+    ],
+    // Red — "failed/unhealthy" status
+    red: [
+      "#ffe3e0",
+      "#ffbdb8",
+      "#ff8f89",
+      "#f66a63",
+      "#ea544c",
+      "#e5484d", // 5
+      "#c93a3e",
+      "#a52f32",
+      "#7a2224",
+      "#4d1517",
     ],
     gray: [
-      "#f6f8fa",
-      "#eaeef2",
-      "#d0d7de",
-      "#b1bac4",
-      "#848d97",
-      "#57606a",
-      "#424a53",
-      "#32383f",
-      "#24292f",
-      "#0d1117",
+      "#f4f7f4",
+      "#e2e8e2",
+      "#c7d0c7",
+      "#a8b5a8",
+      "#7d8a7d",
+      "#5b6a5b",
+      "#454f45",
+      "#323a32",
+      "#232923",
+      "#0f130f",
     ],
   },
 

@@ -173,7 +173,7 @@ export function LogViewer({ process }: { process: ProcessInfo }) {
           <ActionIcon
             size="lg"
             variant={autoScroll ? "filled" : "default"}
-            color={autoScroll ? "blue" : "gray"}
+            color={autoScroll ? "green" : "gray"}
             onClick={() => {
               setAutoScroll(true);
               viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight });

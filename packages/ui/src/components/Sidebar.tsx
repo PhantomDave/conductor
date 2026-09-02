@@ -7,6 +7,7 @@ import {
   IconPlayerStop,
   IconPlus,
   IconSettings,
+  IconSitemap,
   IconTerminal2,
   IconUsersGroup,
 } from "@tabler/icons-react";
@@ -23,6 +24,18 @@ const STATUS_COLOR: Record<string, string> = {
   stopped: "gray",
   failed: "red",
 };
+
+// "# running"-style section label, matching SectionHeading's comment
+// convention on the rest of the app — kept local since the sidebar's
+// narrow column doesn't want SectionHeading's fill-width divider.
+function SidebarLabel({ children }: { children: string }) {
+  return (
+    <Text size="xs" fw={700} px="xs" pt="xs" pb={2}>
+      <span style={{ color: "var(--mantine-color-green-5)" }}>#</span>{" "}
+      <span style={{ color: "var(--mantine-color-dark-3)" }}>{children}</span>
+    </Text>
+  );
+}
 
 export function Sidebar() {
   const { data: processes } = useProcesses();
@@ -48,6 +61,12 @@ export function Sidebar() {
           onClick={() => setView("processes")}
         />
         <NavLink
+          label="Flow"
+          leftSection={<IconSitemap size={16} />}
+          active={view === "flow" && !selectedProcessKey}
+          onClick={() => setView("flow")}
+        />
+        <NavLink
           label="Profiles"
           leftSection={<IconUsersGroup size={16} />}
           active={view === "profiles" && !selectedProcessKey}
@@ -70,9 +89,7 @@ export function Sidebar() {
       <Divider />
 
       <ScrollArea flex={1} p="xs">
-        <Text size="xs" fw={700} c="dimmed" px="xs" pt="xs">
-          RUNNING
-        </Text>
+        <SidebarLabel>running</SidebarLabel>
         {active.length === 0 && (
           <Text size="xs" c="dimmed" px="xs" py={4}>
             Nothing running
@@ -96,9 +113,7 @@ export function Sidebar() {
 
         <Divider my="xs" />
 
-        <Text size="xs" fw={700} c="dimmed" px="xs" pt="xs">
-          QUICK ACTIONS
-        </Text>
+        <SidebarLabel>quick actions</SidebarLabel>
         <NavLink
           label="Command library"
           description="Run or edit saved commands"
@@ -128,9 +143,7 @@ export function Sidebar() {
         {profileNames.length > 0 && (
           <>
             <Divider my="xs" />
-            <Text size="xs" fw={700} c="dimmed" px="xs" pt="xs">
-              PROFILES
-            </Text>
+            <SidebarLabel>profiles</SidebarLabel>
             {profileNames.map((name) => (
               <NavLink
                 key={name}
@@ -158,9 +171,7 @@ export function Sidebar() {
 
         {finished.length > 0 && (
           <>
-            <Text size="xs" fw={700} c="dimmed" px="xs" pt="md">
-              RECENT
-            </Text>
+            <SidebarLabel>recent</SidebarLabel>
             {finished.slice(0, 10).map((p) => (
               <NavLink
                 key={`${p.profile}/${p.commandId}`}
