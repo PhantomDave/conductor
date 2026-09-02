@@ -17,16 +17,28 @@ import { CommandSchema, type CommandConfig } from "../src/config/schema";
 function makeCommand(
   overrides: Partial<CommandConfig> & { id: string; name: string; run: string },
 ): CommandConfig {
-  return CommandSchema.parse({ shell: false, ...overrides });
+  // See the identical comment in wrapper.test.ts: on Windows, killTree's
+  // graceful (non-SIGKILL) path is a no-op for a plain background process,
+  // so every stop burns the full stop_timeout_ms budget before falling
+  // through to SIGKILL. Default it short so that pre-existing (if
+  // unfortunate) behavior still finishes inside bun:test's own 5000ms
+  // per-test timeout.
+  return CommandSchema.parse({ shell: false, stop_timeout_ms: 500, ...overrides });
 }
 
-/** Writes a JS script to a temp file and returns a `bun "<path>"` command string. */
+/**
+ * Writes a JS script to a temp file and returns a `bun <path>` command
+ * string. Deliberately unquoted: CI temp dirs never contain a space, and
+ * wrapping the path in quotes would just reintroduce a quote character for
+ * cmd.exe's /c parsing to mangle - the whole point is a single argv element
+ * with no quote characters in it at all.
+ */
 function writeScript(code: string): { command: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "conductor-queue-script-"));
   const scriptPath = join(dir, "script.js");
   writeFileSync(scriptPath, code);
   return {
-    command: `bun "${scriptPath}"`,
+    command: `bun ${scriptPath}`,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };
 }

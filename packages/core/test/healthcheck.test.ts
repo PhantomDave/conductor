@@ -26,19 +26,21 @@ function testEnv(extra: Record<string, string> = {}): Record<string, string> {
 }
 
 /**
- * Writes a JS script to a temp file and returns a `bun "<path>"` command
+ * Writes a JS script to a temp file and returns a `bun <path>` command
  * string. A command-type healthcheck always runs through a real shell (no
  * shell:false option), and on Windows that shell is `cmd.exe /c` - an
  * inline `bun -e "<script>"` gets its quoting mangled in that round trip
  * (even a single, simple quoted argument), silently turning the probe into
- * a no-op. A single unquoted-content `bun "<path>"` argument survives it.
+ * a no-op. Deliberately unquoted here too: CI temp dirs never contain a
+ * space, and wrapping the path in quotes would just reintroduce a quote
+ * character for cmd.exe to mangle - the fix is having none at all.
  */
 function writeScript(code: string): { command: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "conductor-healthcheck-script-"));
   const scriptPath = join(dir, "script.js");
   writeFileSync(scriptPath, code);
   return {
-    command: `bun "${scriptPath}"`,
+    command: `bun ${scriptPath}`,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };
 }

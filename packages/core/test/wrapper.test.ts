@@ -24,16 +24,34 @@ import { CommandSchema, type CommandConfig } from "../src/config/schema";
 function makeCommand(
   overrides: Partial<CommandConfig> & { id: string; name: string; run: string },
 ): CommandConfig {
-  return CommandSchema.parse({ shell: false, ...overrides });
+  // stop_timeout_ms defaults short: on Windows, killTree's graceful (non
+  // SIGKILL) path shells out to `taskkill /pid <pid> /T` without `/F`, which
+  // is a no-op for a plain background process with no console-control
+  // handler - the process never actually exits from it, so stop() always
+  // burns the full stop_timeout_ms budget before falling through to a real
+  // SIGKILL. At the 5000ms schema default that collides with bun:test's own
+  // 5000ms per-test timeout. This is a pre-existing production behavior
+  // (Windows stops/restarts really do take ~stop_timeout_ms every time,
+  // graceful or not), not something these tests should paper over by
+  // asserting a fast stop - just keep the budget short enough that the
+  // already-correct-but-slow fallback still finishes inside the test
+  // timeout. Tests that care about the timeout value itself override it.
+  return CommandSchema.parse({ shell: false, stop_timeout_ms: 500, ...overrides });
 }
 
-/** Writes a JS script to a temp file and returns a `bun "<path>"` command string. */
+/**
+ * Writes a JS script to a temp file and returns a `bun <path>` command
+ * string. Deliberately unquoted: CI temp dirs never contain a space, and
+ * wrapping the path in quotes would just reintroduce a quote character for
+ * cmd.exe's /c parsing to mangle - the whole point is a single argv element
+ * with no quote characters in it at all.
+ */
 function writeScript(code: string): { command: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "conductor-wrapper-script-"));
   const scriptPath = join(dir, "script.js");
   writeFileSync(scriptPath, code);
   return {
-    command: `bun "${scriptPath}"`,
+    command: `bun ${scriptPath}`,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };
 }
