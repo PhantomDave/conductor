@@ -125,8 +125,8 @@ Conductor configs are YAML files starting at the root with two top-level section
 | `conductor env get <profile> <key>`       | Read an env var (from `.env.<profile>.local`)                      |
 | `conductor env set <profile> <key> <val>` | Write an env var into `.env.<profile>.local`                       |
 | `conductor ps`                            | List all running processes (hits API at :4000)                     |
-| `conductor logs [--follow]`               | View process logs (stub — SQL layer exists, UI wired only)         |
-| `conductor stop <profile>`                | Stub — use Ctrl+C for now                                          |
+| `conductor logs [--follow]`               | Query or stream logs from the core API (supports filters)          |
+| `conductor stop <profile>`                | Gracefully stop all processes in a profile via core API            |
 
 Full reference: [CLI.md](./docs/CLI.md)
 

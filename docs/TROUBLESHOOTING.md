@@ -67,7 +67,7 @@ This usually means a dependency failed before your command could be started. Che
 
 ```bash
 conductor ps           # shows current process states
-conductor logs api     # view specific command's log lines
+conductor logs --command api     # view specific command's log lines
 ```
 
 ## Health Check Issues
@@ -152,9 +152,16 @@ tasklist | findstr "conductor"           # find process PID
 taskkill /pid <PID> /f                   # force kill
 ```
 
-### Logs command shows only a stub message
+### Logs command cannot connect
 
-The `logs` CLI command currently prints "coming soon" rather than querying SQLite. The database layer for logs (querying via ConductorQueries and the SSE stream at `/api/logs/stream/:pid`) exists but is not wired into the terminal CLI output yet. Use the Web Dashboard's **LogViewer** panel to see live logs via SSE.
+The CLI logs command now queries the API directly. If it fails, verify core is reachable and your API URL is correct:
+
+```bash
+conductor ps
+CONDUCTOR_API_URL=http://localhost:4000 conductor logs --limit 20
+```
+
+For live tails, `conductor logs --follow` uses SSE at `/api/logs/stream`.
 
 ## Desktop App Issues
 
@@ -173,7 +180,7 @@ The sidecar must be in `packages/core/dist-bin/conductor-server` before the desk
 
 ### docker compose YAML fails to parse
 
-If `/api/docker compose/parse` returns errors about service configuration, check:
+If `/api/docker-compose/parse` returns errors about service configuration, check:
 
 - The YAML is valid (run `docker-compose config`)
 - At least one `ports` field maps a host-port for healthcheck detection

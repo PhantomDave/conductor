@@ -100,7 +100,7 @@ Each spawned process is wrapped in `ProcessWrapper` which tracks: pid, status, e
 
 ### SSE Log Streaming
 
-The broadcaster at `packages/core/src/logs/broadcaster.ts` uses a pub/sub pattern keyed by PID. Every log write from ProcessWrapper goes through `broadcaster.publish(pid, line)`. The endpoint `/api/logs/stream/:pid` connects an EventSource; the server replays the last 500 history lines (reversed by query) then tails live events. Heartbeats every 15 seconds keep proxies alive (no data frames sent — just silence).
+The broadcaster at `packages/core/src/logs/broadcaster.ts` uses a pub/sub pattern keyed by log entry metadata. Every log write from ProcessWrapper goes through `broadcaster.publish(entry)`. The endpoint `/api/logs/stream` connects an EventSource; the server replays recent history lines first (with optional filters like `pid`, `commandId`, `profile`) then tails live events. Heartbeats every 15 seconds keep proxies alive (no data frames sent — just silence).
 
 ## SQLite Schema Overview
 
@@ -161,8 +161,8 @@ Tests live in `packages/core/test/`: five test files covering config loading/val
 | ------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------- |
 | run/list/config validate/env get/set | Full functionality via `.conductor.yml` | Same logic, also via REST/HTTP                                            |
 | ps                                   | Stub — prints note to Ctrl+C            | Returns process snapshots from Store + SQLite                             |
-| logs                                 | Stub — TODO message about SQL layer     | SQL-backed query + SSE stream via EventSource API                         |
-| stop                                 | Ctrl+C only (SIGKILL)                   | POST /api/profiles/:profile/stop                                          |
+| logs                                 | API-backed query + SSE follow mode      | SQL-backed query + SSE stream via EventSource API                         |
+| stop                                 | POST /api/profiles/:profile/stop        | POST /api/profiles/:profile/stop                                          |
 | configure                            | CLI auto-runs before run                | Standalone command `configure [profile] [-f]` via API POST /api/configure |
 
 ## Component Communication Pattern
