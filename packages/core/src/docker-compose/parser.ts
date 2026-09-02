@@ -8,7 +8,6 @@ export interface DockerComposeService {
     args?: Record<string, string>;
   };
   ports?: (string | number)[];
-  environment?: Record<string, string> | string[];
   depends_on?: Record<string, any> | string[];
   healthcheck?: {
     test?: string | string[];
@@ -31,27 +30,35 @@ export interface SuggestedCommand {
 }
 
 /**
- * Converts docker duration strings (e.g. "10s", "1m") to milliseconds
+ * Converts docker duration strings to milliseconds. Handles simple forms
+ * ("10s", "1m") as well as compound/fractional forms Docker itself accepts
+ * ("1m30s", "1.5s"). Returns undefined (caller falls back to a default) if
+ * nothing in the string matches a recognized unit.
  */
 function parseDurationToMs(duration?: string): number | undefined {
-  if (!duration) return undefined;
+  if (!duration || duration.trim().startsWith("-")) return undefined;
 
-  const match = duration.match(/^(\d+)([smh])$/);
-  if (!match) return undefined;
+  // Longer unit suffixes ("ms", "us", "ns") must be checked before their
+  // single-character prefixes ("m", "s", "n") or "500ms" would match "500m".
+  const unitMs: Record<string, number> = {
+    h: 3_600_000,
+    m: 60_000,
+    s: 1_000,
+    ms: 1,
+    us: 0.001,
+    ns: 0.000001,
+  };
+  const re = /(\d+(?:\.\d+)?)(ms|us|ns|h|m|s)/g;
+  let totalMs = 0;
+  let matchedAny = false;
+  let match: RegExpExecArray | null;
 
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-
-  switch (unit) {
-    case "s":
-      return value * 1000;
-    case "m":
-      return value * 60 * 1000;
-    case "h":
-      return value * 60 * 60 * 1000;
-    default:
-      return undefined;
+  while ((match = re.exec(duration)) !== null) {
+    matchedAny = true;
+    totalMs += parseFloat(match[1]) * unitMs[match[2]];
   }
+
+  return matchedAny ? Math.round(totalMs) : undefined;
 }
 
 /**
@@ -79,7 +86,10 @@ function extractDependencies(dependsOn?: Record<string, any> | string[]): string
 }
 
 /**
- * Extracts the first exposed port from ports array
+ * Extracts the first exposed port from a compose `ports` array, as the
+ * *host*-side port — the side a healthcheck run from the Conductor host can
+ * actually reach (see executor/healthcheck.ts's checkPort, which always
+ * connects to `localhost`, never into the container network).
  */
 function extractFirstPort(ports?: (string | number)[]): number | undefined {
   if (!ports || ports.length === 0) return undefined;
@@ -90,10 +100,12 @@ function extractFirstPort(ports?: (string | number)[]): number | undefined {
   }
 
   if (typeof firstPort === "string") {
-    // Handle formats like "5432:5432", "localhost:5432:5432", or just "5432"
+    // "5432" (no host mapping)     -> parts.length === 1, use it as-is (best effort)
+    // "8080:80" (HOST:CONTAINER)   -> host is parts[0]
+    // "127.0.0.1:8080:80"          -> host is parts[1]
     const parts = firstPort.split(":");
-    const portStr = parts[parts.length - 1];
-    const port = parseInt(portStr, 10);
+    const hostPortStr = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+    const port = parseInt(hostPortStr, 10);
     return !Number.isNaN(port) ? port : undefined;
   }
 
@@ -101,63 +113,57 @@ function extractFirstPort(ports?: (string | number)[]): number | undefined {
 }
 
 /**
- * Extracts URL from a curl/wget healthcheck test command
- * Handles both string and array formats from docker-compose
+ * Strips docker-compose's `CMD`/`CMD-SHELL` test-command prefix and array
+ * brackets/quotes, leaving a string that's directly executable by a shell.
+ * Compose's `test:` always starts with one of these two markers (see
+ * https://docs.docker.com/reference/compose-file/services/#healthchecktest);
+ * without stripping it, "CMD-SHELL pg_isready" would be stored verbatim and
+ * fail every probe since "CMD-SHELL" isn't a real binary.
  */
-function extractUrlFromTestCommand(testStr: string): string | undefined {
-  // Remove CMD prefix if present (docker-compose adds it sometimes)
-  // Also remove brackets and quotes from array format
-  const cleanedStr = testStr.replace(/^.*?CMD\s+/, "").replace(/[[\]"']/g, "");
-
-  // Try to extract URL pattern (http://... or https://...)
-  const urlRegex = /(https?:\/\/[^\s,]+)/;
-  const match = urlRegex.exec(cleanedStr);
-  return match ? match[1] : undefined;
+function stripTestPrefix(testStr: string): string {
+  return testStr.replace(/^(CMD-SHELL|CMD)\s+/, "").replace(/[[\]"']/g, "");
 }
 
 /**
- * Extracts or infers a health check from the service definition
+ * Extracts or infers a health check from the service definition.
+ *
+ * Compose's `healthcheck.test` always runs *inside the container* (see
+ * https://docs.docker.com/reference/compose-file/services/#healthchecktest)
+ * — it's exercising tools like `pg_isready` or `redis-cli` that are
+ * installed in the image, or hitting a port that's only bound inside the
+ * container network. Running that same string as a bare host-side shell
+ * command (the previous behavior here) is usually just wrong: the tool
+ * often isn't installed on the host, and a "localhost" URL in the test
+ * refers to the container's own network namespace, not the host's. So an
+ * explicit `test` is wrapped in `docker compose exec -T <service>` to run
+ * it exactly the way `docker compose`'s own healthcheck would — `-T`
+ * disables pseudo-TTY allocation, which is required for a probe run
+ * non-interactively.
+ *
+ * With no explicit test, falls back to inferring a `port` check from the
+ * *published* port (see extractFirstPort) — no container-exec is needed
+ * for a plain TCP check.
  */
-function extractHealthcheck(service: DockerComposeService): HealthcheckConfig | undefined {
-  // If service has explicit healthcheck, map it
-  if (service.healthcheck) {
-    const interval = parseDurationToMs(service.healthcheck.interval) ?? 1000;
-    const timeout = parseDurationToMs(service.healthcheck.timeout) ?? 30000;
-    const retries = service.healthcheck.retries ?? 30;
+function extractHealthcheck(
+  serviceName: string,
+  service: DockerComposeService,
+): HealthcheckConfig | undefined {
+  const hc = service.healthcheck;
+  if (hc?.test) {
+    const rawTestStr = typeof hc.test === "string" ? hc.test : hc.test.join(" ");
+    const testStr = stripTestPrefix(rawTestStr);
 
-    // Try to infer type and extract URL/command from test command
-    let type: "command" | "port" | "http" | "none" = "command";
-    let url: string | undefined;
-    let command: string | undefined;
-
-    if (service.healthcheck.test) {
-      const testStr =
-        typeof service.healthcheck.test === "string"
-          ? service.healthcheck.test
-          : service.healthcheck.test.join(" ");
-
-      if (testStr.includes("curl") || testStr.includes("wget")) {
-        type = "http";
-        url = extractUrlFromTestCommand(testStr);
-      } else {
-        command = testStr;
-      }
-    }
-
-    const result: HealthcheckConfig = {
-      type,
-      interval_ms: interval,
-      timeout_ms: timeout,
-      retries,
+    return {
+      type: "command",
+      command: `docker compose exec -T ${serviceName} ${testStr}`,
+      interval_ms: parseDurationToMs(hc.interval) ?? 1000,
+      timeout_ms: parseDurationToMs(hc.timeout) ?? 30000,
+      retries: hc.retries ?? 30,
     };
-
-    if (url) result.url = url;
-    if (command) result.command = command;
-
-    return result;
   }
 
-  // Infer from port if available
+  // No usable explicit test (or `healthcheck:` present without one) — fall
+  // back to inferring from the published port, same as no healthcheck at all.
   const port = extractFirstPort(service.ports);
   if (port) {
     return {
@@ -188,7 +194,7 @@ export function suggestCommand(
     name: serviceName,
     run: `docker compose up -d${buildFlag} ${serviceName}`,
     stop_command: `docker compose stop ${serviceName}`,
-    healthcheck: extractHealthcheck(service),
+    healthcheck: extractHealthcheck(serviceName, service),
     deps: extractDependencies(service.depends_on),
     needsBuild: hasCustomBuild,
     buildContext: service.build?.context,
