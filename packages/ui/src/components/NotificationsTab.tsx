@@ -48,7 +48,7 @@ export function NotificationsTab() {
         </Text>
       </Group>
 
-      <Table striped highlightOnHover>
+      <Table highlightOnHover>
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Time</Table.Th>

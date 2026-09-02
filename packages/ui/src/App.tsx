@@ -5,7 +5,10 @@ import { ProcessBoard } from "./components/ProcessBoard";
 import { NotificationsTab } from "./components/NotificationsTab";
 import { ProfileGridView } from "./components/ProfileGridView";
 import { CommandLibrary } from "./components/CommandLibrary";
+import { DependencyFlow } from "./components/DependencyFlow";
 import { Sidebar } from "./components/Sidebar";
+import { ConductorMark } from "./components/ConductorMark";
+import { SectionHeading } from "./components/SectionHeading";
 import { useUiStore } from "./store/ui";
 import { useProcesses } from "./hooks/useProcesses";
 
@@ -25,7 +28,7 @@ export default function App() {
     if (selectedProcessKey) {
       return (
         <Box
-          h="calc(100vh - 92px)"
+          h="calc(100vh - 76px)"
           style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}
         >
           <Group mb="md" justify="space-between">
@@ -55,6 +58,7 @@ export default function App() {
       );
     }
 
+    if (view === "flow") return <DependencyFlow />;
     if (view === "profiles") return <ProfileGridView />;
     if (view === "commands") return <CommandLibrary />;
     if (view === "environment") return <EnvironmentManager />;
@@ -62,16 +66,16 @@ export default function App() {
     return (
       <Stack gap="xl">
         <div>
-          <Title order={2}>Processes</Title>
-          <Text c="dimmed" size="sm">
+          <SectionHeading>processes</SectionHeading>
+          <Text c="dimmed" size="sm" mt={4}>
             Live view of all running Conductor processes
           </Text>
           <ProcessBoard />
         </div>
 
         <div>
-          <Title order={2}>Notifications</Title>
-          <Text c="dimmed" size="sm">
+          <SectionHeading>notifications</SectionHeading>
+          <Text c="dimmed" size="sm" mt={4}>
             Process failures, blocked dependencies, and healthcheck issues
           </Text>
           <NotificationsTab />
@@ -81,11 +85,12 @@ export default function App() {
   };
 
   return (
-    <AppShell header={{ height: 60 }} navbar={{ width: 300, breakpoint: "sm" }} padding="md">
-      <AppShell.Header>
+    <AppShell header={{ height: 52 }} navbar={{ width: 260, breakpoint: "sm" }} padding="sm">
+      <AppShell.Header style={{ borderBottom: "1px solid var(--mantine-color-dark-6)" }}>
         <Group h="100%" px="md" justify="space-between">
-          <Group>
-            <Title order={3}>🎼 Conductor</Title>
+          <Group gap="xs">
+            <ConductorMark size={20} />
+            <Title order={4}>conductor</Title>
             <Badge variant="light">v{__VERSION__}</Badge>
           </Group>
           <Text size="sm" c="dimmed">

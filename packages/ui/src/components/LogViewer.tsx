@@ -25,14 +25,7 @@ import { fetchLogs, streamLogs, type LogRow, type ProcessInfo } from "../lib/api
 import { useUiStore } from "../store/ui";
 import { useStopProcess, useRestartCommand } from "../hooks/useProcessActions";
 import { renderAnsiLine } from "../lib/ansi";
-
-const STATUS_COLOR: Record<string, string> = {
-  running: "green",
-  starting: "yellow",
-  stopping: "orange",
-  stopped: "gray",
-  failed: "red",
-};
+import { STATUS_COLOR } from "../lib/statusColor";
 
 type StreamFilter = "all" | "stdout" | "stderr";
 
@@ -173,7 +166,7 @@ export function LogViewer({ process }: { process: ProcessInfo }) {
           <ActionIcon
             size="lg"
             variant={autoScroll ? "filled" : "default"}
-            color={autoScroll ? "blue" : "gray"}
+            color={autoScroll ? "green" : "gray"}
             onClick={() => {
               setAutoScroll(true);
               viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight });

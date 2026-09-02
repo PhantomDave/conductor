@@ -33,6 +33,7 @@ import {
 } from "@tabler/icons-react";
 import { useDisclosure } from "@mantine/hooks";
 import { useProfiles } from "../hooks/useProfiles";
+import { SectionHeading } from "./SectionHeading";
 import {
   useEnvVars,
   useUpsertEnvVar,
@@ -466,7 +467,7 @@ function EnvVarTable({ scope, profile }: { scope: "global" | "profile"; profile?
           No variables yet.
         </Text>
       ) : (
-        <Table striped highlightOnHover>
+        <Table highlightOnHover>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Key</Table.Th>
@@ -597,8 +598,8 @@ export function EnvironmentManager() {
   return (
     <Stack gap="md">
       <div>
-        <Title order={2}>Environment</Title>
-        <Text c="dimmed" size="sm">
+        <SectionHeading>environment</SectionHeading>
+        <Text c="dimmed" size="sm" mt={4}>
           Variables stored here live in Conductor's local database, not in .conductor.yml, so
           secrets never need to be committed to source control.
         </Text>

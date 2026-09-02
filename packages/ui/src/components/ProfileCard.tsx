@@ -69,7 +69,7 @@ export function ProfileCard({
                   lineClamp={1}
                   onClick={() => onView?.(name)}
                   style={{ cursor: "pointer" }}
-                  c="blue"
+                  c="green"
                 >
                   {name}
                 </Text>
@@ -139,7 +139,7 @@ export function ProfileCard({
                       width: 4,
                       height: 4,
                       borderRadius: "50%",
-                      backgroundColor: "var(--mantine-color-blue-6)",
+                      backgroundColor: "var(--mantine-color-green-6)",
                     }}
                   />
                   <Text size="xs" c="dimmed" lineClamp={1} flex={1}>
@@ -148,7 +148,7 @@ export function ProfileCard({
                 </Group>
               ))}
               {commandCount > 3 && (
-                <Text size="xs" c="blue" fw={500}>
+                <Text size="xs" c="green" fw={500}>
                   + {commandCount - 3} more
                 </Text>
               )}
@@ -187,7 +187,7 @@ export function ProfileCard({
           <ActionIcon
             size="lg"
             variant="light"
-            color="blue"
+            color="green"
             onClick={() => onManageCommands?.(name)}
             aria-label="Manage profile commands"
           >

@@ -143,7 +143,7 @@ export function DockerComposeImporter({
             </Group>
 
             <div style={{ overflowX: "auto" }}>
-              <Table striped highlightOnHover>
+              <Table highlightOnHover>
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th style={{ width: "40px" }}>
@@ -202,7 +202,7 @@ export function DockerComposeImporter({
                       </Table.Td>
                       <Table.Td>
                         {cmd.healthcheck ? (
-                          <Badge size="sm" variant="light" color="blue">
+                          <Badge size="sm" variant="light" color="green">
                             {cmd.healthcheck.type}
                           </Badge>
                         ) : (

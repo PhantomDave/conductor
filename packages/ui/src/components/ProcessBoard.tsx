@@ -4,14 +4,7 @@ import { useState } from "react";
 import { useProcesses } from "../hooks/useProcesses";
 import { useStopProcess, useRestartCommand } from "../hooks/useProcessActions";
 import { useUiStore } from "../store/ui";
-
-const STATUS_COLOR: Record<string, string> = {
-  running: "green",
-  starting: "yellow",
-  stopping: "orange",
-  stopped: "gray",
-  failed: "red",
-};
+import { STATUS_COLOR } from "../lib/statusColor";
 
 const HEALTH_COLOR: Record<string, string> = {
   healthy: "green",
@@ -41,7 +34,7 @@ function ProcessTable({ processes, stopProcess, restartCommand }: ProcessTablePr
   }
 
   return (
-    <Table striped highlightOnHover>
+    <Table highlightOnHover>
       <Table.Thead>
         <Table.Tr>
           <Table.Th>Command</Table.Th>
@@ -63,10 +56,25 @@ function ProcessTable({ processes, stopProcess, restartCommand }: ProcessTablePr
               <Table.Td>{p.profile}</Table.Td>
               <Table.Td>{p.pid}</Table.Td>
               <Table.Td>
-                <Badge color={STATUS_COLOR[p.status] ?? "gray"}>{p.status}</Badge>
+                <Group gap={6} wrap="nowrap">
+                  <span
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      background: `var(--mantine-color-${STATUS_COLOR[p.status] ?? "gray"}-5)`,
+                    }}
+                  />
+                  <Text size="sm" c={STATUS_COLOR[p.status] ?? "gray"}>
+                    {p.status}
+                  </Text>
+                </Group>
               </Table.Td>
               <Table.Td>
-                <Badge color={HEALTH_COLOR[p.health] ?? "gray"}>{p.health}</Badge>
+                <Text size="sm" c={HEALTH_COLOR[p.health] ?? "gray"}>
+                  {p.health}
+                </Text>
               </Table.Td>
               <Table.Td>{p.cpuPercent?.toFixed(1) ?? "-"}</Table.Td>
               <Table.Td>

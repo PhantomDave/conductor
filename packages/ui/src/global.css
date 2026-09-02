@@ -3,47 +3,47 @@
  * Extends Mantine theme with additional polish
  */
 
-/* Scrollbar styling for dark theme */
+/* Scrollbar styling for the terminal theme */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(13, 17, 23, 0.5);
+  background: rgba(8, 10, 8, 0.6);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(139, 148, 155, 0.4);
+  background: rgba(125, 138, 125, 0.35);
   border-radius: 5px;
   transition: background 200ms ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 148, 155, 0.6);
+  background: rgba(125, 138, 125, 0.55);
 }
 
 /* Firefox scrollbar */
 * {
-  scrollbar-color: rgba(139, 148, 155, 0.4) rgba(13, 17, 23, 0.5);
+  scrollbar-color: rgba(125, 138, 125, 0.35) rgba(8, 10, 8, 0.6);
   scrollbar-width: thin;
 }
 
 /* Selection styling */
 ::selection {
-  background-color: rgba(88, 166, 255, 0.3);
-  color: rgb(230, 237, 243);
+  background-color: rgba(74, 222, 128, 0.25);
+  color: rgb(232, 240, 232);
 }
 
 ::-moz-selection {
-  background-color: rgba(88, 166, 255, 0.3);
-  color: rgb(230, 237, 243);
+  background-color: rgba(74, 222, 128, 0.25);
+  color: rgb(232, 240, 232);
 }
 
 /* Base body styles */
 body {
-  background-color: rgb(13, 17, 23);
-  color: rgb(230, 237, 243);
+  background-color: rgb(8, 10, 8);
+  color: rgb(232, 240, 232);
   transition:
     background-color 200ms ease,
     color 200ms ease;
@@ -55,7 +55,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgba(88, 166, 255, 0.5);
+  outline: 2px solid rgba(74, 222, 128, 0.5);
   outline-offset: 2px;
 }
 
@@ -72,17 +72,17 @@ textarea:focus-visible {
 
 /* Better link styling */
 a {
-  color: rgb(88, 166, 255);
+  color: rgb(74, 222, 128);
   text-decoration: none;
   transition: color 200ms ease;
 }
 
 a:hover {
-  color: rgb(120, 180, 255);
+  color: rgb(134, 239, 172);
 }
 
 a:active {
-  color: rgb(58, 156, 255);
+  color: rgb(52, 191, 106);
 }
 
 /* Better focus states */
@@ -93,15 +93,15 @@ a:active {
 /* Ensure code blocks have better contrast */
 code,
 pre {
-  background-color: rgba(30, 30, 30, 0.8);
-  border-radius: 4px;
-  color: rgb(200, 209, 217);
+  background-color: rgba(10, 13, 10, 0.8);
+  border-radius: 2px;
+  color: rgb(200, 209, 200);
 }
 
 /* List styling improvements */
 ul,
 ol {
-  color: rgb(201, 209, 217);
+  color: rgb(201, 217, 201);
 }
 
 li {
@@ -110,10 +110,10 @@ li {
 
 /* Form input consistency for native (non-Mantine) controls */
 :where(input, textarea, select):not([class*="mantine-"]) {
-  background-color: rgba(13, 17, 23, 0.5);
-  border: 1px solid rgba(208, 215, 222, 0.15);
-  color: rgb(230, 237, 243);
-  border-radius: 6px;
+  background-color: rgba(8, 10, 8, 0.5);
+  border: 1px solid rgba(58, 69, 58, 0.3);
+  color: rgb(232, 240, 232);
+  border-radius: 2px;
   padding: 8px 12px;
   transition:
     border-color 200ms ease,
@@ -121,13 +121,13 @@ li {
 }
 
 :where(input, textarea, select):not([class*="mantine-"]):focus {
-  border-color: rgba(88, 166, 255, 0.5);
-  background-color: rgba(13, 17, 23, 0.8);
+  border-color: rgba(74, 222, 128, 0.5);
+  background-color: rgba(8, 10, 8, 0.8);
   outline: none;
 }
 
 :where(input, textarea):not([class*="mantine-"])::placeholder {
-  color: rgba(139, 148, 155, 0.6);
+  color: rgba(125, 138, 125, 0.6);
 }
 
 /* Better table styling if needed */
@@ -138,19 +138,19 @@ table {
 
 th,
 td {
-  border: 1px solid rgba(208, 215, 222, 0.1);
+  border: 1px solid rgba(58, 69, 58, 0.2);
   padding: 12px;
   text-align: left;
 }
 
 th {
-  background-color: rgba(30, 30, 30, 0.5);
-  color: rgb(230, 237, 243);
+  background-color: rgba(15, 19, 15, 0.6);
+  color: rgb(232, 240, 232);
   font-weight: 600;
 }
 
 tr:hover {
-  background-color: rgba(33, 38, 45, 0.3);
+  background-color: rgba(26, 31, 26, 0.35);
 }
 
 /* Accessibility: ensure interactive elements have minimum size */
@@ -160,4 +160,48 @@ tr:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+/**
+ * Pseudo-class/attribute overrides for Mantine components.
+ *
+ * This app has no @mantine/emotion resolver, so theme.ts's `styles` prop
+ * only ever produces a literal inline `style` attribute — nested selectors
+ * like "&:hover" or "&[data-active]" inside it are silently dropped (React
+ * warns "Unsupported style property &:hover" in the console). Anything
+ * state-dependent has to be real CSS here instead, targeting Mantine's
+ * stable `mantine-<Component>-<part>` class names.
+ */
+
+.mantine-Card-root {
+  transition: border-color 200ms ease;
+}
+.mantine-Card-root:hover {
+  /* theme.ts's Card.styles.root already sets a literal inline border-color
+     (see the comment above) — an inline style always beats a class
+     selector unless this one carries !important. */
+  border-color: var(--mantine-color-dark-4) !important;
+}
+
+.mantine-Button-root:active {
+  transform: translateY(1px);
+}
+
+.mantine-Input-input:focus {
+  border-color: var(--mantine-color-green-5) !important;
+  background-color: var(--mantine-color-dark-8) !important;
+}
+.mantine-Input-input::placeholder {
+  color: var(--mantine-color-dark-3);
+}
+
+/* Left-border accent instead of Mantine's default filled active pill —
+   reads closer to a terminal menu's ">" cursor. */
+.mantine-NavLink-root {
+  border-left: 2px solid transparent;
+}
+.mantine-NavLink-root[data-active="true"] {
+  border-left-color: var(--mantine-color-green-5) !important;
+  background-color: var(--mantine-color-dark-7) !important;
+  color: var(--mantine-color-green-5) !important;
 }

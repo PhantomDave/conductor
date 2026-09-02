@@ -5,6 +5,10 @@ node_modules/
 # Build outputs
 dist/
 build/
+# ...except electron-builder's buildResources dir (packages/desktop/build/),
+# which holds tracked source assets like icon.png, not build output.
+!packages/desktop/build/
+!packages/desktop/build/**
 *.tsbuildinfo
 
 # Environment & secrets
