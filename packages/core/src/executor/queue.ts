@@ -28,12 +28,21 @@ export class SpawnQueue {
   private notifications: Notification[] = [];
   private readonly MAX_NOTIFICATIONS = 1000;
 
-  // Track pids that have had a failed_start notification to avoid duplicates
-  private failedPids = new Set<number>();
   // Track command IDs that need recovery detection after restart
   private pendingRecovery = new Set<string>();
   // Continuous health monitors per command (running services probed on interval)
   private monitors = new Map<string, HealthMonitor>();
+  // Single-flight in-progress starts, keyed by command id. Ensures a
+  // dependency shared by multiple commands (or a command started twice in
+  // quick succession) is only ever spawned once concurrently, instead of
+  // racing two ProcessWrapper instances under the same id.
+  private startPromises = new Map<string, Promise<void>>();
+  // Commands that never got a wrapper at all because one of *their own*
+  // deps failed first (so there's nothing in `wrappers` for
+  // waitForDependency to poll). Without this, a dependent would poll for
+  // the full 60s timeout instead of failing immediately on a transitive
+  // failure two or more levels down.
+  private blockedCommands = new Set<string>();
 
   constructor(
     private readonly profile: string,
@@ -68,48 +77,106 @@ export class SpawnQueue {
   }
 
   /**
-   * Waits for a dependency to become ready. Throws on failure or timeout.
+   * Waits for `depId` to become ready on behalf of `dependentId`. Throws
+   * (and records a single "dependency_failed" notification attributed to
+   * the *blocked* command, not the dependency) on failure or timeout.
+   *
+   * Polls `this.wrappers` directly rather than taking a wrapper reference
+   * up front, so it also catches the case where `depId` never gets a
+   * wrapper at all — a dangling dep reference to a command id that isn't
+   * in this profile. That used to return immediately as if the dependency
+   * were satisfied, silently masking a config error.
    */
-  private async waitForDependency(depId: string): Promise<void> {
-    const wrapper = this.wrappers.get(depId);
-    if (!wrapper) return;
-
+  private async waitForDependency(dependentId: string, depId: string): Promise<void> {
     const maxWaitMs = 60_000;
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitMs) {
-      const status = wrapper.status;
-      if (status === "running") return;
+      const wrapper = this.wrappers.get(depId);
 
-      const snapshot = wrapper.getSnapshot();
+      if (wrapper) {
+        const status = wrapper.status;
+        if (status === "running") return;
 
-      if (snapshot?.exitCode === 0) return;
+        const snapshot = wrapper.getSnapshot();
+        if (snapshot?.exitCode === 0) return;
 
-      if (["stopped", "failed"].includes(status)) {
-        // Record any unrecorded failed_start for the dependency itself
-        // process may have died between getSnapshot call above and here
-        if (!snapshot) continue;
-        if (!this.failedPids.has(snapshot.pid)) {
+        if (status === "stopped" || status === "failed") {
+          const reason = `Blocked: dependency "${depId}" failed (exit code ${snapshot?.exitCode ?? "?"})`;
           this.recordNotification(
-            "failed_start",
-            depId,
-            `Dependency exited: code ${snapshot.exitCode ?? "?"}`,
-            snapshot.exitCode,
+            "dependency_failed",
+            dependentId,
+            reason,
+            snapshot?.exitCode,
+            this.transitiveDependents(dependentId),
           );
-          this.failedPids.add(snapshot.pid);
+          throw new Error(reason);
         }
-
-        const reason = `Dependency failed with exit code ${snapshot?.exitCode ?? "?"}`;
-        this.recordNotification("dependency_failed", depId, reason, snapshot?.exitCode);
+      } else if (this.blockedCommands.has(depId)) {
+        const reason = `Blocked: dependency "${depId}" could not start because one of its own dependencies failed`;
+        this.recordNotification(
+          "dependency_failed",
+          dependentId,
+          reason,
+          undefined,
+          this.transitiveDependents(dependentId),
+        );
+        throw new Error(reason);
+      } else if (!this.commands.some((c) => c.id === depId)) {
+        const reason = `Blocked: dependency "${depId}" is not a known command in this profile`;
+        this.recordNotification(
+          "dependency_failed",
+          dependentId,
+          reason,
+          undefined,
+          this.transitiveDependents(dependentId),
+        );
         throw new Error(reason);
       }
+      // Known command, just not spawned yet (another in-flight start will
+      // create its wrapper shortly) — keep polling.
 
       await new Promise((r) => setTimeout(r, 100));
     }
 
-    const reason = `Dependency did not become ready within ${maxWaitMs}ms`;
-    this.recordNotification("dependency_failed", depId, reason);
+    const reason = `Dependency "${depId}" did not become ready within ${maxWaitMs}ms`;
+    this.recordNotification(
+      "dependency_failed",
+      dependentId,
+      reason,
+      undefined,
+      this.transitiveDependents(dependentId),
+    );
     throw new Error(reason);
+  }
+
+  /** Maps each command id to the ids of commands that directly declare it as a dep. */
+  private reverseDeps(): Map<string, string[]> {
+    const rev = new Map<string, string[]>();
+    for (const cmd of this.commands) {
+      for (const dep of cmd.deps) {
+        if (!dep) continue;
+        if (!rev.has(dep)) rev.set(dep, []);
+        rev.get(dep)!.push(cmd.id);
+      }
+    }
+    return rev;
+  }
+
+  /** Every command (direct or transitive) that depends on `commandId`, for Notification.affectedDownstream. */
+  private transitiveDependents(commandId: string): string[] {
+    const rev = this.reverseDeps();
+    const seen = new Set<string>();
+    const queue = [...(rev.get(commandId) ?? [])];
+
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      for (const next of rev.get(id) ?? []) queue.push(next);
+    }
+
+    return [...seen];
   }
 
   /** Records a probe attempt as a log line through the wrapper's pipeline. */
@@ -153,12 +220,12 @@ export class SpawnQueue {
     return wrapper.onHealthChange(onHealthChange);
   }
 
-  /** Internal: spawn one process and await its healthcheck. */
+  /** Internal: spawn one process and await its healthcheck. Returns whether it became healthy. */
   private async startSingleProcess(
     cmd: CommandConfig,
     env: Record<string, string>,
     onLog?: LogHandler,
-  ): Promise<number | null> {
+  ): Promise<boolean> {
     const wrapper = new ProcessWrapper(cmd, this.profile, env);
     if (onLog) wrapper.onLog(onLog);
 
@@ -193,29 +260,41 @@ export class SpawnQueue {
 
       // Remove from recovery-pending set on successful start
       this.pendingRecovery.delete(cmd.id);
+      return true;
     } catch (err) {
       wrapper.markFailed();
       const reason = err instanceof Error ? err.message : String(err);
+      const affectedDownstream = this.transitiveDependents(cmd.id);
       // Determine notification type based on where it failed
       if (this.isSpawnError(reason)) {
         // Spawn-level failure: process never started properly at all
-        this.recordNotification("failed_start", cmd.id, `Failed to start: ${reason}`);
+        this.recordNotification(
+          "failed_start",
+          cmd.id,
+          `Failed to start: ${reason}`,
+          undefined,
+          affectedDownstream,
+        );
         wrapper.log(`[healthcheck] startup failed: ${reason}`, "stdout");
       } else {
         // Healthcheck timed out after retries
         const label = cmd.healthcheck
           ? `Healthcheck failed after ${cmd.healthcheck.retries} attempts`
           : "No healthcheck configured";
-        this.recordNotification("healthcheck_failed", cmd.id, `${label}: ${reason}`);
+        this.recordNotification(
+          "healthcheck_failed",
+          cmd.id,
+          `${label}: ${reason}`,
+          undefined,
+          affectedDownstream,
+        );
         wrapper.log(
           `[healthcheck] failed after all ${cmd.healthcheck?.retries ?? 0} attempts`,
           "stdout",
         );
       }
+      return false;
     }
-
-    // Return exit code for use by callers
-    return null;
   }
 
   /**
@@ -301,30 +380,110 @@ export class SpawnQueue {
     return ordered;
   }
 
+  /**
+   * Starts every command in this queue concurrently. See `startMany` for
+   * the concurrency/failure-handling contract.
+   */
   async startAll(onLog?: LogHandler): Promise<void> {
-    const ordered = this.topologicalOrder();
-    for (const cmd of ordered) {
-      await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
-    }
+    await this.startMany(
+      this.commands.map((cmd) => cmd.id),
+      onLog,
+    );
   }
 
+  /**
+   * Starts a specific set of commands concurrently, respecting the
+   * dependency graph: each one starts as soon as its own deps are ready,
+   * without waiting for unrelated branches. A command (or dependency) that
+   * fails to become healthy records a notification and blocks only its own
+   * dependents — sibling branches of the graph keep starting regardless, and
+   * this never rejects for an individual command's failure (check
+   * `listNotifications()`/`listSnapshots()` afterward for the outcome).
+   *
+   * This is what "run profile" actually needs: the queue holds every
+   * command from every profile (see ConfigStore's single global queue), so
+   * `startAll` would start far more than just this profile's commands —
+   * `startMany` lets a caller scope the batch to `profile.command_ids`
+   * while still getting the same concurrent, dependency-aware startup.
+   */
+  async startMany(commandIds: string[], onLog?: LogHandler): Promise<void> {
+    this.topologicalOrder(); // fail fast on a real cycle instead of a 60s timeout per node
+    await Promise.all(commandIds.map((id) => this.ensureStarted(id, onLog).catch(() => {})));
+  }
+
+  /**
+   * Starts a single command standalone, starting (and waiting on) any deps
+   * first — recursively, at every level, so a dependency-of-a-dependency
+   * that fails still blocks this command instead of being silently ignored.
+   * Rejects if a dependency never becomes ready; always (re)spawns the
+   * target itself even if it's already running.
+   */
   async startOne(commandId: string, onLog?: LogHandler): Promise<void> {
+    this.topologicalOrder(); // fail fast on a real cycle instead of a 60s timeout per node
+    await this.ensureStarted(commandId, onLog);
+  }
+
+  /** Alias for startOne. */
+  async run(commandId: string, onLog?: LogHandler): Promise<void> {
+    return this.startOne(commandId, onLog);
+  }
+
+  /**
+   * Starts `commandId` if it isn't already in flight, joining the existing
+   * attempt instead of racing a second spawn if it is (single-flight per
+   * command id — closes a real bug where two overlapping calls for the same
+   * command used to create two competing ProcessWrapper instances).
+   */
+  private ensureStarted(commandId: string, onLog?: LogHandler): Promise<void> {
+    const existing = this.startPromises.get(commandId);
+    if (existing) return existing;
+
+    const promise = this.ensureStartedInner(commandId, onLog);
+    this.startPromises.set(commandId, promise);
+    // `.finally()` returns a *new* derived promise that rejects whenever
+    // `promise` does; the real `promise` returned below is what callers
+    // await/catch, so leaving this derived one unhandled would surface as
+    // a spurious unhandled-rejection on every failed start.
+    promise
+      .finally(() => {
+        if (this.startPromises.get(commandId) === promise) this.startPromises.delete(commandId);
+      })
+      .catch(() => {});
+    return promise;
+  }
+
+  private async ensureStartedInner(commandId: string, onLog?: LogHandler): Promise<void> {
     const cmd = this.commands.find((c) => c.id === commandId);
     if (!cmd) {
       throw new Error(`Unknown command "${commandId}" in profile "${this.profile}"`);
     }
 
-    // Start dependencies first (recursively). Note: this also awaits their healthchecks.
-    for (const depId of cmd.deps) {
-      if (!depId) continue;
-      if (!this.isDependencyReady(depId)) {
-        await this.startOneInternal_(depId);
+    const depIds = cmd.deps.filter((d): d is string => Boolean(d));
+    if (depIds.length > 0) {
+      try {
+        // Kick off (or join) every dependency concurrently, then confirm each
+        // one actually became ready — independent branches of the graph
+        // never wait on each other here.
+        await Promise.all(
+          depIds.map(async (depId) => {
+            if (!this.isDependencyReady(depId)) {
+              await this.ensureStarted(depId).catch(() => {}); // failure surfaces via waitForDependency below
+            }
+            await this.waitForDependency(commandId, depId);
+          }),
+        );
+      } catch (err) {
+        // We never reached startSingleProcess, so no wrapper exists for
+        // `commandId` — mark it explicitly so anything depending on *this*
+        // command fails fast via waitForDependency instead of polling for
+        // 60s waiting for a wrapper that will never appear.
+        this.blockedCommands.add(commandId);
+        throw err;
       }
-      // Wait for the dependency to reach a stable state
-      await this.waitForDependency(depId);
     }
+    this.blockedCommands.delete(commandId); // clear a stale mark from a previous failed attempt
 
-    // Before spawning, force-kill any existing orphan for this command
+    // Before spawning, force-kill any existing orphan for this command.
     const orphan = this.wrappers.get(commandId);
     if (orphan != null) {
       await orphan.forceKillAndWait();
@@ -332,20 +491,6 @@ export class SpawnQueue {
     }
 
     await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
-  }
-
-  /** Internal-only recursive startOne that handles deps without env/onLog noise. */
-  private async startOneInternal_(commandId: string): Promise<void> {
-    const cmd = this.commands.find((c) => c.id === commandId);
-    if (!cmd) return;
-    for (const depId of cmd.deps) {
-      if (!depId) continue;
-      if (!this.isDependencyReady(depId)) {
-        await this.startOneInternal_(depId);
-      }
-    }
-    // Actually spawn this dependency so waitForDependency has something to wait on
-    await this.startSingleProcess(cmd, this.resolveEnv(cmd));
   }
 
   /**
@@ -356,19 +501,21 @@ export class SpawnQueue {
     const cmd = this.commands.find((c) => c.id === commandId);
     if (!cmd) throw new Error(`Unknown command "${commandId}" in profile "${this.profile}"`);
 
+    // Snapshot health *before* stopping — stop() always leaves health
+    // "unhealthy" (it's no longer serving), so checking after would make
+    // every restart look like a recovery, even one triggered by hand on an
+    // already-healthy service.
+    const oldWrapper = this.wrappers.get(commandId);
+    const wasUnhealthy =
+      oldWrapper != null && (oldWrapper.status === "failed" || oldWrapper.health === "unhealthy");
+
     await this.stopOne(commandId);
 
-    // Mark command as pending recovery so startSingleProcess can emit the recovered notification
-    const oldWrapper = this.wrappers.get(commandId);
-    if (oldWrapper) {
+    if (wasUnhealthy) {
       this.pendingRecovery.add(commandId);
     }
 
     await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
-  }
-
-  async run(commandId: string, onLog?: LogHandler): Promise<void> {
-    return this.startOne(commandId, onLog);
   }
 
   async stopAll(): Promise<void> {
@@ -378,7 +525,7 @@ export class SpawnQueue {
     await Promise.all(stops);
   }
 
-  /** Alias of startOne: runs a single command standalone, starting (and waiting on) any deps first. */
+  /** Stops the given command's process (if any) and its continuous health monitor. */
   async stopOne(commandId: string): Promise<void> {
     this.monitors.get(commandId)?.stop();
     this.monitors.delete(commandId);

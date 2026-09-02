@@ -693,10 +693,13 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
 
       const queue = deps.store.getQueue();
       try {
-        // Start commands in this profile (resolve from command_ids)
-        for (const commandId of profileConfig.command_ids) {
-          await queue.startOne(commandId, deps.onLog);
-        }
+        // Start every command in this profile concurrently rather than one
+        // at a time — startMany still respects deps (a command waits only
+        // on its own deps, not unrelated ones), and one command's failure
+        // no longer aborts the rest of the profile: it's recorded as a
+        // notification and blocks just its own dependents. Check
+        // /api/notifications or process snapshots afterward for the outcome.
+        await queue.startMany(profileConfig.command_ids, deps.onLog);
       } catch (err) {
         return reply.status(400).send({ error: (err as Error).message });
       }
