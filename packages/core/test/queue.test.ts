@@ -145,11 +145,15 @@ describe("SpawnQueue.startOne - dependency failure", () => {
 
 describe("SpawnQueue.restartOne", () => {
   test("gives the command a new pid", async () => {
+    // Uses makeCommand's short default stop_timeout_ms rather than an
+    // explicit longer one: this test's own stop (via restartOne) plus its
+    // stopAll cleanup both pay that budget, and on Windows every stop pays
+    // it in full (see makeCommand's comment) - a 2000ms budget put the
+    // combined worst case right at bun:test's 5000ms timeout and it flaked.
     const cmd = makeCommand({
       id: "sleeper",
       name: "Sleeper",
       run: `bun -e "setInterval(() => {}, 1000)"`,
-      stop_timeout_ms: 2000,
     });
     const queue = new SpawnQueue("test", [cmd], () => testEnv());
 
@@ -343,11 +347,12 @@ describe("SpawnQueue - notification affectedDownstream", () => {
 
 describe("SpawnQueue.restartOne - recovery notification", () => {
   test("does not claim recovery when restarting an already-healthy service", async () => {
+    // Short default stop_timeout_ms for the same reason as the restartOne
+    // test above: this test also pays it twice (restartOne, then stopAll).
     const cmd = makeCommand({
       id: "healthy",
       name: "Healthy",
       run: `bun -e "setInterval(() => {}, 1000)"`,
-      stop_timeout_ms: 2000,
     });
     const queue = new SpawnQueue("test", [cmd], () => testEnv());
 
