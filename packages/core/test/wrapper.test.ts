@@ -1,20 +1,59 @@
 import { describe, test, expect } from "bun:test";
-import { mkdtempSync, rmSync, realpathSync } from "node:fs";
+import { mkdtempSync, rmSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ProcessWrapper } from "../src/executor/wrapper";
 import { CommandSchema, type CommandConfig } from "../src/config/schema";
 
-// Every spawned command below shells out to `bun -e "<script>"` rather than
-// platform builtins (echo/sleep/etc.) so these tests behave identically on
-// Linux/macOS/Windows in CI. `-e`'s argument always uses double quotes with
-// single-quoted JS string literals inside, which parses correctly under both
-// POSIX sh -c and Windows cmd.exe /c.
+// Every spawned command below runs `bun -e "<script>"` rather than platform
+// builtins (echo/sleep/etc.) so these tests behave identically on
+// Linux/macOS/Windows in CI. They default to `shell: false`, which routes
+// through our own quote-aware splitShellWords tokenizer straight into
+// Bun.spawn's argv array - no shell in the middle. That matters on Windows:
+// a `shell: true` command is handed to `cmd.exe /c` as a single string, and
+// Bun's own argv-to-command-line quoting for that string does not survive
+// cmd.exe's separate (and different) quote parsing - even a single quoted
+// `-e` argument with no nested quotes comes out mangled, silently turning
+// the script into a no-op instead of running it.
+//
+// stop_command always runs through a real shell (no shell:false option, by
+// design - it needs to support arbitrary shell syntax), so any test that
+// uses one instead writes its script to a temp file and runs `bun "<path>"`
+// - a single unquoted-content argument has nothing for cmd.exe to mangle.
 
 function makeCommand(
   overrides: Partial<CommandConfig> & { id: string; name: string; run: string },
 ): CommandConfig {
-  return CommandSchema.parse(overrides);
+  // stop_timeout_ms defaults short: on Windows, killTree's graceful (non
+  // SIGKILL) path shells out to `taskkill /pid <pid> /T` without `/F`, which
+  // is a no-op for a plain background process with no console-control
+  // handler - the process never actually exits from it, so stop() always
+  // burns the full stop_timeout_ms budget before falling through to a real
+  // SIGKILL. At the 5000ms schema default that collides with bun:test's own
+  // 5000ms per-test timeout. This is a pre-existing production behavior
+  // (Windows stops/restarts really do take ~stop_timeout_ms every time,
+  // graceful or not), not something these tests should paper over by
+  // asserting a fast stop - just keep the budget short enough that the
+  // already-correct-but-slow fallback still finishes inside the test
+  // timeout. Tests that care about the timeout value itself override it.
+  return CommandSchema.parse({ shell: false, stop_timeout_ms: 500, ...overrides });
+}
+
+/**
+ * Writes a JS script to a temp file and returns a `bun <path>` command
+ * string. Deliberately unquoted: CI temp dirs never contain a space, and
+ * wrapping the path in quotes would just reintroduce a quote character for
+ * cmd.exe's /c parsing to mangle - the whole point is a single argv element
+ * with no quote characters in it at all.
+ */
+function writeScript(code: string): { command: string; cleanup: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), "conductor-wrapper-script-"));
+  const scriptPath = join(dir, "script.js");
+  writeFileSync(scriptPath, code);
+  return {
+    command: `bun ${scriptPath}`,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
 }
 
 /** process.env with the `string | undefined` values narrowed to `string`. */
@@ -200,11 +239,15 @@ describe("ProcessWrapper.stop", () => {
     // Let the process actually crash and its exit handler run before we
     // issue a kill against it — simulates orphan cleanup/restart racing an
     // independent crash rather than causing it.
-    await new Promise((resolve) => {
+    await new Promise((resolve, reject) => {
+      const deadline = Date.now() + 3000;
       const check = setInterval(() => {
         if (wrapper.status === "failed") {
           clearInterval(check);
           resolve(undefined);
+        } else if (Date.now() > deadline) {
+          clearInterval(check);
+          reject(new Error(`expected status "failed", still "${wrapper.status}" after 3s`));
         }
       }, 5);
     });
@@ -217,12 +260,13 @@ describe("ProcessWrapper.stop", () => {
   test("runs a custom stop_command instead of signalling the process directly", async () => {
     const dir = mkdtempSync(join(tmpdir(), "conductor-wrapper-stopcmd-"));
     const markerPath = join(dir, "stopped.txt");
+    const stopScript = writeScript("require('fs').writeFileSync(process.env.MARKER_PATH, 'ok')");
     try {
       const cmd = makeCommand({
         id: "sleeper2",
         name: "Sleeper2",
         run: `bun -e "setInterval(() => {}, 1000)"`,
-        stop_command: `bun -e "require('fs').writeFileSync(process.env.MARKER_PATH, 'ok')"`,
+        stop_command: stopScript.command,
         stop_timeout_ms: 3000,
       });
       const wrapper = new ProcessWrapper(cmd, "test", testEnv({ MARKER_PATH: markerPath }));
@@ -233,6 +277,7 @@ describe("ProcessWrapper.stop", () => {
       expect(wrapper.status).toBe("stopped");
     } finally {
       rmSync(dir, { recursive: true, force: true });
+      stopScript.cleanup();
     }
   });
 });
