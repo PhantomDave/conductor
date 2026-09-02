@@ -46,14 +46,20 @@ async function checkHttp(url: string): Promise<boolean> {
  */
 async function checkCommand(
   command: string,
-  cwd?: string,
-  configuredShell?: string,
+  cwd: string | undefined,
+  configuredShell: string | undefined,
+  env: Record<string, string>,
 ): Promise<boolean> {
   try {
     const { bin, flag } = resolveShell(configuredShell);
     const proc = Bun.spawn({
       cmd: [bin, flag, command],
       cwd,
+      // Match the env the actual command runs with, so a probe like
+      // `psql $DATABASE_URL` (shell-expanded, not `${VAR}`-interpolated by
+      // Conductor itself) sees the same variables the process it's
+      // checking does, instead of just this server's own ambient env.
+      env,
       stdout: "ignore",
       stderr: "ignore",
     });
@@ -92,7 +98,7 @@ export async function probeOnce(
         const resolvedCmd = interpolateString(healthcheck.command, env);
         const cwd =
           env.BASE_PATH && isAbsolute(env.BASE_PATH) ? resolvePath(env.BASE_PATH) : undefined;
-        const ok = await checkCommand(resolvedCmd, cwd, env.CONDUCTOR_SHELL);
+        const ok = await checkCommand(resolvedCmd, cwd, env.CONDUCTOR_SHELL, env);
         return { ok, latencyMs: Date.now() - start, detail: `command "${resolvedCmd}"` };
       }
       case "none":
@@ -117,11 +123,14 @@ export async function waitForHealthy(
 ): Promise<void> {
   if (!healthcheck || healthcheck.type === "none") return;
 
-  const deadline = Date.now() + healthcheck.timeout_ms;
+  const start = Date.now();
+  const deadline = start + healthcheck.timeout_ms;
   let lastDetail = "";
+  let attemptsRun = 0;
 
   for (let attempt = 0; attempt < healthcheck.retries; attempt++) {
     const result = await probeOnce(healthcheck, env);
+    attemptsRun++;
 
     if (opts?.onAttempt) opts.onAttempt(attempt, result);
 
@@ -132,7 +141,15 @@ export async function waitForHealthy(
     await new Promise((r) => setTimeout(r, healthcheck.interval_ms));
   }
 
-  throw new HealthcheckError(
-    `Healthcheck for "${commandLabel}" did not pass within ${healthcheck.timeout_ms}ms (${lastDetail})`,
-  );
+  // Report what actually happened rather than always blaming the full
+  // timeout budget — a small `retries` count can exhaust well before
+  // `timeout_ms` elapses, and the previous message ("did not pass within
+  // 30000ms") was misleading when the real story was "gave up after 3
+  // attempts in under a second".
+  const elapsedMs = Date.now() - start;
+  const cause =
+    attemptsRun >= healthcheck.retries
+      ? `gave up after ${attemptsRun} attempt${attemptsRun === 1 ? "" : "s"}`
+      : `timed out after ${elapsedMs}ms`;
+  throw new HealthcheckError(`Healthcheck for "${commandLabel}" ${cause} (${lastDetail})`);
 }
