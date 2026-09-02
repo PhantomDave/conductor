@@ -349,14 +349,16 @@ export class SpawnQueue {
   }
 
   /**
-   * Returns commands ordered so that dependencies always start before
-   * the commands that depend on them. Throws on circular dependencies.
+   * Fail-fast cycle check scoped to `commandIds` and their transitive
+   * dependencies only. Every profile shares one global `SpawnQueue` (see
+   * ConfigStore), so checking every command in the queue instead would
+   * make a cycle accidentally introduced in one profile block starts for
+   * every other, unrelated profile too.
    */
-  private topologicalOrder(): CommandConfig[] {
+  private checkForCycles(commandIds: string[]): void {
     const byId = new Map(this.commands.map((c) => [c.id, c]));
     const visited = new Set<string>();
     const visiting = new Set<string>();
-    const ordered: CommandConfig[] = [];
 
     const visit = (id: string) => {
       if (visited.has(id)) return;
@@ -367,17 +369,12 @@ export class SpawnQueue {
       if (!cmd) return;
 
       visiting.add(id);
-      for (const dep of cmd.deps) visit(dep);
+      for (const dep of cmd.deps) if (dep) visit(dep);
       visiting.delete(id);
       visited.add(id);
-      ordered.push(cmd);
     };
 
-    for (const cmd of this.commands) {
-      if (cmd.id) visit(cmd.id);
-    }
-
-    return ordered;
+    for (const id of commandIds) visit(id);
   }
 
   /**
@@ -407,7 +404,7 @@ export class SpawnQueue {
    * while still getting the same concurrent, dependency-aware startup.
    */
   async startMany(commandIds: string[], onLog?: LogHandler): Promise<void> {
-    this.topologicalOrder(); // fail fast on a real cycle instead of a 60s timeout per node
+    this.checkForCycles(commandIds); // fail fast on a real cycle instead of a 60s timeout per node
     await Promise.all(commandIds.map((id) => this.ensureStarted(id, onLog).catch(() => {})));
   }
 
@@ -419,7 +416,7 @@ export class SpawnQueue {
    * target itself even if it's already running.
    */
   async startOne(commandId: string, onLog?: LogHandler): Promise<void> {
-    this.topologicalOrder(); // fail fast on a real cycle instead of a 60s timeout per node
+    this.checkForCycles([commandId]); // fail fast on a real cycle instead of a 60s timeout per node
     await this.ensureStarted(commandId, onLog);
   }
 
@@ -496,11 +493,39 @@ export class SpawnQueue {
   /**
    * Stops a command (if running) and starts it fresh with a new pid.
    * Dependencies are left untouched, matching `startOne`'s behavior.
+   *
+   * Routed through the same `startPromises` single-flight map as
+   * `ensureStarted` — otherwise a restart racing a concurrent
+   * startOne/startMany for the same command id could each independently
+   * call `startSingleProcess` and `this.wrappers.set(commandId, ...)`,
+   * silently orphaning whichever wrapper's process loses the race (the
+   * exact bug `startPromises` exists to close, just via a different entry
+   * point).
    */
   async restartOne(commandId: string, onLog?: LogHandler): Promise<void> {
     const cmd = this.commands.find((c) => c.id === commandId);
     if (!cmd) throw new Error(`Unknown command "${commandId}" in profile "${this.profile}"`);
 
+    // If a start is already in flight for this command, let it finish
+    // first rather than racing it — our stop+restart runs after.
+    const inFlight = this.startPromises.get(commandId);
+    if (inFlight) await inFlight.catch(() => {});
+
+    const promise = this.restartOneInner(commandId, cmd, onLog);
+    this.startPromises.set(commandId, promise);
+    promise
+      .finally(() => {
+        if (this.startPromises.get(commandId) === promise) this.startPromises.delete(commandId);
+      })
+      .catch(() => {});
+    return promise;
+  }
+
+  private async restartOneInner(
+    commandId: string,
+    cmd: CommandConfig,
+    onLog?: LogHandler,
+  ): Promise<void> {
     // Snapshot health *before* stopping — stop() always leaves health
     // "unhealthy" (it's no longer serving), so checking after would make
     // every restart look like a recovery, even one triggered by hand on an

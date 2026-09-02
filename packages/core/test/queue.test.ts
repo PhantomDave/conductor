@@ -61,6 +61,21 @@ describe("SpawnQueue.startAll - circular dependencies", () => {
 
     await expect(queue.startAll()).rejects.toThrow(/Circular dependency/);
   });
+
+  test("a cycle in one profile's commands doesn't block starting an unrelated command", async () => {
+    // Every profile shares one global SpawnQueue (store.ts), so a cycle
+    // accidentally introduced in profile A's commands must not make
+    // startMany/startOne throw for profile B's unrelated command_ids.
+    const a = makeCommand({ id: "a", name: "A", run: `bun -e "1"`, deps: ["b"] });
+    const b = makeCommand({ id: "b", name: "B", run: `bun -e "1"`, deps: ["a"] });
+    const unrelated = makeCommand({ id: "unrelated", name: "Unrelated", run: `bun -e "1"` });
+    const queue = new SpawnQueue("test", [a, b, unrelated], () => testEnv());
+
+    await queue.startOne("unrelated");
+    expect(queue.getWrapper("unrelated")?.status).toBe("running");
+
+    await queue.stopAll();
+  });
 });
 
 describe("SpawnQueue.startOne - dependency failure", () => {
@@ -329,6 +344,44 @@ describe("SpawnQueue - single-flight starts", () => {
 
       const lines = readFileSync(logPath, "utf-8").trim().split("\n").filter(Boolean);
       expect(lines).toHaveLength(1);
+
+      await queue.stopAll();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("SpawnQueue - restartOne races a concurrent start", () => {
+  test("restartOne joins the single-flight map instead of racing startOne's spawn", async () => {
+    // Before restartOne was routed through startPromises, restartOne and a
+    // concurrent startOne/startMany for the same command id could each
+    // independently call startSingleProcess and overwrite `wrappers`,
+    // orphaning whichever process's wrapper lost the race — never killed,
+    // never tracked again.
+    const dir = mkdtempSync(join(tmpdir(), "conductor-queue-restart-race-"));
+    const logPath = join(dir, "spawns.log");
+    try {
+      const cmd = makeCommand({
+        id: "racer",
+        name: "Racer",
+        run: `bun -e "require('fs').appendFileSync(process.env.SPAWN_LOG, process.pid + '\\n'); setInterval(() => {}, 1000)"`,
+      });
+      const queue = new SpawnQueue("test", [cmd], () => testEnv({ SPAWN_LOG: logPath }));
+
+      await queue.startOne("racer");
+      const firstPid = queue.getWrapper("racer")?.pid;
+
+      await Promise.all([queue.startOne("racer"), queue.restartOne("racer")]);
+
+      // Whatever wrapper ends up tracked for "racer" must be the one that
+      // actually won — no orphaned wrapper left running untracked outside
+      // `queue.wrappers`, and the queue's own bookkeeping (pid, status)
+      // must be internally consistent.
+      const finalWrapper = queue.getWrapper("racer");
+      expect(finalWrapper).toBeDefined();
+      expect(finalWrapper?.status).toBe("running");
+      expect(finalWrapper?.pid).not.toBe(firstPid);
 
       await queue.stopAll();
     } finally {
