@@ -4,14 +4,7 @@ import { useState } from "react";
 import { useProcesses } from "../hooks/useProcesses";
 import { useStopProcess, useRestartCommand } from "../hooks/useProcessActions";
 import { useUiStore } from "../store/ui";
-
-const STATUS_COLOR: Record<string, string> = {
-  running: "green",
-  starting: "yellow",
-  stopping: "orange",
-  stopped: "gray",
-  failed: "red",
-};
+import { STATUS_COLOR } from "../lib/statusColor";
 
 const HEALTH_COLOR: Record<string, string> = {
   healthy: "green",

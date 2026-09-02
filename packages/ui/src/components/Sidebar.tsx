@@ -15,15 +15,8 @@ import { useProcesses } from "../hooks/useProcesses";
 import { useProfiles } from "../hooks/useProfiles";
 import { useRunProfile, useStopAllProcesses } from "../hooks/useProcessActions";
 import { useUiStore } from "../store/ui";
+import { STATUS_COLOR } from "../lib/statusColor";
 import type { ProcessInfo } from "../lib/api";
-
-const STATUS_COLOR: Record<string, string> = {
-  running: "green",
-  starting: "yellow",
-  stopping: "orange",
-  stopped: "gray",
-  failed: "red",
-};
 
 // "# running"-style section label, matching SectionHeading's comment
 // convention on the rest of the app — kept local since the sidebar's

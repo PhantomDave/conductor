@@ -1,78 +1,127 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Badge, Card, Group, Stack, Text } from "@mantine/core";
 import { useProfiles } from "../hooks/useProfiles";
 import { useProcesses } from "../hooks/useProcesses";
 import { useUiStore } from "../store/ui";
 import { SectionHeading } from "./SectionHeading";
+import { STATUS_COLOR } from "../lib/statusColor";
 import type { CommandInfo, ProcessInfo } from "../lib/api";
-
-const STATUS_COLOR: Record<string, string> = {
-  running: "green",
-  starting: "yellow",
-  stopping: "orange",
-  stopped: "gray",
-  failed: "red",
-};
 
 const COLUMN_GAP = 56;
 const NODE_GAP = 10;
 const NODE_WIDTH = 180;
 
+// Stable fallback so a profile with no live processes doesn't force a new
+// Map identity (and a re-render) on every call.
+const EMPTY_PROCESS_MAP = new Map<string, ProcessInfo>();
+
 interface FlowNode {
   command: CommandInfo;
   depth: number;
   cycle: boolean;
+  resolvedDeps: string[];
+  unresolvedDeps: string[];
+}
+
+/**
+ * Finds every command that's a member of ANY dependency cycle reachable
+ * from `rootIds`, walking the FULL command graph (not just one profile) —
+ * this is the same scope SpawnQueue.checkForCycles uses in
+ * packages/core/src/executor/queue.ts, since `deps` reference commands
+ * globally and a command can be shared across profiles. `stack` tracks the
+ * current DFS path; finding an id already on it means every id from that
+ * point to the top of the stack is part of one cycle, not just the id that
+ * closed the loop.
+ */
+function findCycleMembers(rootIds: string[], byId: Map<string, CommandInfo>): Set<string> {
+  const cycleMembers = new Set<string>();
+  const visited = new Set<string>();
+  const stack: string[] = [];
+
+  function visit(id: string) {
+    if (visited.has(id)) return;
+    const stackIndex = stack.indexOf(id);
+    if (stackIndex !== -1) {
+      for (let i = stackIndex; i < stack.length; i++) cycleMembers.add(stack[i]);
+      return;
+    }
+    const cmd = byId.get(id);
+    if (!cmd) return;
+
+    stack.push(id);
+    for (const dep of cmd.deps) if (dep) visit(dep);
+    stack.pop();
+    visited.add(id);
+  }
+
+  for (const id of rootIds) visit(id);
+  return cycleMembers;
 }
 
 /**
  * Depth = longest chain of in-profile dependencies before a command can
- * start. Mirrors SpawnQueue.checkForCycles' visiting/visited DFS
- * (packages/core/src/executor/queue.ts) but degrades a cycle to depth 0 +
- * a flag instead of throwing — this only draws a picture, it doesn't run
- * anything. A dep id not present in this profile's own command list has no
- * node to connect to and is silently ignored, same as SpawnQueue's `if
- * (!cmd) return`.
+ * start, used only to pick this profile's visual column layout. Cycle
+ * membership, though, is checked against the full cross-profile command
+ * graph via findCycleMembers — a command can list a dep that belongs to a
+ * different profile (commands are global; profiles just reference a
+ * subset), and core's real SpawnQueue.checkForCycles traverses that edge
+ * too. A dep outside this profile has no node to connect to, so it's
+ * dropped from the drawn edges and the depth count, but never from cycle
+ * detection.
  */
-function layoutProfile(commands: CommandInfo[]): FlowNode[] {
-  const byId = new Map(commands.map((c) => [c.id, c]));
-  const depthCache = new Map<string, number>();
-  const visiting = new Set<string>();
-  const cycles = new Set<string>();
+function layoutProfile(
+  profileCommands: CommandInfo[],
+  allCommandsById: Map<string, CommandInfo>,
+): FlowNode[] {
+  const profileIds = new Set(profileCommands.map((c) => c.id));
+  const cycleMembers = findCycleMembers(
+    profileCommands.map((c) => c.id),
+    allCommandsById,
+  );
 
+  const depthCache = new Map<string, number>();
   function depthOf(id: string): number {
     const cached = depthCache.get(id);
     if (cached !== undefined) return cached;
-    if (visiting.has(id)) {
-      cycles.add(id);
+    if (cycleMembers.has(id)) {
+      depthCache.set(id, 0);
       return 0;
     }
-    const cmd = byId.get(id);
+    const cmd = allCommandsById.get(id);
     if (!cmd) return 0;
-
-    visiting.add(id);
-    const inProfileDeps = cmd.deps.filter((d) => byId.has(d));
+    const inProfileDeps = cmd.deps.filter((d) => profileIds.has(d));
     const depth = inProfileDeps.length === 0 ? 0 : 1 + Math.max(...inProfileDeps.map(depthOf));
-    visiting.delete(id);
     depthCache.set(id, depth);
     return depth;
   }
 
-  return commands.map((command) => ({
+  return profileCommands.map((command) => ({
     command,
     depth: depthOf(command.id),
-    cycle: cycles.has(command.id),
+    cycle: cycleMembers.has(command.id),
+    resolvedDeps: command.deps.filter((d) => profileIds.has(d)),
+    unresolvedDeps: command.deps.filter((d) => !profileIds.has(d)),
   }));
 }
 
 interface ProfileFlowProps {
   profileName: string;
   commands: CommandInfo[];
+  allCommandsById: Map<string, CommandInfo>;
   processesByCommandId: Map<string, ProcessInfo>;
 }
 
-function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlowProps) {
+const ProfileFlow = memo(function ProfileFlow({
+  profileName,
+  commands,
+  allCommandsById,
+  processesByCommandId,
+}: ProfileFlowProps) {
   const { selectProcess, setView } = useUiStore();
-  const nodes = useMemo(() => layoutProfile(commands), [commands]);
+  const nodes = useMemo(
+    () => layoutProfile(commands, allCommandsById),
+    [commands, allCommandsById],
+  );
 
   const columns = useMemo(() => {
     const maxDepth = nodes.reduce((m, n) => Math.max(m, n.depth), 0);
@@ -85,7 +134,6 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
   const containerRef = useRef<HTMLDivElement>(null);
   const nodeRefs = useRef(new Map<string, HTMLDivElement>());
   const [edges, setEdges] = useState<{ id: string; d: string }[]>([]);
-  const [svgSize, setSvgSize] = useState({ width: 0, height: 0 });
 
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -107,7 +155,7 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
 
       const nextEdges: { id: string; d: string }[] = [];
       for (const node of nodes) {
-        for (const depId of node.command.deps) {
+        for (const depId of node.resolvedDeps) {
           const from = rectOf(depId);
           const to = rectOf(node.command.id);
           if (!from || !to) continue;
@@ -123,7 +171,6 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
         }
       }
       setEdges(nextEdges);
-      setSvgSize({ width: containerRect.width, height: containerRect.height });
     };
 
     measure();
@@ -162,9 +209,13 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
           style={{ position: "relative", display: "inline-block", minWidth: "100%" }}
         >
           <svg
-            width={svgSize.width}
-            height={svgSize.height}
-            style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+            }}
           >
             {edges.map((e) => (
               <path
@@ -180,7 +231,7 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
           <Group align="flex-start" gap={COLUMN_GAP} wrap="nowrap">
             {columns.map((col, depth) => (
               <Stack key={depth} gap={NODE_GAP} style={{ width: NODE_WIDTH, flexShrink: 0 }}>
-                {col.map(({ command, cycle }) => {
+                {col.map(({ command, cycle, resolvedDeps, unresolvedDeps }) => {
                   const process = processesByCommandId.get(command.id);
                   const color = process ? (STATUS_COLOR[process.status] ?? "gray") : "gray";
                   const clickable = Boolean(process);
@@ -200,7 +251,7 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
                           : undefined
                       }
                       style={{
-                        border: `1px solid var(--mantine-color-${process ? color : "dark"}-${process ? 6 : 4})`,
+                        border: `1px solid var(--mantine-color-${cycle ? "red" : process ? color : "dark"}-${process || cycle ? 6 : 4})`,
                         borderStyle: process ? "solid" : "dashed",
                         background: "var(--mantine-color-dark-7)",
                         padding: "8px 12px",
@@ -220,9 +271,14 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
                       <Text size="xs" c={process ? color : "dimmed"} mt={2}>
                         {process ? process.status : "not running"}
                       </Text>
-                      {command.deps.length > 0 && (
+                      {resolvedDeps.length > 0 && (
                         <Text size="xs" c="dimmed" mt={2} truncate>
-                          needs: {command.deps.join(", ")}
+                          needs: {resolvedDeps.join(", ")}
+                        </Text>
+                      )}
+                      {unresolvedDeps.length > 0 && (
+                        <Text size="xs" c="dimmed" fs="italic" mt={2} truncate>
+                          also needs (other profile): {unresolvedDeps.join(", ")}
                         </Text>
                       )}
                     </div>
@@ -235,11 +291,36 @@ function ProfileFlow({ profileName, commands, processesByCommandId }: ProfileFlo
       </div>
     </Stack>
   );
-}
+});
 
 export function DependencyFlow() {
   const { data: profiles, isLoading, error } = useProfiles();
   const { data: processes } = useProcesses();
+
+  // Commands are global and shared across profiles by id (see layoutProfile's
+  // docstring) — merge every profile's resolved commands into one lookup so
+  // cycle detection can traverse the same graph SpawnQueue would at runtime.
+  const allCommandsById = useMemo(() => {
+    const map = new Map<string, CommandInfo>();
+    if (profiles) {
+      for (const name of Object.keys(profiles)) {
+        for (const cmd of profiles[name].commands) map.set(cmd.id, cmd);
+      }
+    }
+    return map;
+  }, [profiles]);
+
+  // A derived, poll-stable proxy for `processes`: only the fields this view
+  // displays. useProcesses() polls every 5s and ProcessInfo carries
+  // cpuPercent/memoryBytes that fluctuate almost every tick — keying
+  // processesByProfile off the raw array would rebuild it (and force every
+  // ProfileFlow subtree to re-render) on every poll even when no status or
+  // health actually changed.
+  const statusSignature = useMemo(
+    () =>
+      (processes ?? []).map((p) => `${p.profile}:${p.commandId}:${p.status}:${p.health}`).join("|"),
+    [processes],
+  );
 
   const processesByProfile = useMemo(() => {
     const map = new Map<string, Map<string, ProcessInfo>>();
@@ -248,7 +329,8 @@ export function DependencyFlow() {
       map.get(p.profile)!.set(p.commandId, p);
     }
     return map;
-  }, [processes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- statusSignature is the intentional, poll-stable proxy for `processes` described above.
+  }, [statusSignature]);
 
   if (isLoading) return <Text c="dimmed">Loading flow...</Text>;
   if (error) {
@@ -280,7 +362,8 @@ export function DependencyFlow() {
           key={name}
           profileName={name}
           commands={profiles![name].commands}
-          processesByCommandId={processesByProfile.get(name) ?? new Map()}
+          allCommandsById={allCommandsById}
+          processesByCommandId={processesByProfile.get(name) ?? EMPTY_PROCESS_MAP}
         />
       ))}
     </Stack>

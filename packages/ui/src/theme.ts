@@ -9,6 +9,7 @@ import type { MantineThemeOverride } from "@mantine/core";
  */
 const MONO_STACK =
   'ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace';
+const HAIRLINE_BORDER = "1px solid var(--mantine-color-dark-5)";
 
 export const conductorTheme: MantineThemeOverride = {
   primaryColor: "green",
@@ -54,6 +55,9 @@ export const conductorTheme: MantineThemeOverride = {
     lg: "3px",
     xl: "5px",
   },
+  // Applies to every radius-aware component below unless it sets its own
+  // `defaultProps.radius` (Badge and Tooltip do, to "sm").
+  defaultRadius: "md",
 
   shadows: {
     xs: "0 1px 2px rgba(0, 0, 0, 0.3)",
@@ -63,10 +67,16 @@ export const conductorTheme: MantineThemeOverride = {
     xl: "0 16px 24px rgba(0, 0, 0, 0.5)",
   },
 
+  // NOTE for future edits: this app has no @mantine/emotion resolver, so a
+  // component's `styles` prop below only ever produces a literal inline
+  // `style` attribute on the DOM node — nested selectors like "&:hover" or
+  // "&[data-active]" silently no-op (only a console warning, easy to miss).
+  // Anything state-dependent (hover/focus/active/data-attribute) belongs in
+  // global.css as real CSS targeting Mantine's stable `mantine-<Component>-
+  // <part>` class names instead — see the comment block there.
   components: {
     Card: {
       defaultProps: {
-        radius: "md",
         p: "md",
         shadow: "none",
       },
@@ -79,9 +89,6 @@ export const conductorTheme: MantineThemeOverride = {
       },
     },
     Button: {
-      defaultProps: {
-        radius: "md",
-      },
       styles: {
         root: {
           fontWeight: 500,
@@ -105,9 +112,6 @@ export const conductorTheme: MantineThemeOverride = {
       },
     },
     Input: {
-      defaultProps: {
-        radius: "md",
-      },
       styles: {
         input: {
           borderColor: "var(--mantine-color-dark-4)",
@@ -116,25 +120,7 @@ export const conductorTheme: MantineThemeOverride = {
         },
       },
     },
-    TextInput: {
-      defaultProps: {
-        radius: "md",
-      },
-    },
-    Select: {
-      defaultProps: {
-        radius: "md",
-      },
-    },
-    Tabs: {
-      defaultProps: {
-        radius: "md",
-      },
-    },
     ActionIcon: {
-      defaultProps: {
-        radius: "md",
-      },
       styles: {
         root: {
           transition: "all 200ms ease",
@@ -168,13 +154,12 @@ export const conductorTheme: MantineThemeOverride = {
     },
     Modal: {
       defaultProps: {
-        radius: "md",
         centered: true,
         overlayProps: { backgroundOpacity: 0.7, blur: 0 },
       },
       styles: {
         content: {
-          border: "1px solid var(--mantine-color-dark-5)",
+          border: HAIRLINE_BORDER,
         },
         header: {
           borderBottom: "1px solid var(--mantine-color-dark-6)",
@@ -182,12 +167,9 @@ export const conductorTheme: MantineThemeOverride = {
       },
     },
     Menu: {
-      defaultProps: {
-        radius: "md",
-      },
       styles: {
         dropdown: {
-          border: "1px solid var(--mantine-color-dark-5)",
+          border: HAIRLINE_BORDER,
         },
       },
     },
@@ -199,7 +181,7 @@ export const conductorTheme: MantineThemeOverride = {
     Notification: {
       styles: {
         root: {
-          border: "1px solid var(--mantine-color-dark-5)",
+          border: HAIRLINE_BORDER,
         },
       },
     },

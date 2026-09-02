@@ -177,7 +177,10 @@ tr:hover {
   transition: border-color 200ms ease;
 }
 .mantine-Card-root:hover {
-  border-color: var(--mantine-color-dark-4);
+  /* theme.ts's Card.styles.root already sets a literal inline border-color
+     (see the comment above) — an inline style always beats a class
+     selector unless this one carries !important. */
+  border-color: var(--mantine-color-dark-4) !important;
 }
 
 .mantine-Button-root:active {
