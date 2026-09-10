@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, shell } from "electron";
+import { app, BrowserWindow, dialog, Menu, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
@@ -12,42 +12,49 @@ if (process.platform === "linux") {
 
 // AppImage extracts to a fresh mountpoint under /tmp on every launch, so
 // chrome-sandbox can never keep the setuid-root (4755) ownership Chromium's
-// sandbox requires - it fails fatally on most modern kernels that restrict
-// unprivileged user namespaces (Ubuntu 24.04+, Fedora, etc.). Conductor
-// only ever renders its own bundled UI (no remote/untrusted content), so
-// disabling the sandbox here is a safe, standard workaround for Electron
-// apps distributed as AppImage. --disable-dev-shm-usage is added for the
-// same reason it's paired with --no-sandbox in containerized/CI setups:
-// some restricted environments give Chromium a /dev/shm it can't actually
-// use, and this makes it fall back to a regular temp file instead of
-// crashing. Must be set before app is ready.
+// setuid sandbox helper requires - it fails fatally on most modern kernels
+// that restrict unprivileged user namespaces (Ubuntu 24.04+, Fedora, etc.).
+// --disable-setuid-sandbox skips that helper while KEEPING the namespace
+// sandbox. Must be set before app is ready.
+//
+// Deliberately NOT --no-sandbox, which is what this used to be. That switch
+// tears down the whole sandbox, and an unsandboxed renderer allocates its own
+// shared memory rather than having the browser process broker it. On some
+// kernels that allocation fails and Chromium answers with a fatal CHECK():
+//
+//   ERROR ... Creating shared memory in /dev/shm/.org.chromium.Chromium.XXXXXX
+//             failed: No such process (3)
+//   FATAL ... This is frequently caused by incorrect permissions on /dev/shm.
+//
+// The renderer then dies of SIGTRAP the instant a page loads, which presents
+// as a blank white window with nothing logged in the main process. That last
+// line is a red herring - it reproduced on a host whose /dev/shm was mode
+// 1777 with 31GB free. Bisected against a minimal Electron app, three runs
+// each: no switches survives, --no-sandbox crashes, this one survives.
 if (process.platform === "linux") {
-  app.commandLine.appendSwitch("no-sandbox");
-  app.commandLine.appendSwitch("disable-dev-shm-usage");
-  // Disable GPU acceleration to avoid crashes on systems with GPU issues
-  app.commandLine.appendSwitch("disable-gpu");
-  app.commandLine.appendSwitch("disable-gpu-compositing");
-  // Use software rendering as fallback
-  app.commandLine.appendSwitch("enable-software-rasterizer");
-  // Additional stability flags for restricted Linux environments
-  app.commandLine.appendSwitch("disable-features", "TranslateUI,BackingStoreLimit");
-  app.commandLine.appendSwitch("disable-extensions");
-  app.commandLine.appendSwitch("no-first-run");
-  app.commandLine.appendSwitch("disable-breakpad");
-  app.commandLine.appendSwitch("disable-client-side-phishing-detection");
-  app.commandLine.appendSwitch("disable-component-update");
-  app.commandLine.appendSwitch("disable-sync");
-  // Disable GTK theming integration which may cause crashes on broken GTK setups
-  app.commandLine.appendSwitch("disable-gtk-im-module");
-  // Force X11 backend if available to avoid Wayland compatibility issues
-  // (Chromium/Electron on Wayland can be unstable)
-  if (!process.env.WAYLAND_DISPLAY) {
-    app.commandLine.appendSwitch("ozone-platform", "x11");
-  }
+  app.commandLine.appendSwitch("disable-setuid-sandbox");
+  // Everything that used to live here - disable-gpu, disable-gpu-compositing,
+  // enable-software-rasterizer, disable-features=TranslateUI/BackingStoreLimit,
+  // disable-extensions, no-first-run, disable-breakpad, disable-sync,
+  // disable-gtk-im-module and friends - is gone. Bisected individually against
+  // a minimal Electron app, none of them was needed to render, and the crash
+  // they were nominally guarding against turned out to come from --no-sandbox
+  // above. That is not proof they never helped some other machine, so: add any
+  // of them back, but only with a reproduction attached.
+  //
+  // The ozone/x11 block that used to sit here was also inverted: it read
+  // `if (!process.env.WAYLAND_DISPLAY)` while its comment claimed to force X11
+  // to dodge Wayland instability, so it only ever applied X11 on sessions that
+  // were already using X11. Forcing X11 was separately confirmed not to affect
+  // the crash, so it is gone rather than corrected - Electron handles Wayland
+  // via --ozone-platform-hint if it is ever actually wanted.
 }
 
 let sidecar: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
+/** Set once shutdown starts, so teardown noise (a renderer going away because
+ * we are quitting) is not reported as a failure. */
+let isQuitting = false;
 
 /** Finds a free TCP port by asking the OS to bind port 0 and reading back
  * whatever it picked - avoids clashing with anything else on the machine
@@ -105,6 +112,20 @@ function resolvePaths(): { sidecarPath: string; uiDistPath: string } {
   };
 }
 
+/** Relays a sidecar output chunk to our own stdout/stderr, tolerating a
+ * stream that cannot be written to. A double-clicked AppImage has no
+ * terminal attached, and a piped launch can have its reader go away at any
+ * time - in both cases the write raises EPIPE, and an unhandled EPIPE takes
+ * down the whole main process with a modal "A JavaScript error occurred"
+ * dialog. Losing a log line is fine; losing the app is not. */
+function forward(stream: NodeJS.WriteStream, chunk: unknown): void {
+  try {
+    stream.write(`[core] ${chunk}`);
+  } catch {
+    // Stream is closed or broken - drop the line.
+  }
+}
+
 async function startSidecar(): Promise<number> {
   const { sidecarPath, uiDistPath } = resolvePaths();
 
@@ -137,8 +158,8 @@ async function startSidecar(): Promise<number> {
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  sidecar.stdout?.on("data", (chunk) => process.stdout.write(`[core] ${chunk}`));
-  sidecar.stderr?.on("data", (chunk) => process.stderr.write(`[core] ${chunk}`));
+  sidecar.stdout?.on("data", (chunk) => forward(process.stdout, chunk));
+  sidecar.stderr?.on("data", (chunk) => forward(process.stderr, chunk));
   sidecar.on("exit", (code, signal) => {
     console.log(`[core] sidecar exited (code=${code}, signal=${signal})`);
     sidecar = null;
@@ -183,6 +204,35 @@ async function createWindow(port: number) {
 
     console.log("BrowserWindow created, attaching event handlers...");
 
+    // A renderer that dies takes the page with it but leaves the window
+    // frame up, so the only symptom is a blank white rectangle and a silent
+    // main process. Surface the reason instead - `details.reason` is what
+    // distinguishes a Chromium CHECK() abort from an OOM kill or a plain
+    // crash, and it is the difference between a one-line diagnosis and an
+    // afternoon of bisecting launch flags.
+    mainWindow.webContents.on("render-process-gone", (_event, details) => {
+      const message = `Renderer process gone: reason=${details.reason} exitCode=${details.exitCode}`;
+      // "clean-exit" is what a normal shutdown looks like - the renderer goes
+      // away because we asked it to. Only an unexpected death is news, and
+      // only then is a modal warranted; popping one during quit would put an
+      // error box in front of every user who simply closed the app.
+      if (details.reason === "clean-exit" || isQuitting) {
+        console.log(message);
+        return;
+      }
+      console.error(message);
+      dialog.showErrorBox("Conductor: the UI process stopped", message);
+    });
+
+    // Distinct failure: the renderer is alive but the page never loaded
+    // (sidecar died mid-request, wrong port, UI bundle missing).
+    mainWindow.webContents.on(
+      "did-fail-load",
+      (_event, errorCode, errorDescription, validatedURL) => {
+        console.error(`Failed to load ${validatedURL}: ${errorDescription} (${errorCode})`);
+      },
+    );
+
     // Any link that would normally navigate away (e.g. a "view on GitHub"
     // link) should open in the OS browser instead of inside the app window.
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -225,6 +275,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", (event) => {
+  isQuitting = true;
   if (!sidecar || sidecar.exitCode !== null) return;
   // Delay quitting until the sidecar (and everything it started) has had
   // a chance to shut down cleanly, instead of orphaning child processes.
