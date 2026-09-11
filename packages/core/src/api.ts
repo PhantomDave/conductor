@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { existsSync } from "node:fs";
@@ -124,7 +124,7 @@ function looksSecret(key: string): boolean {
   return /secret|token|password|key|credential|api_key/i.test(key);
 }
 
-function handleConfigError(err: unknown, reply: { status: (code: number) => any }) {
+function handleConfigError(err: unknown, reply: FastifyReply) {
   if (err instanceof ConfigError) {
     return reply.status(400).send({ error: err.message });
   }

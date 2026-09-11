@@ -26,7 +26,7 @@
     "build": "bun run --cwd packages/core build && bun run --cwd packages/cli build && bun run --cwd packages/ui build",
     "build:desktop": "bun run --cwd packages/core build:sidecar && bun run --cwd packages/ui build && bun run --cwd packages/desktop dist",
     "test": "bun test",
-    "lint": "eslint . --ext .ts,.tsx",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "bun run --cwd packages/core typecheck && bun run --cwd packages/cli typecheck && bun run --cwd packages/ui typecheck && bun run --cwd packages/desktop typecheck"
@@ -37,6 +37,6 @@
     "eslint": "^10.8.0",
     "typescript-eslint": "^8.16.0",
     "prettier": "^3.3.3",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.3"
   }
 }

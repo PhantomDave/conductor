@@ -149,11 +149,11 @@ Tests live in `packages/core/test/`: five test files covering config loading/val
 
 ## CI/CD (.github/workflows)
 
-| Workflow         | When it runs                     | What it does                                                                                                                                                                                      |
-| ---------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`         | Every push / PR to main branches | lint-and-typecheck (format:check + typecheck), test (ubuntu/macos/windows matrix), build (core → cli → ui), cli-smoke-test (cp .conductor.example.yml → .conductor.yml; config validate; run dev) |
-| `release.yml`    | On release published             | Per-OS compile of sidecar + electron-builder upload to same GitHub Release                                                                                                                        |
-| `dependabot.yml` | Automatic dependency bumps       | Dependabot bot config for Bun ecosystem                                                                                                                                                           |
+| Workflow         | When it runs                     | What it does                                                                                                                                                                                             |
+| ---------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`         | Every push / PR to main branches | lint-and-typecheck (format:check + lint + typecheck), test (ubuntu/macos/windows matrix), build (core → cli → ui), cli-smoke-test (cp .conductor.example.yml → .conductor.yml; config validate; run dev) |
+| `release.yml`    | On release published             | Per-OS compile of sidecar + electron-builder upload to same GitHub Release                                                                                                                               |
+| `dependabot.yml` | Automatic dependency bumps       | Dependabot bot config for Bun ecosystem                                                                                                                                                                  |
 
 ## CLI vs API Comparison
 

@@ -8,7 +8,7 @@ export interface DockerComposeService {
     args?: Record<string, string>;
   };
   ports?: (string | number)[];
-  depends_on?: Record<string, any> | string[];
+  depends_on?: Record<string, unknown> | string[];
   healthcheck?: {
     test?: string | string[];
     interval?: string;
@@ -75,11 +75,11 @@ function slugify(name: string): string {
 /**
  * Extracts dependencies from depends_on field
  */
-function extractDependencies(dependsOn?: Record<string, any> | string[]): string[] {
+function extractDependencies(dependsOn?: Record<string, unknown> | string[]): string[] {
   if (!dependsOn) return [];
 
   if (Array.isArray(dependsOn)) {
-    return dependsOn.map((dep) => slugify(typeof dep === "string" ? dep : dep.toString()));
+    return dependsOn.map((dep) => slugify(String(dep)));
   }
 
   return Object.keys(dependsOn).map((key) => slugify(key));
@@ -206,13 +206,13 @@ export function suggestCommand(
  * Services with profiles in docker compose are imported normally,
  * but their profile configuration is ignored and they're assigned to the selected profile in Conductor
  */
-export function parseDockerCompose(config: any): SuggestedCommand[] {
+export function parseDockerCompose(config: unknown): SuggestedCommand[] {
   if (!config || typeof config !== "object") {
     return [];
   }
 
-  const services = config.services || {};
-  if (typeof services !== "object") {
+  const services: unknown = ("services" in config && config.services) || {};
+  if (typeof services !== "object" || services === null) {
     return [];
   }
 

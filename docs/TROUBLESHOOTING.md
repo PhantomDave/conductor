@@ -176,6 +176,18 @@ bun run build:desktop  # sidecar + electron builder
 
 The sidecar must be in `packages/core/dist-bin/conductor-server` before the desktop app can find it. Check for errors during the sidecar compilation step (`bunx bun build --compile > ...`).
 
+## Development Tooling Issues
+
+### `bun run lint` fails with "typescript-eslint does not support TS 7.0"
+
+typescript-eslint loads the compiler through `require("typescript")`, and TypeScript 7 no longer ships that JS API ([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)). The repo therefore stays on TypeScript 6 (`"typescript": "^6.0.3"` in the root and `packages/desktop` manifests), and `.github/dependabot.yml` ignores TypeScript 7+ bumps.
+
+If this error appears, something moved `typescript` to 7.x — pin it back to `^6.0.3` and run `bun install`. Once typescript-eslint supports TypeScript 7, drop the Dependabot ignore and upgrade both manifests together.
+
+### `bun run lint` fails on a warning
+
+Lint runs with `--max-warnings 0`, so warnings fail it (and CI) just like errors. Fix the finding rather than raising the limit; prefix intentionally unused variables and arguments with `_`.
+
 ## Docker Compose Import Issues
 
 ### docker compose YAML fails to parse

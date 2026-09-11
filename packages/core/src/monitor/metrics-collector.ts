@@ -152,7 +152,9 @@ export class MetricCollector {
 
         this.queries.insertMetric(item.pid, cpuSum, memTotal);
         this.options.onSample?.(item.pid, cpuSum, memTotal);
-      } catch {}
+      } catch {
+        /* process exited mid-sample or the metric write failed — skip it, next tick retries */
+      }
     }
 
     // Retention cleanup

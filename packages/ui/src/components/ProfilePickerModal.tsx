@@ -4,7 +4,7 @@ import { useMemo } from "react";
 interface ProfilePickerModalProps {
   readonly opened: boolean;
   readonly onClose: () => void;
-  readonly profiles: Record<string, { commands: readonly any[] }> | undefined;
+  readonly profiles: Record<string, { commands: readonly unknown[] }> | undefined;
   readonly excludeProfile?: string;
   readonly onSelect: (profileName: string) => void;
   readonly title: string;

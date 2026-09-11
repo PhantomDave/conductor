@@ -329,7 +329,7 @@ export function DependencyFlow() {
       map.get(p.profile)!.set(p.commandId, p);
     }
     return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- statusSignature is the intentional, poll-stable proxy for `processes` described above.
+    // statusSignature is the intentional, poll-stable proxy for `processes` described above.
   }, [statusSignature]);
 
   if (isLoading) return <Text c="dimmed">Loading flow...</Text>;
