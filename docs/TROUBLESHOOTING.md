@@ -180,9 +180,9 @@ The sidecar must be in `packages/core/dist-bin/conductor-server` before the desk
 
 ### `bun run lint` fails with "typescript-eslint does not support TS 7.0"
 
-typescript-eslint loads the compiler through `require("typescript")`, and TypeScript 7 no longer ships that JS API ([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)). The repo therefore stays on TypeScript 6 (`"typescript": "^6.0.3"` in the root and `packages/desktop` manifests), and `.github/dependabot.yml` ignores TypeScript 7+ bumps.
+typescript-eslint loads the compiler through `require("typescript")`, and TypeScript 7 no longer ships that JS API ([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)). The repo therefore stays on TypeScript 6 (`"typescript": "^6.0.3"` in the root and `packages/desktop` manifests) until lint moves to a tool that doesn't depend on the TypeScript API.
 
-If this error appears, something moved `typescript` to 7.x — pin it back to `^6.0.3` and run `bun install`. Once typescript-eslint supports TypeScript 7, drop the Dependabot ignore and upgrade both manifests together.
+Dependabot still proposes TypeScript 7 bumps. Those PRs fail CI's Lint step with this error, so leave them unmerged. If the error appears locally, something moved `typescript` to 7.x: pin it back to `^6.0.3` and run `bun install`.
 
 ### `bun run lint` fails on a warning
 
