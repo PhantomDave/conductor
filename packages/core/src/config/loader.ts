@@ -5,25 +5,35 @@ import { ConductorConfigSchema, type ConductorConfig } from "./schema";
 
 export class ConfigError extends Error {}
 
+type RawRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is RawRecord {
+  return typeof value === "object" && value !== null;
+}
+
+/** Old-format commands are identified by a truthy `id`; the schema validates the rest. */
+function hasId(value: unknown): value is RawRecord & { id: unknown } {
+  return isRecord(value) && Boolean(value.id);
+}
+
 /**
  * Checks if a config uses the old format (commands nested in profiles).
  */
-function usesOldFormat(profiles: Record<string, any> | undefined): boolean {
-  if (!profiles || typeof profiles !== "object") return false;
+function usesOldFormat(profiles: RawRecord): boolean {
   return Object.values(profiles).some(
-    (profile) => profile && typeof profile === "object" && Array.isArray(profile.commands),
+    (profile) => isRecord(profile) && Array.isArray(profile.commands),
   );
 }
 
 /**
  * Extracts commands from old-format profiles and deduplicates by ID.
  */
-function extractCommandsFromProfiles(profiles: Record<string, any>): Map<string, any> {
-  const commandMap = new Map<string, any>();
+function extractCommandsFromProfiles(profiles: RawRecord): Map<unknown, RawRecord> {
+  const commandMap = new Map<unknown, RawRecord>();
   for (const profile of Object.values(profiles)) {
-    if (profile && Array.isArray(profile.commands)) {
+    if (isRecord(profile) && Array.isArray(profile.commands)) {
       for (const cmd of profile.commands) {
-        if (cmd && typeof cmd === "object" && cmd.id) {
+        if (hasId(cmd)) {
           commandMap.set(cmd.id, cmd);
         }
       }
@@ -35,17 +45,15 @@ function extractCommandsFromProfiles(profiles: Record<string, any>): Map<string,
 /**
  * Converts old-format profiles to new format (with command_ids instead of commands).
  */
-function migrateProfiles(profiles: Record<string, any>): Record<string, any> {
-  const migratedProfiles: Record<string, any> = {};
+function migrateProfiles(profiles: RawRecord): Record<string, RawRecord> {
+  const migratedProfiles: Record<string, RawRecord> = {};
   for (const [profileName, profile] of Object.entries(profiles)) {
-    if (!profile || typeof profile !== "object") continue;
-    const commands = (profile as Record<string, any>).commands || [];
-    const command_ids = Array.isArray(commands)
-      ? commands.filter((c): c is any => c && typeof c === "object" && c.id).map((c) => c.id)
-      : [];
+    if (!isRecord(profile)) continue;
+    const commands = profile.commands || [];
+    const command_ids = Array.isArray(commands) ? commands.filter(hasId).map((c) => c.id) : [];
     migratedProfiles[profileName] = {
-      description: (profile as Record<string, any>).description,
-      env: ((profile as Record<string, any>).env as Record<string, string>) || {},
+      description: profile.description,
+      env: profile.env || {},
       command_ids,
     };
   }
@@ -58,12 +66,11 @@ function migrateProfiles(profiles: Record<string, any>): Record<string, any> {
  * This enables backward compatibility with existing .conductor.yml files.
  */
 function migrateConfigFormat(raw: unknown): unknown {
-  if (typeof raw !== "object" || raw === null) {
+  if (!isRecord(raw)) {
     return raw;
   }
 
-  const config = raw as Record<string, unknown>;
-  const profiles = config.profiles as Record<string, any> | undefined;
+  const profiles = isRecord(raw.profiles) ? raw.profiles : undefined;
 
   if (!profiles || !usesOldFormat(profiles)) {
     return raw;
@@ -73,7 +80,7 @@ function migrateConfigFormat(raw: unknown): unknown {
   const migratedProfiles = migrateProfiles(profiles);
 
   return {
-    ...config,
+    ...raw,
     commands: Array.from(commandMap.values()),
     profiles: migratedProfiles,
   };

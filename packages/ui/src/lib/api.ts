@@ -83,24 +83,32 @@ export async function fetchProcesses(): Promise<ProcessInfo[]> {
   return data.processes ?? [];
 }
 
+interface ProfilesResponse {
+  profiles?: Record<string, Pick<ProfileInfo, "description" | "command_ids">>;
+  commands: CommandInfo[];
+}
+
 export async function fetchProfiles(): Promise<
   Record<string, ProfileInfo & { commands: CommandInfo[] }>
 > {
   const res = await fetch(`${API_BASE}/profiles`);
-  const data = await parseJsonOrThrow(res, `Failed to fetch profiles: ${res.status}`);
+  const data: ProfilesResponse = await parseJsonOrThrow(
+    res,
+    `Failed to fetch profiles: ${res.status}`,
+  );
   const { profiles, commands } = data;
 
   // Resolve command_ids to full command objects
   const resolvedProfiles = Object.fromEntries(
-    Object.entries(profiles ?? {}).map(([name, profile]: [string, any]) => [
+    Object.entries(profiles ?? {}).map(([name, profile]) => [
       name,
       {
         description: profile.description,
         command_ids: profile.command_ids,
-        commands: (profile.command_ids as string[])
-          .map((id: string) => (commands as CommandInfo[]).find((c: CommandInfo) => c.id === id))
-          .filter((c: CommandInfo | undefined): c is CommandInfo => c !== undefined),
-      } as ProfileInfo & { commands: CommandInfo[] },
+        commands: profile.command_ids
+          .map((id) => commands.find((c) => c.id === id))
+          .filter((c): c is CommandInfo => c !== undefined),
+      },
     ]),
   );
 

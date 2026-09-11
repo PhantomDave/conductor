@@ -2,6 +2,7 @@ import { Table, Badge, Text, Card, Button, Group, Tabs } from "@mantine/core";
 import { IconPlayerStop, IconRefresh, IconFileText } from "@tabler/icons-react";
 import { useState } from "react";
 import { useProcesses } from "../hooks/useProcesses";
+import type { ProcessInfo } from "../lib/api";
 import { useStopProcess, useRestartCommand } from "../hooks/useProcessActions";
 import { useUiStore } from "../store/ui";
 import { STATUS_COLOR } from "../lib/statusColor";
@@ -13,11 +14,7 @@ const HEALTH_COLOR: Record<string, string> = {
 };
 
 interface ProcessTableProps {
-  processes: typeof useProcesses extends (...args: any[]) => infer R
-    ? R extends { data: infer D }
-      ? D
-      : never
-    : never;
+  processes: ProcessInfo[];
   stopProcess: ReturnType<typeof useStopProcess>;
   restartCommand: ReturnType<typeof useRestartCommand>;
 }
