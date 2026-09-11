@@ -132,9 +132,8 @@ function CommandFormFields({
       if (isStandalone) {
         setIsSubmitting(true);
         updateStandaloneCommand(editing.id, input)
-          .then(() => {
-            invCmdLib();
-            invProfiles();
+          .then(async () => {
+            await Promise.all([invCmdLib(), invProfiles()]);
             notifications.show({ color: "green", message: `Updated command "${input.name}"` });
             onClose();
           })
@@ -156,9 +155,8 @@ function CommandFormFields({
       if (isStandalone) {
         setIsSubmitting(true);
         createStandaloneCommand(input)
-          .then((created) => {
-            invCmdLib();
-            invProfiles();
+          .then(async (created) => {
+            await Promise.all([invCmdLib(), invProfiles()]);
             notifications.show({ color: "green", message: `Created command "${created.name}"` });
             onClose();
           })

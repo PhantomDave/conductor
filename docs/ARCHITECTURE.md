@@ -150,17 +150,17 @@ Tests live in `packages/core/test/`: five test files covering config loading/val
 ## Toolchain
 
 - **TypeScript 7** (`typescript@^7`, the native compiler) is only the type checker: `bun run typecheck` runs `tsc --noEmit` in core, cli, ui and desktop. Builds never go through `tsc`; Bun (`bun build`), Vite and esbuild strip the types.
-- **oxlint** (`.oxlintrc.json`) lints every `.ts/.tsx/.js/.mjs` file: the correctness category, the rules carried over from the old ESLint config, and the React hooks rules. It doesn't load the `typescript` package, which is what let the repo move to TS 7 (typescript-eslint needs the TS 6 JS API).
+- **oxlint** (`.oxlintrc.json`) lints every `.ts/.tsx/.js/.mjs` file: the correctness category, the rules carried over from the old ESLint config, and the React hooks rules. It doesn't load the `typescript` package, which is what let the repo move to TS 7 (typescript-eslint needs the TS 6 JS API). `bun run lint:types` adds the type-aware rules (`oxlint --type-aware`, through `oxlint-tsgolint`, which is built on the TS 7 codebase): floating promises, `await` on non-promises, unsafe template expressions and the rest of the type-aware correctness category.
 - **Prettier** formats everything (`bun run format` / `format:check`).
 - **Editor:** the recommended VS Code extensions are listed in `.vscode/extensions.json`: TypeScript 7 (native language service), Oxc (inline oxlint) and Prettier.
 
 ## CI/CD (.github/workflows)
 
-| Workflow         | When it runs                     | What it does                                                                                                                                                                                             |
-| ---------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`         | Every push / PR to main branches | lint-and-typecheck (format:check + lint + typecheck), test (ubuntu/macos/windows matrix), build (core → cli → ui), cli-smoke-test (cp .conductor.example.yml → .conductor.yml; config validate; run dev) |
-| `release.yml`    | On release published             | Per-OS compile of sidecar + electron-builder upload to same GitHub Release                                                                                                                               |
-| `dependabot.yml` | Automatic dependency bumps       | Dependabot bot config for Bun ecosystem                                                                                                                                                                  |
+| Workflow         | When it runs                     | What it does                                                                                                                                                                                                          |
+| ---------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`         | Every push / PR to main branches | lint-and-typecheck (format:check + lint + lint:types + typecheck), test (ubuntu/macos/windows matrix), build (core → cli → ui), cli-smoke-test (cp .conductor.example.yml → .conductor.yml; config validate; run dev) |
+| `release.yml`    | On release published             | Per-OS compile of sidecar + electron-builder upload to same GitHub Release                                                                                                                                            |
+| `dependabot.yml` | Automatic dependency bumps       | Dependabot bot config for Bun ecosystem                                                                                                                                                                               |
 
 ## CLI vs API Comparison
 

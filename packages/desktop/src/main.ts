@@ -118,9 +118,9 @@ function resolvePaths(): { sidecarPath: string; uiDistPath: string } {
  * time - in both cases the write raises EPIPE, and an unhandled EPIPE takes
  * down the whole main process with a modal "A JavaScript error occurred"
  * dialog. Losing a log line is fine; losing the app is not. */
-function forward(stream: NodeJS.WriteStream, chunk: unknown): void {
+function forward(stream: NodeJS.WriteStream, chunk: Buffer | string): void {
   try {
-    stream.write(`[core] ${chunk}`);
+    stream.write(`[core] ${chunk.toString()}`);
   } catch {
     // Stream is closed or broken - drop the line.
   }
@@ -283,32 +283,40 @@ app.on("before-quit", (event) => {
   void stopSidecar().then(() => app.quit());
 });
 
-app.whenReady().then(async () => {
-  buildMenu();
-  try {
-    // Check for display server before trying to create window
-    if (process.platform === "linux") {
-      const display = process.env.DISPLAY || process.env.WAYLAND_DISPLAY;
-      if (!display) {
-        console.error(
-          "No X11 or Wayland display found. Set DISPLAY=:0 or run with a display server.",
-        );
-        console.error("For headless testing, use Xvfb or similar virtual display.");
-        throw new Error("No display server available (set DISPLAY environment variable)");
+app
+  .whenReady()
+  .then(async () => {
+    buildMenu();
+    try {
+      // Check for display server before trying to create window
+      if (process.platform === "linux") {
+        const display = process.env.DISPLAY || process.env.WAYLAND_DISPLAY;
+        if (!display) {
+          console.error(
+            "No X11 or Wayland display found. Set DISPLAY=:0 or run with a display server.",
+          );
+          console.error("For headless testing, use Xvfb or similar virtual display.");
+          throw new Error("No display server available (set DISPLAY environment variable)");
+        }
       }
+
+      const port = await startSidecar();
+      await createWindow(port);
+    } catch (err) {
+      console.error("Failed to start Conductor:", err);
+      app.quit();
+      return;
     }
 
-    const port = await startSidecar();
-    await createWindow(port);
-  } catch (err) {
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+        console.error("Auto-update check failed:", err);
+      });
+    }
+  })
+  // Anything thrown outside the try above (e.g. by buildMenu) would otherwise
+  // be an unhandled rejection that leaves the app running with no window.
+  .catch((err: unknown) => {
     console.error("Failed to start Conductor:", err);
     app.quit();
-    return;
-  }
-
-  if (app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.error("Auto-update check failed:", err);
-    });
-  }
-});
+  });

@@ -109,7 +109,7 @@ describe("probeOnce - type: http", () => {
       );
       expect(result.ok).toBe(true);
     } finally {
-      server.stop(true);
+      await server.stop(true);
     }
   });
 
@@ -122,7 +122,7 @@ describe("probeOnce - type: http", () => {
       );
       expect(result.ok).toBe(false);
     } finally {
-      server.stop(true);
+      await server.stop(true);
     }
   });
 
@@ -136,7 +136,7 @@ describe("probeOnce - type: http", () => {
       expect(result.ok).toBe(true);
       expect(result.detail).toContain(String(server.port));
     } finally {
-      server.stop(true);
+      await server.stop(true);
     }
   });
 
@@ -189,13 +189,11 @@ describe("probeOnce - type: command", () => {
 
 describe("waitForHealthy", () => {
   test("resolves immediately when there's no healthcheck configured", async () => {
-    await expect(waitForHealthy("test/none", undefined, {})).resolves.toBeUndefined();
+    expect(waitForHealthy("test/none", undefined, {})).resolves.toBeUndefined();
   });
 
   test("resolves immediately for type: none", async () => {
-    await expect(
-      waitForHealthy("test/none", healthcheck({ type: "none" }), {}),
-    ).resolves.toBeUndefined();
+    expect(waitForHealthy("test/none", healthcheck({ type: "none" }), {})).resolves.toBeUndefined();
   });
 
   test("succeeds once the probe starts passing, after actually retrying", async () => {
@@ -224,7 +222,7 @@ describe("waitForHealthy", () => {
 
   test("throws HealthcheckError after exhausting retries", async () => {
     const port = await getClosedPort();
-    await expect(
+    expect(
       waitForHealthy(
         "test/never",
         healthcheck({ type: "port", port, interval_ms: 10, retries: 3, timeout_ms: 5000 }),
@@ -236,7 +234,7 @@ describe("waitForHealthy", () => {
   test("reports every attempt index via onAttempt before giving up", async () => {
     const port = await getClosedPort();
     const attempts: number[] = [];
-    await expect(
+    expect(
       waitForHealthy(
         "test/count",
         healthcheck({ type: "port", port, interval_ms: 10, retries: 3, timeout_ms: 5000 }),

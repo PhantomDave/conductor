@@ -1,6 +1,6 @@
 # TypeScript 7 Migration Plan
 
-**Status:** in progress (decisions settled 2026-09-11, see [Decisions](#decisions)) · **Baseline:** `main` after #57 and #58 (TypeScript 6.0.3, ESLint + typescript-eslint, strict lint in CI; Dependabot proposes TS 7 bumps, which fail Lint until Phase 1 lands)
+**Status:** complete (2026-09-11): Phase 1 #61, Phase 2 #62, Phase 3 #63, Phase 4 #64; decisions in [Decisions](#decisions) · **Baseline:** `main` after #57 and #58 (TypeScript 6.0.3, ESLint + typescript-eslint, strict lint in CI; Dependabot proposes TS 7 bumps, which fail Lint until Phase 1 lands)
 
 ## Goal
 
@@ -85,6 +85,8 @@ Add `oxlint-tsgolint` and run `oxlint --type-aware`. Baseline on the #57 tree:
 | `typescript/restrict-template-expressions` | 1        | `packages/desktop/src/main.ts:123`                                                                   |
 
 By package: ui 50, core 17, desktop 2. Fix every finding (no baseline file, no blanket disables). Type-aware lint runs as its **own required CI step** (`lint:types`), so it can be switched off separately if tsgolint regresses. If the phase gets large, split it into consecutive PRs (per rule or package), each green and merged before the next.
+
+**Outcome:** by the time Phase 4 ran, 58 findings remained (Phase 2's React fixes and two returned `invalidateQueries` promises had cleared the rest), and all 58 were fixed in one PR with no suppressions. The 10 `await-thenable` findings were all `await expect(promise).rejects/resolves...` in core tests. bun:test's `.rejects`/`.resolves` matchers block until the promise settles and return `undefined` (checked at runtime), so those `await`s were no-ops and were removed.
 
 ## Verification checklist (every phase)
 
