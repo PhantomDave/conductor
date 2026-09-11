@@ -329,7 +329,7 @@ export function DependencyFlow() {
       map.get(p.profile)!.set(p.commandId, p);
     }
     return map;
-    // statusSignature is the intentional, poll-stable proxy for `processes` described above.
+    // oxlint-disable-next-line react/exhaustive-deps -- statusSignature is the intentional, poll-stable proxy for `processes` described above
   }, [statusSignature]);
 
   if (isLoading) return <Text c="dimmed">Loading flow...</Text>;

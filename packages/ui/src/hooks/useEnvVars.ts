@@ -53,7 +53,9 @@ export function useUpdateBasePath() {
     mutationFn: updateBasePath,
     onSuccess: () => {
       notifications.show({ color: "green", message: "Base path updated" });
-      queryClient.invalidateQueries({ queryKey: ["base-path"] });
+      // Returned so the mutation (and any per-call onSuccess) settles only
+      // once the fresh value is in the cache.
+      return queryClient.invalidateQueries({ queryKey: ["base-path"] });
     },
     onError: (error: Error) => {
       notifications.show({
@@ -78,7 +80,9 @@ export function useUpdateDefaultShell() {
     mutationFn: updateDefaultShell,
     onSuccess: () => {
       notifications.show({ color: "green", message: "Default shell updated" });
-      queryClient.invalidateQueries({ queryKey: ["shells"] });
+      // Returned so the mutation (and any per-call onSuccess) settles only
+      // once the fresh value is in the cache.
+      return queryClient.invalidateQueries({ queryKey: ["shells"] });
     },
     onError: (error: Error) => {
       notifications.show({

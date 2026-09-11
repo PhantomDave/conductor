@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Badge,
   Box,
@@ -49,14 +49,15 @@ export function CommandLibrary() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  // Auto-open the add form when the sidebar's "New Command" quick action navigates here.
-  useEffect(() => {
-    if (pendingAction === "newCommand") {
-      setFormOpen(true);
-      setEditState(null);
-      clearPendingAction();
-    }
-  }, [pendingAction, clearPendingAction]);
+  // The sidebar's "New Command" quick action navigates here with a pending
+  // request. Treat that request as an open, empty form until the form closes,
+  // rather than copying it into local state from an effect.
+  const newCommandRequested = pendingAction === "newCommand";
+  const isFormOpen = formOpen || newCommandRequested;
+  const closeForm = () => {
+    setFormOpen(false);
+    if (newCommandRequested) clearPendingAction();
+  };
 
   if (loadingCommands || processes.isLoading)
     return <Text c="dimmed">Loading command library...</Text>;
@@ -194,13 +195,13 @@ export function CommandLibrary() {
         </Group>
       )}
 
-      {formOpen && (
+      {isFormOpen && (
         <CommandForm
           opened={true}
-          onClose={() => setFormOpen(false)}
+          onClose={closeForm}
           profile={undefined}
           existingCommands={flatCommands}
-          editing={editState}
+          editing={newCommandRequested ? null : editState}
         />
       )}
 

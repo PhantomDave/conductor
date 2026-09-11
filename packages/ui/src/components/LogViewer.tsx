@@ -29,35 +29,41 @@ import { STATUS_COLOR } from "../lib/statusColor";
 
 type StreamFilter = "all" | "stdout" | "stderr";
 
+const NO_LOGS: LogRow[] = [];
+
 export function LogViewer({ process }: { process: ProcessInfo }) {
   const selectProcess = useUiStore((s) => s.selectProcess);
   const stopProcess = useStopProcess();
   const restartCommand = useRestartCommand();
-  const [logs, setLogs] = useState<LogRow[]>([]);
+  // Rows are tagged with the pid they were loaded for. process.pid changes on
+  // every restart, so a fresh pid reads as an empty view straight away instead
+  // of mixing old and new output together.
+  const [logState, setLogState] = useState<{ pid: number; rows: LogRow[] }>(() => ({
+    pid: process.pid,
+    rows: [],
+  }));
+  const logs = logState.pid === process.pid ? logState.rows : NO_LOGS;
   const [search, setSearch] = useState("");
   const [streamFilter, setStreamFilter] = useState<StreamFilter>("all");
   const [autoScroll, setAutoScroll] = useState(true);
   const viewportRef = useRef<HTMLDivElement>(null);
   const isStoppable = process.status === "running" || process.status === "starting";
 
-  // Keyed off process.pid, which changes on every restart - so switching
-  // to a fresh pid naturally clears the view instead of mixing old and
-  // new output together.
   useEffect(() => {
-    setLogs([]);
+    const pid = process.pid;
     let cancelled = false;
 
-    fetchLogs({ pid: process.pid, limit: 500 }).then((history) => {
-      if (!cancelled) setLogs(history);
+    fetchLogs({ pid, limit: 500 }).then((history) => {
+      if (!cancelled) setLogState({ pid, rows: history });
     });
 
     // Live tail: SSE already replays recent history too, but we've just
     // fetched it above for an instant first paint, so dedupe by id.
     const seenIds = new Set<number>();
-    const unsubscribe = streamLogs(process.pid, (entry) => {
+    const unsubscribe = streamLogs(pid, (entry) => {
       if (seenIds.has(entry.id)) return;
       seenIds.add(entry.id);
-      setLogs((prev) => [...prev, entry]);
+      setLogState((prev) => ({ pid, rows: prev.pid === pid ? [...prev.rows, entry] : [entry] }));
     });
 
     return () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Modal,
@@ -38,13 +38,27 @@ const DEFAULT_HEALTHCHECK: HealthcheckInfo = {
   retries: 10,
 };
 
-export function CommandForm({
-  opened,
+export function CommandForm({ opened, onClose, ...fieldProps }: CommandFormProps) {
+  return (
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={fieldProps.editing ? "Edit command" : "New command"}
+      size="lg"
+    >
+      {/* Mantine unmounts modal content while the modal is closed, so the
+          fields start fresh from `editing` every time the form opens. */}
+      <CommandFormFields onClose={onClose} {...fieldProps} />
+    </Modal>
+  );
+}
+
+function CommandFormFields({
   onClose,
   profile,
   existingCommands,
   editing,
-}: CommandFormProps) {
+}: Omit<CommandFormProps, "opened">) {
   const isStandalone = !profile;
   const isEditing = Boolean(editing);
   const queryClient = useQueryClient();
@@ -56,54 +70,23 @@ export function CommandForm({
   const profileUpdate = useUpdateCommand();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
-  const [run, setRun] = useState("");
-  const [cwd, setCwd] = useState(".");
-  const [shell, setShell] = useState(true);
-  const [deps, setDeps] = useState<string[]>([]);
-  const [watch, setWatch] = useState("");
-  const [readonly, setReadonly] = useState(false);
-  const [stopSignal, setStopSignal] = useState("SIGTERM");
-  const [stopTimeoutMs, setStopTimeoutMs] = useState(5000);
-  const [stopCommand, setStopCommand] = useState("");
-  const [envOverrides, setEnvOverrides] = useState<Array<{ key: string; value: string }>>([]);
-  const [healthcheck, setHealthcheck] = useState<HealthcheckInfo>(DEFAULT_HEALTHCHECK);
-
-  useEffect(() => {
-    if (!opened) return;
-    if (editing) {
-      setName(editing.name);
-      setCategory(editing.category ?? "");
-      setRun(editing.run);
-      setCwd(editing.cwd || ".");
-      setShell(editing.shell);
-      setDeps(editing.deps ?? []);
-      setWatch((editing.watch ?? []).join(", "));
-      setReadonly(editing.readonly);
-      setStopSignal(editing.stop_signal || "SIGTERM");
-      setStopTimeoutMs(editing.stop_timeout_ms ?? 5000);
-      setStopCommand(editing.stop_command ?? "");
-      setEnvOverrides(
-        Object.entries(editing.env_overrides ?? {}).map(([key, value]) => ({ key, value })),
-      );
-      setHealthcheck(editing.healthcheck ?? DEFAULT_HEALTHCHECK);
-    } else {
-      setName("");
-      setCategory("");
-      setRun("");
-      setCwd(".");
-      setShell(true);
-      setDeps([]);
-      setWatch("");
-      setReadonly(false);
-      setStopSignal("SIGTERM");
-      setStopTimeoutMs(5000);
-      setStopCommand("");
-      setEnvOverrides([]);
-      setHealthcheck(DEFAULT_HEALTHCHECK);
-    }
-  }, [opened, editing]);
+  const [name, setName] = useState(editing?.name ?? "");
+  const [category, setCategory] = useState(editing?.category ?? "");
+  const [run, setRun] = useState(editing?.run ?? "");
+  const [cwd, setCwd] = useState(editing?.cwd || ".");
+  const [shell, setShell] = useState(editing?.shell ?? true);
+  const [deps, setDeps] = useState<string[]>(editing?.deps ?? []);
+  const [watch, setWatch] = useState((editing?.watch ?? []).join(", "));
+  const [readonly, setReadonly] = useState(editing?.readonly ?? false);
+  const [stopSignal, setStopSignal] = useState(editing?.stop_signal || "SIGTERM");
+  const [stopTimeoutMs, setStopTimeoutMs] = useState(editing?.stop_timeout_ms ?? 5000);
+  const [stopCommand, setStopCommand] = useState(editing?.stop_command ?? "");
+  const [envOverrides, setEnvOverrides] = useState<Array<{ key: string; value: string }>>(() =>
+    Object.entries(editing?.env_overrides ?? {}).map(([key, value]) => ({ key, value })),
+  );
+  const [healthcheck, setHealthcheck] = useState<HealthcheckInfo>(
+    editing?.healthcheck ?? DEFAULT_HEALTHCHECK,
+  );
 
   const depOptions = existingCommands
     .filter((c) => c.id !== editing?.id)
@@ -197,215 +180,206 @@ export function CommandForm({
   const pending = isStandalone ? isSubmitting : profileCreate.isPending || profileUpdate.isPending;
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={isEditing ? "Edit command" : "New command"}
-      size="lg"
-    >
-      <Stack>
+    <Stack>
+      <TextInput
+        label="Name"
+        placeholder="web-server"
+        value={name}
+        onChange={(e) => setName(e.currentTarget.value)}
+        required
+      />
+      <TextInput
+        label="Category"
+        placeholder="frontend"
+        value={category}
+        onChange={(e) => setCategory(e.currentTarget.value)}
+        list="command-category-options"
+      />
+      <datalist id="command-category-options">
+        {categoryOptions.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+      <Textarea
+        label="Command"
+        placeholder="bun run start"
+        value={run}
+        onChange={(e) => setRun(e.currentTarget.value)}
+        autosize
+        minRows={2}
+        required
+      />
+      <Group grow>
         <TextInput
-          label="Name"
-          placeholder="web-server"
-          value={name}
-          onChange={(e) => setName(e.currentTarget.value)}
-          required
+          label="Working directory"
+          value={cwd}
+          onChange={(e) => setCwd(e.currentTarget.value)}
         />
-        <TextInput
-          label="Category"
-          placeholder="frontend"
-          value={category}
-          onChange={(e) => setCategory(e.currentTarget.value)}
-          list="command-category-options"
-        />
-        <datalist id="command-category-options">
-          {categoryOptions.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
-        <Textarea
-          label="Command"
-          placeholder="bun run start"
-          value={run}
-          onChange={(e) => setRun(e.currentTarget.value)}
-          autosize
-          minRows={2}
-          required
-        />
-        <Group grow>
-          <TextInput
-            label="Working directory"
-            value={cwd}
-            onChange={(e) => setCwd(e.currentTarget.value)}
-          />
-          <Switch
-            label="Run through shell"
-            checked={shell}
-            onChange={(e) => setShell(e.currentTarget.checked)}
-            mt="xl"
-          />
-        </Group>
-
-        <MultiSelect
-          label="Depends on"
-          placeholder="Select commands that must be healthy first"
-          data={depOptions}
-          value={deps}
-          onChange={setDeps}
-          searchable
-        />
-
-        <TextInput
-          label="Watch paths (comma-separated, optional)"
-          placeholder="src/**/*.ts, package.json"
-          value={watch}
-          onChange={(e) => setWatch(e.currentTarget.value)}
-        />
-
-        <Group grow>
-          <Select
-            label="Stop signal"
-            data={["SIGTERM", "SIGINT", "SIGKILL"]}
-            value={stopSignal}
-            onChange={(v) => setStopSignal(v ?? "SIGTERM")}
-          />
-          <NumberInput
-            label="Stop timeout (ms)"
-            value={stopTimeoutMs}
-            onChange={(v) => setStopTimeoutMs(Number(v) || 0)}
-            min={0}
-          />
-        </Group>
-        <Textarea
-          label="Stop command (optional)"
-          description="Run this command before sending the stop signal. If omitted, the signal is sent directly."
-          placeholder="docker compose stop web"
-          value={stopCommand}
-          onChange={(e) => setStopCommand(e.currentTarget.value)}
-          autosize
-          minRows={1}
-        />
-
         <Switch
-          label="Read-only (cannot be started/stopped from the UI)"
-          checked={readonly}
-          onChange={(e) => setReadonly(e.currentTarget.checked)}
+          label="Run through shell"
+          checked={shell}
+          onChange={(e) => setShell(e.currentTarget.checked)}
+          mt="xl"
         />
+      </Group>
 
-        <Divider label="Environment overrides" labelPosition="left" />
-        <Stack gap="xs">
-          {envOverrides.map((entry, idx) => (
-            <Group key={idx} gap="xs">
-              <TextInput
-                placeholder="KEY"
-                value={entry.key}
-                onChange={(e) =>
-                  setEnvOverrides((prev) =>
-                    prev.map((p, i) => (i === idx ? { ...p, key: e.currentTarget.value } : p)),
-                  )
-                }
-                flex={1}
-              />
-              <TextInput
-                placeholder="value"
-                value={entry.value}
-                onChange={(e) =>
-                  setEnvOverrides((prev) =>
-                    prev.map((p, i) => (i === idx ? { ...p, value: e.currentTarget.value } : p)),
-                  )
-                }
-                flex={1}
-              />
-              <ActionIcon
-                color="red"
-                variant="subtle"
-                onClick={() => setEnvOverrides((prev) => prev.filter((_, i) => i !== idx))}
-              >
-                <IconTrash size={14} />
-              </ActionIcon>
-            </Group>
-          ))}
-          <Button
-            size="xs"
-            variant="light"
-            leftSection={<IconPlus size={14} />}
-            onClick={() => setEnvOverrides((prev) => [...prev, { key: "", value: "" }])}
-          >
-            Add variable
-          </Button>
-        </Stack>
+      <MultiSelect
+        label="Depends on"
+        placeholder="Select commands that must be healthy first"
+        data={depOptions}
+        value={deps}
+        onChange={setDeps}
+        searchable
+      />
 
-        <Divider label="Healthcheck" labelPosition="left" />
-        <Text size="xs" c="dimmed">
-          Commands that depend on this one will wait until it reports healthy before starting.
-        </Text>
+      <TextInput
+        label="Watch paths (comma-separated, optional)"
+        placeholder="src/**/*.ts, package.json"
+        value={watch}
+        onChange={(e) => setWatch(e.currentTarget.value)}
+      />
+
+      <Group grow>
         <Select
-          label="Type"
-          data={[
-            { value: "none", label: "None (started = healthy)" },
-            { value: "port", label: "TCP port" },
-            { value: "http", label: "HTTP request" },
-            { value: "command", label: "Shell command exits 0" },
-          ]}
-          value={healthcheck.type}
-          onChange={(v) =>
-            setHealthcheck((prev) => ({ ...prev, type: (v as HealthcheckInfo["type"]) ?? "none" }))
-          }
+          label="Stop signal"
+          data={["SIGTERM", "SIGINT", "SIGKILL"]}
+          value={stopSignal}
+          onChange={(v) => setStopSignal(v ?? "SIGTERM")}
         />
-        {healthcheck.type === "port" && (
-          <NumberInput
-            label="Port"
-            value={healthcheck.port ?? 0}
-            onChange={(v) => setHealthcheck((prev) => ({ ...prev, port: Number(v) || 0 }))}
-          />
-        )}
-        {healthcheck.type === "http" && (
-          <TextInput
-            label="URL"
-            placeholder="http://localhost:3000/health"
-            value={healthcheck.url ?? ""}
-            onChange={(e) => setHealthcheck((prev) => ({ ...prev, url: e.currentTarget.value }))}
-          />
-        )}
-        {healthcheck.type === "command" && (
-          <TextInput
-            label="Command"
-            placeholder="curl -f http://localhost:3000/health"
-            value={healthcheck.command ?? ""}
-            onChange={(e) =>
-              setHealthcheck((prev) => ({ ...prev, command: e.currentTarget.value }))
-            }
-          />
-        )}
-        {healthcheck.type !== "none" && (
-          <Group grow>
-            <NumberInput
-              label="Interval (ms)"
-              value={healthcheck.interval_ms}
-              onChange={(v) => setHealthcheck((prev) => ({ ...prev, interval_ms: Number(v) || 0 }))}
-            />
-            <NumberInput
-              label="Timeout (ms)"
-              value={healthcheck.timeout_ms}
-              onChange={(v) => setHealthcheck((prev) => ({ ...prev, timeout_ms: Number(v) || 0 }))}
-            />
-            <NumberInput
-              label="Retries"
-              value={healthcheck.retries}
-              onChange={(v) => setHealthcheck((prev) => ({ ...prev, retries: Number(v) || 0 }))}
-            />
-          </Group>
-        )}
+        <NumberInput
+          label="Stop timeout (ms)"
+          value={stopTimeoutMs}
+          onChange={(v) => setStopTimeoutMs(Number(v) || 0)}
+          min={0}
+        />
+      </Group>
+      <Textarea
+        label="Stop command (optional)"
+        description="Run this command before sending the stop signal. If omitted, the signal is sent directly."
+        placeholder="docker compose stop web"
+        value={stopCommand}
+        onChange={(e) => setStopCommand(e.currentTarget.value)}
+        autosize
+        minRows={1}
+      />
 
-        <Group justify="flex-end" mt="md">
-          <Button variant="subtle" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={submit} loading={pending}>
-            {isEditing ? "Save changes" : "Create command"}
-          </Button>
-        </Group>
+      <Switch
+        label="Read-only (cannot be started/stopped from the UI)"
+        checked={readonly}
+        onChange={(e) => setReadonly(e.currentTarget.checked)}
+      />
+
+      <Divider label="Environment overrides" labelPosition="left" />
+      <Stack gap="xs">
+        {envOverrides.map((entry, idx) => (
+          <Group key={idx} gap="xs">
+            <TextInput
+              placeholder="KEY"
+              value={entry.key}
+              onChange={(e) =>
+                setEnvOverrides((prev) =>
+                  prev.map((p, i) => (i === idx ? { ...p, key: e.currentTarget.value } : p)),
+                )
+              }
+              flex={1}
+            />
+            <TextInput
+              placeholder="value"
+              value={entry.value}
+              onChange={(e) =>
+                setEnvOverrides((prev) =>
+                  prev.map((p, i) => (i === idx ? { ...p, value: e.currentTarget.value } : p)),
+                )
+              }
+              flex={1}
+            />
+            <ActionIcon
+              color="red"
+              variant="subtle"
+              onClick={() => setEnvOverrides((prev) => prev.filter((_, i) => i !== idx))}
+            >
+              <IconTrash size={14} />
+            </ActionIcon>
+          </Group>
+        ))}
+        <Button
+          size="xs"
+          variant="light"
+          leftSection={<IconPlus size={14} />}
+          onClick={() => setEnvOverrides((prev) => [...prev, { key: "", value: "" }])}
+        >
+          Add variable
+        </Button>
       </Stack>
-    </Modal>
+
+      <Divider label="Healthcheck" labelPosition="left" />
+      <Text size="xs" c="dimmed">
+        Commands that depend on this one will wait until it reports healthy before starting.
+      </Text>
+      <Select
+        label="Type"
+        data={[
+          { value: "none", label: "None (started = healthy)" },
+          { value: "port", label: "TCP port" },
+          { value: "http", label: "HTTP request" },
+          { value: "command", label: "Shell command exits 0" },
+        ]}
+        value={healthcheck.type}
+        onChange={(v) =>
+          setHealthcheck((prev) => ({ ...prev, type: (v as HealthcheckInfo["type"]) ?? "none" }))
+        }
+      />
+      {healthcheck.type === "port" && (
+        <NumberInput
+          label="Port"
+          value={healthcheck.port ?? 0}
+          onChange={(v) => setHealthcheck((prev) => ({ ...prev, port: Number(v) || 0 }))}
+        />
+      )}
+      {healthcheck.type === "http" && (
+        <TextInput
+          label="URL"
+          placeholder="http://localhost:3000/health"
+          value={healthcheck.url ?? ""}
+          onChange={(e) => setHealthcheck((prev) => ({ ...prev, url: e.currentTarget.value }))}
+        />
+      )}
+      {healthcheck.type === "command" && (
+        <TextInput
+          label="Command"
+          placeholder="curl -f http://localhost:3000/health"
+          value={healthcheck.command ?? ""}
+          onChange={(e) => setHealthcheck((prev) => ({ ...prev, command: e.currentTarget.value }))}
+        />
+      )}
+      {healthcheck.type !== "none" && (
+        <Group grow>
+          <NumberInput
+            label="Interval (ms)"
+            value={healthcheck.interval_ms}
+            onChange={(v) => setHealthcheck((prev) => ({ ...prev, interval_ms: Number(v) || 0 }))}
+          />
+          <NumberInput
+            label="Timeout (ms)"
+            value={healthcheck.timeout_ms}
+            onChange={(v) => setHealthcheck((prev) => ({ ...prev, timeout_ms: Number(v) || 0 }))}
+          />
+          <NumberInput
+            label="Retries"
+            value={healthcheck.retries}
+            onChange={(v) => setHealthcheck((prev) => ({ ...prev, retries: Number(v) || 0 }))}
+          />
+        </Group>
+      )}
+
+      <Group justify="flex-end" mt="md">
+        <Button variant="subtle" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button onClick={submit} loading={pending}>
+          {isEditing ? "Save changes" : "Create command"}
+        </Button>
+      </Group>
+    </Stack>
   );
 }

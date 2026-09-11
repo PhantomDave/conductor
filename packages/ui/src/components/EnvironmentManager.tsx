@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   Tabs,
   Stack,
@@ -46,7 +46,7 @@ import {
   useCompileConfigExamples,
   useImportConfig,
 } from "../hooks/useEnvVars";
-import type { EnvVarRow, CompileReport } from "../lib/api";
+import type { EnvVarRow, CompileReport, ShellsInfo } from "../lib/api";
 
 function ImportConfigCard() {
   const importConfig = useImportConfig();
@@ -141,13 +141,11 @@ function ImportConfigCard() {
 function BasePathCard() {
   const { data, isLoading } = useBasePath();
   const update = useUpdateBasePath();
-  const [value, setValue] = useState("");
-
-  // Keep the input in sync with the loaded value, but don't clobber
-  // whatever the user is actively typing on refetches.
-  useEffect(() => {
-    if (data && value === "") setValue(data.base_path);
-  }, [data]);
+  // null = no local edits, so the input follows the saved value, including
+  // changes made elsewhere (e.g. Import config). Once the user types, their
+  // text is kept until it's saved; refetches never clobber it.
+  const [draft, setDraft] = useState<string | null>(null);
+  const value = draft ?? data?.base_path ?? "";
 
   const dirty = data && value !== data.base_path && value.trim() !== "";
 
@@ -175,12 +173,12 @@ function BasePathCard() {
               style={{ flex: 1 }}
               placeholder="."
               value={value}
-              onChange={(e) => setValue(e.currentTarget.value)}
+              onChange={(e) => setDraft(e.currentTarget.value)}
             />
             <Button
               disabled={!dirty}
               loading={update.isPending}
-              onClick={() => update.mutate(value.trim())}
+              onClick={() => update.mutate(value.trim(), { onSuccess: () => setDraft(null) })}
             >
               Save
             </Button>
@@ -196,26 +194,32 @@ function BasePathCard() {
   );
 }
 
+/** Maps the saved default_shell onto the shell picker's options. */
+function savedShellSelection(data: ShellsInfo | undefined): {
+  selection: string | null;
+  customPath: string;
+} {
+  if (!data) return { selection: null, customPath: "" };
+  if (!data.default_shell) return { selection: "__system__", customPath: "" };
+  if (data.available.some((s) => s.path === data.default_shell)) {
+    return { selection: data.default_shell, customPath: "" };
+  }
+  return { selection: "__custom__", customPath: data.default_shell };
+}
+
 function ShellCard() {
   const { data, isLoading } = useShells();
   const update = useUpdateDefaultShell();
   // "__system__" = no override (fall back to $SHELL/%COMSPEC%), "__custom__"
   // = user-typed path not in the detected list, anything else = a detected
   // shell's path.
-  const [selection, setSelection] = useState<string | null>(null);
-  const [customPath, setCustomPath] = useState("");
-
-  useEffect(() => {
-    if (!data) return;
-    if (!data.default_shell) {
-      setSelection("__system__");
-    } else if (data.available.some((s) => s.path === data.default_shell)) {
-      setSelection(data.default_shell);
-    } else {
-      setSelection("__custom__");
-      setCustomPath(data.default_shell);
-    }
-  }, [data]);
+  // Local edits only (null = follow the saved setting), so a refetch can't
+  // clobber an unsaved choice and a change made elsewhere still shows up.
+  const [selectionDraft, setSelectionDraft] = useState<string | null>(null);
+  const [customPathDraft, setCustomPathDraft] = useState<string | null>(null);
+  const saved = savedShellSelection(data);
+  const selection = selectionDraft ?? saved.selection;
+  const customPath = customPathDraft ?? saved.customPath;
 
   const options = [
     { value: "__system__", label: "System default (auto-detect)" },
@@ -253,21 +257,28 @@ function ShellCard() {
             <Select
               data={options}
               value={selection}
-              onChange={(v) => setSelection(v)}
+              onChange={(v) => setSelectionDraft(v)}
               allowDeselect={false}
             />
             {selection === "__custom__" && (
               <TextInput
                 placeholder="/path/to/shell"
                 value={customPath}
-                onChange={(e) => setCustomPath(e.currentTarget.value)}
+                onChange={(e) => setCustomPathDraft(e.currentTarget.value)}
               />
             )}
             <Group justify="flex-end">
               <Button
                 disabled={!dirty}
                 loading={update.isPending}
-                onClick={() => update.mutate(pending)}
+                onClick={() =>
+                  update.mutate(pending, {
+                    onSuccess: () => {
+                      setSelectionDraft(null);
+                      setCustomPathDraft(null);
+                    },
+                  })
+                }
               >
                 Save
               </Button>
