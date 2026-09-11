@@ -1,0 +1,49 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // oxlint's default plugins, listed explicitly so later additions are visible.
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": ["**/dist/**", "**/build/**", "**/node_modules/**"],
+  "rules": {
+    // Project rules (carried over from eslint.config.js).
+    "typescript/no-explicit-any": "error",
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-empty": "error",
+
+    // eslint:recommended + typescript-eslint recommended rules that are not in
+    // oxlint's correctness category, kept for parity with the old ESLint setup.
+    "no-array-constructor": "error",
+    "no-case-declarations": "error",
+    "no-fallthrough": "error",
+    "no-prototype-builtins": "error",
+    "no-regex-spaces": "error",
+    "no-unexpected-multiline": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "prefer-rest-params": "error",
+    "prefer-spread": "error",
+    "preserve-caught-error": "error",
+    "typescript/ban-ts-comment": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-unsafe-function-type": "error"
+  },
+  "overrides": [
+    {
+      // The TypeScript compiler already covers these for .ts/.tsx (which is
+      // why typescript-eslint turned them off there); keep them for plain JS.
+      "files": ["**/*.js", "**/*.mjs", "**/*.cjs"],
+      "rules": {
+        "no-undef": "error",
+        "no-redeclare": "error"
+      }
+    }
+  ]
+}

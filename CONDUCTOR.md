@@ -174,16 +174,16 @@ packages/core/src/monitor/ is an empty directory — CPU/memory polling does not
 
 ## Monorepo Scripts
 
-| Script          | What it runs                                 |
-| --------------- | -------------------------------------------- |
-| `dev:core`      | @conductor/core dev server                   |
-| `dev:ui`        | Vite dev on port 3000                        |
-| `dev:cli`       | CLI dev (run directly)                       |
-| `dev:desktop`   | Builds sidecar + UI, starts Electron         |
-| `build`         | Core build → CLI build → UI build            |
-| `build:desktop` | Sidecar + UI + electron-builder dist         |
-| `test`          | bun test                                     |
-| `lint`          | ESLint (typescript-eslint) over all .ts/.tsx |
-| `typecheck`     | TypeScript across all packages               |
+| Script          | What it runs                                         |
+| --------------- | ---------------------------------------------------- |
+| `dev:core`      | @conductor/core dev server                           |
+| `dev:ui`        | Vite dev on port 3000                                |
+| `dev:cli`       | CLI dev (run directly)                               |
+| `dev:desktop`   | Builds sidecar + UI, starts Electron                 |
+| `build`         | Core build → CLI build → UI build                    |
+| `build:desktop` | Sidecar + UI + electron-builder dist                 |
+| `test`          | bun test                                             |
+| `lint`          | oxlint (`.oxlintrc.json`) over all .ts/.tsx/.js/.mjs |
+| `typecheck`     | TypeScript across all packages                       |
 
 ==================end of section===============================================
