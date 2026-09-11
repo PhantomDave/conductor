@@ -184,6 +184,6 @@ packages/core/src/monitor/ is an empty directory — CPU/memory polling does not
 | `build:desktop` | Sidecar + UI + electron-builder dist                 |
 | `test`          | bun test                                             |
 | `lint`          | oxlint (`.oxlintrc.json`) over all .ts/.tsx/.js/.mjs |
-| `typecheck`     | TypeScript across all packages                       |
+| `typecheck`     | TypeScript 7 (`tsc --noEmit`) across all packages    |
 
 ==================end of section===============================================

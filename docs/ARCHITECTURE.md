@@ -147,6 +147,13 @@ The monitor directory under packages/core/src/monitor is empty and represents th
 
 Tests live in `packages/core/test/`: five test files covering config loading/validation, env resolution order, masker secret detection, example-template compile logic, and store mutation helpers (config → example-compiler). The test runner is bun:test which provides native assertion, mocking through globals, and parallel execution.
 
+## Toolchain
+
+- **TypeScript 7** (`typescript@^7`, the native compiler) is only the type checker: `bun run typecheck` runs `tsc --noEmit` in core, cli, ui and desktop. Builds never go through `tsc`; Bun (`bun build`), Vite and esbuild strip the types.
+- **oxlint** (`.oxlintrc.json`) lints every `.ts/.tsx/.js/.mjs` file: the correctness category, the rules carried over from the old ESLint config, and the React hooks rules. It doesn't load the `typescript` package, which is what let the repo move to TS 7 (typescript-eslint needs the TS 6 JS API).
+- **Prettier** formats everything (`bun run format` / `format:check`).
+- **Editor:** the recommended VS Code extensions are listed in `.vscode/extensions.json`: TypeScript 7 (native language service), Oxc (inline oxlint) and Prettier.
+
 ## CI/CD (.github/workflows)
 
 | Workflow         | When it runs                     | What it does                                                                                                                                                                                             |

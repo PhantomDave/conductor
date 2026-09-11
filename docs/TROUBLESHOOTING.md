@@ -178,11 +178,13 @@ The sidecar must be in `packages/core/dist-bin/conductor-server` before the desk
 
 ## Development Tooling Issues
 
-### `bun run lint` fails with "typescript-eslint does not support TS 7.0"
+### TypeScript 7: tooling or editor errors
 
-typescript-eslint loads the compiler through `require("typescript")`, and TypeScript 7 no longer ships that JS API ([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)). The repo therefore stays on TypeScript 6 (`"typescript": "^6.0.3"` in the root and `packages/desktop` manifests) until lint moves to a tool that doesn't depend on the TypeScript API.
+The repo is on TypeScript 7 (`"typescript": "^7.0.2"` in the root and `packages/desktop` manifests), the native compiler. Its npm package has no JavaScript compiler API: `require("typescript")` only gets a version shim. Tools that load the compiler as a library therefore don't work with it, which is why lint moved from ESLint + typescript-eslint to oxlint ([migration plan](./TS7_MIGRATION_PLAN.md)).
 
-Lint now runs on oxlint, which doesn't load `typescript`, so this error can no longer happen. The repo still pins TypeScript 6 until the compiler switch in [the TS 7 migration plan](./TS7_MIGRATION_PLAN.md) (Phase 3). Until then, Dependabot's TypeScript 7 bump PRs may pass CI, but leave them unmerged: the switch is done by hand in that phase.
+- **"typescript-eslint does not support TS 7.0"**: something reintroduced ESLint + typescript-eslint ([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)). Lint with `bun run lint` (oxlint) instead.
+- **VS Code disagrees with `bun run typecheck`, or lint errors don't show inline**: install the recommended extensions in `.vscode/extensions.json`: **TypeScript 7** (`TypeScriptTeam.native-preview`, the native language service) and **Oxc** (`oxc.oxc-vscode`, inline oxlint diagnostics). The ESLint extension has nothing to run here.
+- **`tsc --version` prints 6.x**: a stale install. Run `bun install`; `bun run --cwd packages/<core|cli|ui|desktop> tsc --version` should print 7.x. (A `typescript@5` entry in `bun.lock` is expected: electron-builder's `config-file-ts` depends on it for TypeScript builder configs, and ours is `electron-builder.yml`.)
 
 ### `bun run lint` fails on a warning
 
