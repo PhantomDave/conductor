@@ -190,6 +190,14 @@ The repo is on TypeScript 7 (`"typescript": "^7.0.2"` in the root and `packages/
 
 Lint runs oxlint with `--deny-warnings`, so warnings fail it (and CI) just like errors. Fix the finding rather than downgrading the rule in `.oxlintrc.json`; prefix intentionally unused variables and arguments with `_`. If a suppression is genuinely warranted, scope it to one line and give the reason: `// oxlint-disable-next-line <rule> -- <why>`.
 
+### `bun run lint:types` fails
+
+`lint:types` runs oxlint with `--type-aware`, which adds the rules that need type information (for example `typescript/no-floating-promises` and `typescript/await-thenable`) through `oxlint-tsgolint`. CI runs it as its own step, **Lint (type-aware)**.
+
+- **Floating promise**: `await` it, or attach a `.catch` that really handles the failure; use `void` only for calls that are genuinely fire-and-forget. In a React Query `onSuccess`, `return` the `invalidateQueries(...)` promise so the mutation settles once fresh data is cached.
+- **`await` of a non-promise in a test**: bun:test's `.resolves` / `.rejects` matchers block until the promise settles and return nothing, so write `expect(promise).rejects.toThrow()` without `await`.
+- **tsgolint can't be found**: oxlint only looks for `tsgolint` in the project's own `node_modules`, so run `bun install`.
+
 ## Docker Compose Import Issues
 
 ### docker compose YAML fails to parse

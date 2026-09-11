@@ -9,6 +9,8 @@ import {
   type ProcessInfo,
 } from "../lib/api";
 
+// Mutation callbacks return this promise so each mutation settles only once
+// the refetched data is in the cache (TanStack Query awaits it).
 function useInvalidateProcesses() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: ["processes"] });
@@ -21,7 +23,7 @@ export function useExecuteCommand() {
       executeCommand(profile, commandId),
     onSuccess: (_data, { profile, commandId }) => {
       notifications.show({ color: "green", message: `Started "${commandId}" (${profile})` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -39,7 +41,7 @@ export function useRunProfile() {
     mutationFn: (profile: string) => runProfile(profile),
     onSuccess: (_data, profile) => {
       notifications.show({ color: "green", message: `Started all commands in "${profile}"` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -57,7 +59,7 @@ export function useStopProfile() {
     mutationFn: (profile: string) => stopProfile(profile),
     onSuccess: (_data, profile) => {
       notifications.show({ color: "green", message: `Stopped "${profile}"` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -75,7 +77,7 @@ export function useStopProcess() {
     mutationFn: (pid: number) => stopProcess(pid),
     onSuccess: (_data, pid) => {
       notifications.show({ color: "green", message: `Stopped process ${pid}` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -104,7 +106,6 @@ export function useStopAllProcesses() {
         color: "green",
         message: `Stopped ${count} process${count === 1 ? "" : "es"}`,
       });
-      invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -113,9 +114,8 @@ export function useStopAllProcesses() {
         message: error.message,
       });
     },
-    onSettled: () => {
-      invalidate();
-    },
+    // Refresh after success and failure alike: some of the stops may have landed.
+    onSettled: () => invalidate(),
   });
 }
 
@@ -126,7 +126,7 @@ export function useRestartCommand() {
       restartCommand(profile, commandId),
     onSuccess: (_data, { commandId }) => {
       notifications.show({ color: "green", message: `Restarted "${commandId}"` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({

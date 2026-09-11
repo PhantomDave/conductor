@@ -174,16 +174,17 @@ packages/core/src/monitor/ is an empty directory — CPU/memory polling does not
 
 ## Monorepo Scripts
 
-| Script          | What it runs                                         |
-| --------------- | ---------------------------------------------------- |
-| `dev:core`      | @conductor/core dev server                           |
-| `dev:ui`        | Vite dev on port 3000                                |
-| `dev:cli`       | CLI dev (run directly)                               |
-| `dev:desktop`   | Builds sidecar + UI, starts Electron                 |
-| `build`         | Core build → CLI build → UI build                    |
-| `build:desktop` | Sidecar + UI + electron-builder dist                 |
-| `test`          | bun test                                             |
-| `lint`          | oxlint (`.oxlintrc.json`) over all .ts/.tsx/.js/.mjs |
-| `typecheck`     | TypeScript 7 (`tsc --noEmit`) across all packages    |
+| Script          | What it runs                                                         |
+| --------------- | -------------------------------------------------------------------- |
+| `dev:core`      | @conductor/core dev server                                           |
+| `dev:ui`        | Vite dev on port 3000                                                |
+| `dev:cli`       | CLI dev (run directly)                                               |
+| `dev:desktop`   | Builds sidecar + UI, starts Electron                                 |
+| `build`         | Core build → CLI build → UI build                                    |
+| `build:desktop` | Sidecar + UI + electron-builder dist                                 |
+| `test`          | bun test                                                             |
+| `lint`          | oxlint (`.oxlintrc.json`) over all .ts/.tsx/.js/.mjs                 |
+| `lint:types`    | Same, plus type-aware rules (`oxlint --type-aware`, oxlint-tsgolint) |
+| `typecheck`     | TypeScript 7 (`tsc --noEmit`) across all packages                    |
 
 ==================end of section===============================================

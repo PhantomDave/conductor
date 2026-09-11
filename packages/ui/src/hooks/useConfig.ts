@@ -20,6 +20,8 @@ import {
   type CommandInput,
 } from "../lib/api";
 
+// Mutation callbacks return this promise so each mutation settles only once
+// the refetched data is in the cache (TanStack Query awaits it).
 function useInvalidateProfiles() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: ["profiles"] });
@@ -32,7 +34,7 @@ export function useCreateProfile() {
       createProfile(name, description),
     onSuccess: (_data, { name }) => {
       notifications.show({ color: "green", message: `Created profile "${name}"` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -50,7 +52,7 @@ export function useDeleteProfile() {
     mutationFn: (profile: string) => deleteProfile(profile),
     onSuccess: (_data, profile) => {
       notifications.show({ color: "green", message: `Deleted profile "${profile}"` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -69,7 +71,7 @@ export function useRenameProfile() {
       renameProfile(oldName, newName),
     onSuccess: (_data, { oldName, newName }) => {
       notifications.show({ color: "green", message: `Renamed "${oldName}" to "${newName}"` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -96,7 +98,7 @@ export function useUpdateProfile() {
         ? `'${oldName}' → '${changes.newName}'`
         : `profile "${oldName}"`;
       notifications.show({ color: "green", message: `Updated ${label}` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -115,7 +117,7 @@ export function useDuplicateProfile() {
       duplicateProfile(sourceName, newName),
     onSuccess: (_data, { newName }) => {
       notifications.show({ color: "green", message: `Duplicated profile as "${newName}"` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -150,7 +152,7 @@ export function useCreateCommand() {
       createCommand(profile, input),
     onSuccess: (command) => {
       notifications.show({ color: "green", message: `Created command "${command.name}"` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -176,7 +178,7 @@ export function useUpdateCommand() {
     }) => updateCommand(profile, commandId, patch),
     onSuccess: (command) => {
       notifications.show({ color: "green", message: `Updated command "${command.name}"` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -195,7 +197,7 @@ export function useDeleteCommand() {
       deleteCommand(profile, commandId),
     onSuccess: () => {
       notifications.show({ color: "green", message: "Command deleted" });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -226,7 +228,7 @@ export function useDuplicateCommand() {
         color: "green",
         message: `Duplicated command to "${command.name}"`,
       });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -255,7 +257,7 @@ export function useMoveCommand() {
         color: "green",
         message: `Moved command "${command.name}" to target profile`,
       });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -320,7 +322,7 @@ export function useAttachCommandToProfile() {
         color: "green",
         message: `Added "${variables.commandId}" to ${variables.profileName}`,
       });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -351,7 +353,7 @@ export function useSyncCommandsToProfile() {
         color: "green",
         message: `Updated commands for profile "${variables.profileName}"`,
       });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({

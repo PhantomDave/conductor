@@ -31,6 +31,11 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # Separate step (oxlint + oxlint-tsgolint) so it can be switched off on
+      # its own if tsgolint regresses, without losing the regular lint.
+      - name: Lint (type-aware)
+        run: bun run lint:types
+
       - name: Typecheck
         run: bun run typecheck
 
