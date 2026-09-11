@@ -1,6 +1,6 @@
 # TypeScript 7 Migration Plan
 
-**Status:** complete (2026-09-11): Phase 1 #61, Phase 2 #62, Phase 3 #63, Phase 4 in the type-aware lint PR; decisions in [Decisions](#decisions) · **Baseline:** `main` after #57 and #58 (TypeScript 6.0.3, ESLint + typescript-eslint, strict lint in CI; Dependabot proposes TS 7 bumps, which fail Lint until Phase 1 lands)
+**Status:** complete (2026-09-11): Phase 1 #61, Phase 2 #62, Phase 3 #63, Phase 4 #64; decisions in [Decisions](#decisions) · **Baseline:** `main` after #57 and #58 (TypeScript 6.0.3, ESLint + typescript-eslint, strict lint in CI; Dependabot proposes TS 7 bumps, which fail Lint until Phase 1 lands)
 
 ## Goal
 
