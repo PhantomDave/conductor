@@ -1,7 +1,7 @@
 // The `*.sql` text-import ambient type below needs to be visible to
 // consumers (e.g. the CLI package's separate tsc program) that don't
 // glob-include this file, hence the triple-slash reference.
-// eslint-disable-next-line @typescript-eslint/triple-slash-reference
+// oxlint-disable-next-line typescript/triple-slash-reference
 /// <reference path="../types/sql.d.ts" />
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";

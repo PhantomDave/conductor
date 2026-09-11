@@ -182,11 +182,11 @@ The sidecar must be in `packages/core/dist-bin/conductor-server` before the desk
 
 typescript-eslint loads the compiler through `require("typescript")`, and TypeScript 7 no longer ships that JS API ([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)). The repo therefore stays on TypeScript 6 (`"typescript": "^6.0.3"` in the root and `packages/desktop` manifests) until lint moves to a tool that doesn't depend on the TypeScript API.
 
-Dependabot still proposes TypeScript 7 bumps. Those PRs fail CI's Lint step with this error, so leave them unmerged. If the error appears locally, something moved `typescript` to 7.x: pin it back to `^6.0.3` and run `bun install`.
+Lint now runs on oxlint, which doesn't load `typescript`, so this error can no longer happen. The repo still pins TypeScript 6 until the compiler switch in [the TS 7 migration plan](./TS7_MIGRATION_PLAN.md) (Phase 3). Until then, Dependabot's TypeScript 7 bump PRs may pass CI, but leave them unmerged: the switch is done by hand in that phase.
 
 ### `bun run lint` fails on a warning
 
-Lint runs with `--max-warnings 0`, so warnings fail it (and CI) just like errors. Fix the finding rather than raising the limit; prefix intentionally unused variables and arguments with `_`.
+Lint runs oxlint with `--deny-warnings`, so warnings fail it (and CI) just like errors. Fix the finding rather than downgrading the rule in `.oxlintrc.json`; prefix intentionally unused variables and arguments with `_`. If a suppression is genuinely warranted, scope it to one line and give the reason: `// oxlint-disable-next-line <rule> -- <why>`.
 
 ## Docker Compose Import Issues
 
