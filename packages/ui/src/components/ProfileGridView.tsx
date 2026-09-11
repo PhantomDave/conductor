@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Stack,
   Text,
@@ -66,13 +66,17 @@ export function ProfileGridView() {
   const runMutation = useRunProfile();
   const syncMutation = useSyncCommandsToProfile();
 
-  // Auto-open the create modal when the sidebar's "New Profile" quick action navigates here.
-  useEffect(() => {
-    if (pendingAction === "newProfile") {
-      setCreateModalOpen(true);
-      clearPendingAction();
-    }
-  }, [pendingAction, clearPendingAction]);
+  // The sidebar's "New Profile" quick action navigates here with a pending
+  // request. Treat that request as an open create modal until the modal
+  // closes, rather than copying it into local state from an effect.
+  const newProfileRequested = pendingAction === "newProfile";
+  const isCreateModalOpen = createModalOpen || newProfileRequested;
+  const closeCreateModal = () => {
+    setCreateModalOpen(false);
+    setNewProfileName("");
+    setNewProfileDesc("");
+    if (newProfileRequested) clearPendingAction();
+  };
 
   // Helpers
   const handleCreateProfile = async () => {
@@ -81,9 +85,7 @@ export function ProfileGridView() {
       name: newProfileName.trim(),
       description: newProfileDesc || undefined,
     });
-    setCreateModalOpen(false);
-    setNewProfileName("");
-    setNewProfileDesc("");
+    closeCreateModal();
   };
 
   const handleEditProfile = async () => {
@@ -239,15 +241,7 @@ export function ProfileGridView() {
       </Stack>
 
       {/* ── Create Profile Modal ── */}
-      <Modal
-        title="Create New Profile"
-        opened={createModalOpen}
-        onClose={() => {
-          setCreateModalOpen(false);
-          setNewProfileName("");
-          setNewProfileDesc("");
-        }}
-      >
+      <Modal title="Create New Profile" opened={isCreateModalOpen} onClose={closeCreateModal}>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -271,14 +265,7 @@ export function ProfileGridView() {
               rows={3}
             />
             <Group justify="flex-end" gap="sm">
-              <Button
-                variant="light"
-                onClick={() => {
-                  setCreateModalOpen(false);
-                  setNewProfileName("");
-                  setNewProfileDesc("");
-                }}
-              >
+              <Button variant="light" onClick={closeCreateModal}>
                 Cancel
               </Button>
               <Button
