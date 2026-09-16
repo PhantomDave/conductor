@@ -179,6 +179,18 @@ describe("ConfigStore command categories", () => {
     expect(updated.category).toBe("backend");
   });
 
+  test("round-trips the restart policy the command form sends", () => {
+    // The form always sends `restart`, so switching back to "manual" has to
+    // persist as a real value rather than reading as "field absent".
+    const store = makeStore();
+    const command = store.addCommand({ name: "Worker", run: "npm run worker", restart: "always" });
+
+    expect(store.getCommand(command.id)?.restart).toBe("always");
+    expect(readFileSync(configPath, "utf-8")).toContain("restart: always");
+
+    expect(store.updateCommand(command.id, { restart: "manual" }).restart).toBe("manual");
+  });
+
   test("removes category when update patch explicitly clears it", () => {
     const store = makeStore();
     const command = store.addCommand({ name: "UI", run: "npm run ui", category: "frontend" });

@@ -144,6 +144,12 @@ export class ProcessWrapper {
   private healthObservers: HealthChangeHandler[] = [];
   private statusObservers: StatusChangeHandler[] = [];
   private exitHandlers: Array<(exitCode: number) => void> = [];
+  /**
+   * True while a stop() we initiated is in flight. `subprocess.exited` sets
+   * status to "failed" on the SIGTERM *before* the exit handlers run, so
+   * status alone cannot tell a deliberate teardown from a crash.
+   */
+  private intentionalStop = false;
 
   constructor(
     private readonly commandConfig: CommandConfig,
@@ -171,6 +177,11 @@ export class ProcessWrapper {
       const idx = this.statusObservers.indexOf(cb);
       if (idx !== -1) this.statusObservers.splice(idx, 1);
     };
+  }
+
+  /** Whether the last exit came from a stop() we asked for, rather than a crash. */
+  get stoppedIntentionally(): boolean {
+    return this.intentionalStop;
   }
 
   /**
@@ -333,6 +344,8 @@ export class ProcessWrapper {
    * so there is never an overlap of two processes for one command.
    */
   async start(): Promise<void> {
+    this.intentionalStop = false;
+
     // CRITICAL: Kill any lingering subprocess (and its process group) before
     // spawning the new one. Even if stop() was called, a zombie process may
     // still be alive (SIGTERM/exit races, stop_command not working, etc.).
@@ -454,6 +467,7 @@ export class ProcessWrapper {
   }
 
   async stop(): Promise<void> {
+    this.intentionalStop = true;
     if (!this.process || this.process.subprocess == null) return;
 
     // Always attempt to kill the subprocess regardless of current status.

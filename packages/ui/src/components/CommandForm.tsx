@@ -81,6 +81,9 @@ function CommandFormFields({
   const [stopSignal, setStopSignal] = useState(editing?.stop_signal || "SIGTERM");
   const [stopTimeoutMs, setStopTimeoutMs] = useState(editing?.stop_timeout_ms ?? 5000);
   const [stopCommand, setStopCommand] = useState(editing?.stop_command ?? "");
+  const [restart, setRestart] = useState<NonNullable<CommandInfo["restart"]>>(
+    editing?.restart ?? "manual",
+  );
   const [envOverrides, setEnvOverrides] = useState<Array<{ key: string; value: string }>>(() =>
     Object.entries(editing?.env_overrides ?? {}).map(([key, value]) => ({ key, value })),
   );
@@ -125,6 +128,7 @@ function CommandFormFields({
       stop_signal: stopSignal,
       stop_timeout_ms: stopTimeoutMs,
       stop_command: stopCommand.trim() || undefined,
+      restart,
       healthcheck: healthcheck.type === "none" ? undefined : healthcheck,
     };
 
@@ -261,6 +265,18 @@ function CommandFormFields({
         onChange={(e) => setStopCommand(e.currentTarget.value)}
         autosize
         minRows={1}
+      />
+
+      <Select
+        label="Restart policy"
+        description="Keyed on the exit code. Capped at 5 consecutive restarts with backoff (1s to 30s); a stop or restart you asked for never counts as a crash."
+        data={[
+          { value: "manual", label: "Manual (never respawn)" },
+          { value: "on_failure", label: "On failure (non-zero exit)" },
+          { value: "always", label: "Always (any exit)" },
+        ]}
+        value={restart}
+        onChange={(v) => setRestart((v as CommandInfo["restart"]) ?? "manual")}
       />
 
       <Switch
