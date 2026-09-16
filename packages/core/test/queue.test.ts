@@ -455,18 +455,22 @@ describe("SpawnQueue - restart policies", () => {
    */
   function writeCountingScript(body: string): {
     command: string;
+    dir: string;
     runs: () => number;
     cleanup: () => void;
   } {
     const dir = mkdtempSync(join(tmpdir(), "conductor-restart-"));
     const scriptPath = join(dir, "script.js");
     const markerPath = join(dir, "runs.txt");
-    writeFileSync(
-      scriptPath,
-      `require("fs").appendFileSync(${JSON.stringify(markerPath)}, "x\\n");\n${body}\n`,
-    );
+    writeFileSync(scriptPath, `require("fs").appendFileSync("runs.txt", "x\\n");\n${body}\n`);
     return {
-      command: `bun ${scriptPath}`,
+      // Bare filename, run from `dir` as cwd. These commands are spawned with
+      // shell: false, so the run string is tokenized by splitShellWords, whose
+      // POSIX rules make a backslash escape the next character - an absolute
+      // Windows path (C:\Users\...\script.js) would arrive at spawn as
+      // C:Usersscript.js and never run. No separators, no problem.
+      command: "bun script.js",
+      dir,
       runs: () => {
         try {
           return readFileSync(markerPath, "utf8").trim().split("\n").filter(Boolean).length;
@@ -474,7 +478,15 @@ describe("SpawnQueue - restart policies", () => {
           return 0;
         }
       },
-      cleanup: () => rmSync(dir, { recursive: true, force: true }),
+      cleanup: () => {
+        try {
+          rmSync(dir, { recursive: true, force: true });
+        } catch {
+          // Windows refuses to remove a directory that is some live process's
+          // cwd. A restart timer can still be mid-spawn here; the temp dir is
+          // disposable either way.
+        }
+      },
     };
   }
 
@@ -488,6 +500,7 @@ describe("SpawnQueue - restart policies", () => {
       id: "crasher",
       name: "Crasher",
       run: script.command,
+      cwd: script.dir,
       restart: "on_failure",
     });
     const queue = new SpawnQueue("test", [cmd], () => testEnv());
@@ -507,6 +520,7 @@ describe("SpawnQueue - restart policies", () => {
       id: "finisher",
       name: "Finisher",
       run: script.command,
+      cwd: script.dir,
       restart: "on_failure",
     });
     const queue = new SpawnQueue("test", [cmd], () => testEnv());
@@ -530,6 +544,7 @@ describe("SpawnQueue - restart policies", () => {
       id: "daemon",
       name: "Daemon",
       run: script.command,
+      cwd: script.dir,
       restart: "always",
     });
     const queue = new SpawnQueue("test", [cmd], () => testEnv());
@@ -557,6 +572,7 @@ describe("SpawnQueue - restart policies", () => {
       id: "looper",
       name: "Looper",
       run: script.command,
+      cwd: script.dir,
       restart: "always",
     });
     const queue = new SpawnQueue("test", [cmd], () => testEnv());
