@@ -3,6 +3,13 @@ import { ProcessWrapper, type LogHandler, type HealthChangeHandler } from "./wra
 import { waitForHealthy, type ProbeResult } from "./healthcheck";
 import { HealthMonitor } from "../monitor";
 
+/** Consecutive auto-restarts allowed before the queue stops respawning a command. */
+const MAX_RESTART_ATTEMPTS = 5;
+/** Ceiling for the exponential backoff between auto-restarts. */
+const MAX_RESTART_DELAY_MS = 30_000;
+/** Uptime after which a process counts as stable and its attempt budget resets. */
+const STABLE_UPTIME_MS = 60_000;
+
 /**
  * Represents a failure event in the queue: process start failure,
  * dependency block, healthcheck timeout, or service recovery.
@@ -43,6 +50,10 @@ export class SpawnQueue {
   // the full 60s timeout instead of failing immediately on a transitive
   // failure two or more levels down.
   private blockedCommands = new Set<string>();
+  /** Consecutive auto-restarts per command id, for the attempt cap and backoff. */
+  private restartAttempts = new Map<string, number>();
+  /** Last log handler a caller supplied, so auto-restarts keep streaming logs. */
+  private lastLogHandler?: LogHandler;
 
   constructor(
     private readonly profile: string,
@@ -220,6 +231,57 @@ export class SpawnQueue {
     return wrapper.onHealthChange(onHealthChange);
   }
 
+  /**
+   * Applies the command's `restart` policy when its process exits.
+   *
+   * Capped and backed off deliberately: an `always` policy on a service that
+   * dies at startup is otherwise an unbounded spawn loop inside the queue.
+   */
+  private onProcessExit(
+    cmd: CommandConfig,
+    wrapper: ProcessWrapper,
+    exitCode: number,
+    spawnedAt: number,
+  ): void {
+    const policy = cmd.restart ?? "manual";
+    if (policy === "manual") return;
+    // stop()/stopAll()/restartOne() all route through wrapper.stop(), which
+    // sets this flag — without it every deliberate teardown looks like a crash.
+    if (wrapper.stoppedIntentionally) return;
+    if (policy === "on_failure" && exitCode === 0) return;
+    // A wrapper from a previous lifecycle has already been replaced.
+    if (this.wrappers.get(cmd.id) !== wrapper) return;
+
+    // A process that stayed up a while earns a fresh budget, so a service
+    // crashing once a day doesn't silently exhaust its attempts over a week.
+    const stable = Date.now() - spawnedAt > STABLE_UPTIME_MS;
+    const attempt = (stable ? 0 : (this.restartAttempts.get(cmd.id) ?? 0)) + 1;
+    if (attempt > MAX_RESTART_ATTEMPTS) {
+      wrapper.log(
+        `[restart] giving up after ${MAX_RESTART_ATTEMPTS} consecutive restarts`,
+        "stdout",
+      );
+      return;
+    }
+    this.restartAttempts.set(cmd.id, attempt);
+
+    const delayMs = Math.min(1000 * 2 ** (attempt - 1), MAX_RESTART_DELAY_MS);
+    wrapper.log(
+      `[restart] ${policy}: exited ${exitCode}, restarting in ${delayMs}ms ` +
+        `(attempt ${attempt}/${MAX_RESTART_ATTEMPTS})`,
+      "stdout",
+    );
+    // Deliberately *not* unref'd: on the foreground `conductor run` path the
+    // crashed child's pipes are gone, and signal listeners alone don't hold
+    // Bun's loop — an unref'd timer would let the supervisor exit instead of
+    // performing the restart it just scheduled.
+    setTimeout(() => {
+      // Re-check: the command may have been stopped or restarted during the wait.
+      if (this.wrappers.get(cmd.id) !== wrapper || wrapper.stoppedIntentionally) return;
+      this.restartQueued(cmd.id, this.lastLogHandler).catch(() => {});
+    }, delayMs);
+  }
+
   /** Internal: spawn one process and await its healthcheck. Returns whether it became healthy. */
   private async startSingleProcess(
     cmd: CommandConfig,
@@ -227,7 +289,9 @@ export class SpawnQueue {
     onLog?: LogHandler,
   ): Promise<boolean> {
     const wrapper = new ProcessWrapper(cmd, this.profile, env);
-    if (onLog) wrapper.onLog(onLog);
+    if (onLog) this.lastLogHandler = onLog;
+    const logHandler = onLog ?? this.lastLogHandler;
+    if (logHandler) wrapper.onLog(logHandler);
 
     // Track health transitions for recovery detection during restart
     this.setupHealthObserver(wrapper, cmd);
@@ -238,6 +302,12 @@ export class SpawnQueue {
     try {
       await wrapper.start();
       wrapper.log(`[startup] command started (pid ${wrapper.pid})`, "stdout");
+
+      // Auto-restart keys on process exit, not on the health flip: a service
+      // that crashes outright never flips (HealthMonitor only reports state
+      // *changes*, and a crash with no healthcheck configured reports nothing).
+      const spawnedAt = Date.now();
+      wrapper.onExit((exitCode) => this.onProcessExit(cmd, wrapper, exitCode, spawnedAt));
 
       // Await healthcheck with per-attempt logging
       await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env, {
@@ -417,6 +487,9 @@ export class SpawnQueue {
    */
   async startOne(commandId: string, onLog?: LogHandler): Promise<void> {
     this.checkForCycles([commandId]); // fail fast on a real cycle instead of a 60s timeout per node
+    // Starting by hand is the same fresh intent as restarting by hand: don't
+    // let attempts spent before an operator stopped the command count here.
+    this.restartAttempts.delete(commandId);
     await this.ensureStarted(commandId, onLog);
   }
 
@@ -503,6 +576,13 @@ export class SpawnQueue {
    * point).
    */
   async restartOne(commandId: string, onLog?: LogHandler): Promise<void> {
+    // A restart the operator asked for restores the auto-restart budget.
+    this.restartAttempts.delete(commandId);
+    return this.restartQueued(commandId, onLog);
+  }
+
+  /** `restartOne` without the budget reset — the path auto-restarts take. */
+  private async restartQueued(commandId: string, onLog?: LogHandler): Promise<void> {
     const cmd = this.commands.find((c) => c.id === commandId);
     if (!cmd) throw new Error(`Unknown command "${commandId}" in profile "${this.profile}"`);
 

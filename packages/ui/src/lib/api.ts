@@ -37,6 +37,7 @@ export interface CommandInfo {
   stop_signal: string;
   stop_timeout_ms: number;
   stop_command?: string;
+  restart?: "manual" | "on_failure" | "always";
   healthcheck?: HealthcheckInfo;
 }
 

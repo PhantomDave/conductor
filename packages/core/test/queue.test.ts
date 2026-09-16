@@ -447,3 +447,146 @@ describe("SpawnQueue.startMany", () => {
     await queue.stopAll();
   });
 });
+
+describe("SpawnQueue - restart policies", () => {
+  /**
+   * A script that records each run by appending a line to a marker file, so
+   * the number of lines is the number of times the process was spawned.
+   */
+  function writeCountingScript(body: string): {
+    command: string;
+    dir: string;
+    runs: () => number;
+    cleanup: () => void;
+  } {
+    const dir = mkdtempSync(join(tmpdir(), "conductor-restart-"));
+    const scriptPath = join(dir, "script.js");
+    const markerPath = join(dir, "runs.txt");
+    writeFileSync(scriptPath, `require("fs").appendFileSync("runs.txt", "x\\n");\n${body}\n`);
+    return {
+      // Bare filename, run from `dir` as cwd. These commands are spawned with
+      // shell: false, so the run string is tokenized by splitShellWords, whose
+      // POSIX rules make a backslash escape the next character - an absolute
+      // Windows path (C:\Users\...\script.js) would arrive at spawn as
+      // C:Usersscript.js and never run. No separators, no problem.
+      command: "bun script.js",
+      dir,
+      runs: () => {
+        try {
+          return readFileSync(markerPath, "utf8").trim().split("\n").filter(Boolean).length;
+        } catch {
+          return 0;
+        }
+      },
+      cleanup: () => {
+        try {
+          rmSync(dir, { recursive: true, force: true });
+        } catch {
+          // Windows refuses to remove a directory that is some live process's
+          // cwd. A restart timer can still be mid-spawn here; the temp dir is
+          // disposable either way.
+        }
+      },
+    };
+  }
+
+  // First backoff step is 1000ms, so every assertion below waits past it.
+  const PAST_FIRST_BACKOFF_MS = 2200;
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  test("on_failure respawns a process that exits non-zero", async () => {
+    const script = writeCountingScript("setTimeout(() => process.exit(1), 100);");
+    const cmd = makeCommand({
+      id: "crasher",
+      name: "Crasher",
+      run: script.command,
+      cwd: script.dir,
+      restart: "on_failure",
+    });
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    try {
+      await queue.startOne("crasher");
+      await wait(PAST_FIRST_BACKOFF_MS);
+      expect(script.runs()).toBeGreaterThan(1);
+    } finally {
+      await queue.stopAll();
+      script.cleanup();
+    }
+  }, 10_000);
+
+  test("on_failure leaves a clean exit alone", async () => {
+    const script = writeCountingScript("setTimeout(() => process.exit(0), 100);");
+    const cmd = makeCommand({
+      id: "finisher",
+      name: "Finisher",
+      run: script.command,
+      cwd: script.dir,
+      restart: "on_failure",
+    });
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    try {
+      await queue.startOne("finisher");
+      await wait(PAST_FIRST_BACKOFF_MS);
+      expect(script.runs()).toBe(1);
+    } finally {
+      await queue.stopAll();
+      script.cleanup();
+    }
+  }, 10_000);
+
+  test("always does not respawn after a deliberate stop", async () => {
+    // The regression this guards: stop() sets status "stopping", but
+    // subprocess.exited overwrites it with "failed" before the exit
+    // handlers run — so without the intentionalStop flag every manual
+    // stop (and every stopAll on shutdown) would look like a crash.
+    const script = writeCountingScript("setInterval(() => {}, 1000);");
+    const cmd = makeCommand({
+      id: "daemon",
+      name: "Daemon",
+      run: script.command,
+      cwd: script.dir,
+      restart: "always",
+    });
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    try {
+      await queue.startOne("daemon");
+      // With no healthcheck, startOne returns the moment the process is
+      // spawned — stopping immediately can kill it before Bun has even
+      // finished loading the script, leaving nothing to observe.
+      await wait(500);
+      expect(script.runs()).toBe(1);
+
+      await queue.stopOne("daemon");
+      await wait(PAST_FIRST_BACKOFF_MS);
+      expect(script.runs()).toBe(1);
+    } finally {
+      await queue.stopAll();
+      script.cleanup();
+    }
+  }, 10_000);
+
+  test("always respawns even a clean exit", async () => {
+    // The only behavioural difference from on_failure: exit code 0 still restarts.
+    const script = writeCountingScript("setTimeout(() => process.exit(0), 100);");
+    const cmd = makeCommand({
+      id: "looper",
+      name: "Looper",
+      run: script.command,
+      cwd: script.dir,
+      restart: "always",
+    });
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    try {
+      await queue.startOne("looper");
+      await wait(PAST_FIRST_BACKOFF_MS);
+      expect(script.runs()).toBeGreaterThan(1);
+    } finally {
+      await queue.stopAll();
+      script.cleanup();
+    }
+  }, 10_000);
+
+  test("manual is the default and never respawns", async () => {
+    expect(makeCommand({ id: "d", name: "D", run: "true" }).restart).toBe("manual");
+  });
+});

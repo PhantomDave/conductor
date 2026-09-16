@@ -34,6 +34,7 @@ export const CommandSchema = z.object({
   stop_signal: z.string().default("SIGTERM"),
   stop_timeout_ms: z.number().int().positive().default(5_000),
   stop_command: z.string().min(1).optional(),
+  restart: z.enum(["manual", "on_failure", "always"]).default("manual"),
   healthcheck: HealthcheckSchema.optional(),
 });
 

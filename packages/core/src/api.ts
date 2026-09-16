@@ -42,6 +42,7 @@ const CommandInputSchema = z.object({
   stop_signal: z.string().optional(),
   stop_timeout_ms: z.number().optional(),
   stop_command: z.string().min(1).optional(),
+  restart: z.enum(["manual", "on_failure", "always"]).optional(),
   healthcheck: HealthcheckSchema.optional(),
 });
 
