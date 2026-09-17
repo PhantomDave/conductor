@@ -38,6 +38,11 @@ packages/desktop/dist/
 packages/desktop/out/
 packages/core/dist-bin/
 
+# Tauri desktop app build artifacts
+packages/desktop-tauri/src-tauri/target/
+packages/desktop-tauri/src-tauri/binaries/
+packages/desktop-tauri/src-tauri/gen/
+
 # Logs
 *.log
 /logs/
