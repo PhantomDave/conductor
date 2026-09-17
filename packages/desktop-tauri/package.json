@@ -6,7 +6,8 @@
     "stage-sidecar": "node scripts/stage-sidecar.mjs",
     "dev": "bun run stage-sidecar && tauri dev",
     "build": "bun run stage-sidecar && tauri build",
-    "icon": "tauri icon ../desktop/build/icon.png"
+    "tauri": "tauri",
+    "icon": "tauri icon src-tauri/icons/icon-source.png"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
