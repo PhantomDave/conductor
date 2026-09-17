@@ -118,9 +118,9 @@ function resolvePaths(): { sidecarPath: string; uiDistPath: string } {
  * time - in both cases the write raises EPIPE, and an unhandled EPIPE takes
  * down the whole main process with a modal "A JavaScript error occurred"
  * dialog. Losing a log line is fine; losing the app is not. */
-function forward(stream: NodeJS.WriteStream, chunk: unknown): void {
+function forward(stream: NodeJS.WriteStream, chunk: Buffer | string): void {
   try {
-    stream.write(`[core] ${chunk}`);
+    stream.write(`[core] ${chunk.toString()}`);
   } catch {
     // Stream is closed or broken - drop the line.
   }
@@ -283,7 +283,7 @@ app.on("before-quit", (event) => {
   void stopSidecar().then(() => app.quit());
 });
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   buildMenu();
   try {
     // Check for display server before trying to create window

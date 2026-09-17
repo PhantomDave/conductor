@@ -53,9 +53,14 @@ export function LogViewer({ process }: { process: ProcessInfo }) {
     const pid = process.pid;
     let cancelled = false;
 
-    fetchLogs({ pid, limit: 500 }).then((history) => {
-      if (!cancelled) setLogState({ pid, rows: history });
-    });
+    fetchLogs({ pid, limit: 500 })
+      .then((history) => {
+        if (!cancelled) setLogState({ pid, rows: history });
+      })
+      // ponytail: history fetch failure is swallowed - the live SSE tail
+      // below still streams new lines in, so a blank backlog degrades
+      // gracefully instead of blocking the view.
+      .catch(() => {});
 
     // Live tail: SSE already replays recent history too, but we've just
     // fetched it above for an instant first paint, so dedupe by id.

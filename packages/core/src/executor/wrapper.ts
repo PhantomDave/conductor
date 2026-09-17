@@ -403,18 +403,33 @@ export class ProcessWrapper {
       subprocess,
     };
 
-    this.pumpStream(subprocess.stdout, "stdout", this.process);
-    this.pumpStream(subprocess.stderr, "stderr", this.process);
-
-    subprocess.exited.then((exitCode) => {
-      if (this.process) {
-        this.process.status = exitCode === 0 ? "stopped" : "failed";
-        this.process.exitCode = exitCode;
-        this.process.endedAt = new Date();
-        this.markUnhealthy();
-      }
-      for (const cb of this.exitHandlers) cb(exitCode);
+    const owner = this.process;
+    this.pumpStream(subprocess.stdout, "stdout", owner).catch((err) => {
+      this.emitLogFor(
+        owner,
+        `stdout pump failed: ${err instanceof Error ? err.message : String(err)}`,
+        "stderr",
+      );
     });
+    this.pumpStream(subprocess.stderr, "stderr", owner).catch((err) => {
+      this.emitLogFor(
+        owner,
+        `stderr pump failed: ${err instanceof Error ? err.message : String(err)}`,
+        "stderr",
+      );
+    });
+
+    subprocess.exited
+      .then((exitCode) => {
+        if (this.process) {
+          this.process.status = exitCode === 0 ? "stopped" : "failed";
+          this.process.exitCode = exitCode;
+          this.process.endedAt = new Date();
+          this.markUnhealthy();
+        }
+        for (const cb of this.exitHandlers) cb(exitCode);
+      })
+      .catch(() => {});
   }
 
   private async pumpStream(
@@ -539,15 +554,17 @@ export class ProcessWrapper {
     // Wait for the process to actually exit (or timeout), then update state immediately
     const exitedInTime = await Promise.race([
       new Promise<boolean>((resolve) => {
-        subprocess.exited.then((code) => {
-          if (this.process) {
-            this.process.status = "stopped";
-            this.process.exitCode ??= code;
-            this.process.endedAt = new Date();
-            this.markUnhealthy();
-          }
-          resolve(true);
-        });
+        subprocess.exited
+          .then((code) => {
+            if (this.process) {
+              this.process.status = "stopped";
+              this.process.exitCode ??= code;
+              this.process.endedAt = new Date();
+              this.markUnhealthy();
+            }
+            resolve(true);
+          })
+          .catch(() => {});
       }),
       new Promise<boolean>((resolve) => setTimeout(() => resolve(false), remainingMs)),
     ]);

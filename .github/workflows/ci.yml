@@ -31,6 +31,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Type-aware lint
+        run: bun run lint:types
+
       - name: Typecheck
         run: bun run typecheck
 

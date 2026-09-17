@@ -27,6 +27,7 @@
     "build:desktop": "bun run --cwd packages/core build:sidecar && bun run --cwd packages/ui build && bun run --cwd packages/desktop dist",
     "test": "bun test",
     "lint": "oxlint --deny-warnings",
+    "lint:types": "oxlint --type-aware --deny-warnings",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "bun run --cwd packages/core typecheck && bun run --cwd packages/cli typecheck && bun run --cwd packages/ui typecheck && bun run --cwd packages/desktop typecheck"
@@ -34,6 +35,7 @@
   "devDependencies": {
     "@types/bun": "^1.1.14",
     "oxlint": "^1.82.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "playwright-core": "^1.63.0",
     "prettier": "^3.3.3",
     "typescript": "^7.0.2"
