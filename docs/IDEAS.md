@@ -1,9 +1,4 @@
-# Ideas Borrowed from Farsight Control
-
-Farsight Control (`~/jimtools/farsightcontrol`) is a Tauri/Rust process orchestrator
-that explicitly positions itself as a `process-compose` replacement. It occupies the
-same product category as Conductor but is several years further along, so its design
-docs are a source of _settled_ answers rather than a loose analogy.
+# Ideas for Conductor
 
 This is a shortlist, not a feature tour. The filter applied to every candidate was:
 **does Conductor already have the substrate, so the borrow is a small diff?**
@@ -33,8 +28,7 @@ flip. The entire flip handler is this (`startHealthMonitor` in [queue.ts](../pac
 
 It paints the status dot red. That's the whole response to a crashed service.
 
-**The borrow.** Farsight's config carries a per-service `restart` policy with three
-values. Conductor needs one schema field and a branch in the closure above — and the
+**The change.** Conductor needs one schema field and a branch in the closure above — and the
 closure is already a method on `SpawnQueue`, which already owns `restartOne(commandId)`
 (`restartOne` in the same file). The action is a method
 call on `this`.
@@ -57,15 +51,13 @@ unbounded loop.
 ---
 
 ## 2. `log_line` readiness probe
-
 **The gap.** Conductor's healthchecks are `port` / `http` / `command` / `none`. Plenty
 of dev tools announce readiness _only_ on stdout and never open a port you can
 meaningfully poll — `webpack` printing `compiled successfully`, a migration runner,
 `Attached to ...`. Today the only option is `sleep`-and-hope via `command`.
 
-**The borrow.** Farsight has five probe types; `log_line` is the one Conductor lacks
-that costs the least to add. Match a substring against the process's output stream and
-resolve when it appears.
+**The change.** Match a substring against the process's output stream and resolve when
+it appears.
 
 ```yaml
 healthcheck:
@@ -76,17 +68,13 @@ healthcheck:
 **Honest caveat — this is not a clean fifth `case`.** `probeOnce(healthcheck, env)` is
 a _pure, stateless_ function ([healthcheck.ts](../packages/core/src/executor/healthcheck.ts));
 it has no idea which process it is probing and no access to its output. A log probe is
-inherently stateful and per-process. Farsight solves this with a `LogLineRegistry` that
-matches against PTY output _before_ the chunk is flushed to SQLite.
-
-Conductor's equivalent: set a matched flag on the `ProcessWrapper` from the existing
+inherently stateful and per-process. Set a matched flag on the `ProcessWrapper` from the existing
 log path, and have the `log_line` case read that flag. Still small, but it touches
 `ProcessWrapper` as well as the switch — budget for two files, not one.
 
 ---
 
 ## 3. Watch-and-restart
-
 **The gap.** Conductor has no file watching at all. Restarting after an edit is manual,
 and restarting the services _downstream_ of the edited one is manual and easy to forget.
 
@@ -102,14 +90,12 @@ commands:
     watch: ["src/**", "*.csproj"]
 ```
 
-Farsight also coalesces events that arrive during an in-flight restart, which is the
-difference between "saves a rebuild" and "thrashes under a formatter run that touches
-40 files".
+Coalesce events that arrive during an in-flight restart so a formatter run that touches
+40 files does not thrash the restart machinery.
 
 **Depends on #1** — it's the same restart machinery with a different trigger. Build it
 second.
 
----
 
 ## 4. Resource alerts that never kill
 
@@ -122,16 +108,15 @@ Stub — CPU/memory metrics roadmap, not wired" is accurate.
 So this is two steps: wire the collector, then hang thresholds off the `onSample` hook
 that already exists.
 
-**The borrow is the rationale, not the feature.** Farsight's `max_cpu_pct` /
-`max_mem_mb` **notify and never kill**, deliberately: a dev process legitimately pegging
+**The rationale, not the feature.** `max_cpu_pct` / `max_mem_mb` should **notify and
+never kill**, deliberately: a dev process legitimately pegging
 a core under a debugger or a profiler must not be killed by a number someone typed into
-a config months earlier. Pair that with a per-(service, resource) cooldown — Farsight
-uses 5 minutes — or a service that idles on the threshold boundary generates a
+a config months earlier. Pair that with a per-(service, resource) cooldown — 5 minutes
+is a reasonable default — or a service that idles on the threshold boundary generates a
 notification every sample tick. Omitting the fields disarms it at zero cost.
 
 Kept on the list because the sampling code is the expensive half and it is already
 written and already correct.
-
 ---
 
 ## 5. Failure diagnosis panel
@@ -141,24 +126,20 @@ the status badge says _why_ in three words, the log viewer has the actual error,
 dependency view shows which upstream is red, and the probe detail is buried in a log
 line.
 
-**The borrow.** Farsight's `failureDiagnosis.ts` assembles one panel from data it
+**The change.** Assemble one panel from data Conductor
 already stores: failure reason, an output tail, the last probe cycle, and the list of
 unhealthy dependencies. **No new subsystem — pure assembly over existing state.**
 Conductor stores every one of those inputs already.
 
 Two implementation details worth copying verbatim:
-
-- Pop trailing blank lines _before_ taking the last N, or the tail is half empty.
 - Detect the probe-cycle boundary by watching for the attempt number to _decrease_,
   so you show the last full cycle rather than an arbitrary window.
-
 ---
 
 ## Sharpens an existing backlog item: FTS5 + log retention
 
-Backlog item 6 is "add log retention." Farsight's contribution is the **measured
-numbers** that turn it from a nice-to-have into a sizing decision — and the reason the
-two features belong together.
+Backlog item 6 is "add log retention." The **measured numbers** turn it from a
+nice-to-have into a sizing decision — and explain why the two features belong together.
 
 From `db/retention.rs`: an 8-hour session across 43 services produced 247,680 rows and
 484 MiB of raw payload — which landed as **1,497 MiB** on disk. Roughly **3.1×
@@ -168,20 +149,16 @@ sweep, `0` disables.
 
 The paired half is FTS5 with a **trigram** tokenizer as an _external-content_ index
 (`content='logs'`, no duplicated payload). Three points from their migration's rationale:
-
 - **Trigram, not the default tokenizer** — log search is substring search. `eout` must
-  find `timeout`. Word tokenizers can't do that.
 - **The index is a candidate filter, not the answer.** It narrows the rows; the exact
   matcher still runs per line. This is what keeps results correct rather than
-  approximately correct.
 - **Regex stays on the linear path**, and terms under 3 characters have no trigram at
   all and fall back to scanning. Know the fallbacks before promising the speedup.
-
 ---
 
 ## Considered and deliberately rejected
 
-**Farsight's control socket.** It runs a 0600 Unix domain socket with a line-delimited
+**A control socket.** A 0600 Unix domain socket with a line-delimited
 JSON protocol and a `ctl` verb set, parsed before Tauri boots. Tempting, and the wrong
 borrow: that socket exists because Tauri is single-instance and accepts no argv.
 **Conductor already has a control plane** — the Fastify API on :4000, which already
@@ -198,7 +175,6 @@ mechanism next to the HTTP API would be architecture astronomy.
 banner, support bundle, crash report dialog, stack export/import, time-travel state
 timeline. All real, all require substrate Conductor doesn't have. Revisit individually
 if one becomes the actual bottleneck.
-
 ---
 
 ## Suggested order
@@ -210,13 +186,11 @@ if one becomes the actual bottleneck.
 5. **Resource alerts** — wire `MetricCollector` first; the sampling is already done.
 
 Retention + FTS folds into backlog item 6 whenever that comes up.
-
 ---
 
 ## Progress
 
 Build order follows the section above. Checked items are in the working tree, not committed.
-
 - [x] **1. Restart policies** — `restart: manual | on_failure | always` on `CommandSchema`, keyed on process exit
   - [x] `restart` field in `packages/core/src/config/schema.ts`
   - [x] Mirrored in the API command schema (`packages/core/src/api.ts`)
@@ -230,10 +204,6 @@ Build order follows the section above. Checked items are in the working tree, no
   - [x] UI: `Restart policy` select in `CommandForm.tsx` + `restart` on `CommandInfo`
         (`packages/ui/src/lib/api.ts`). The form always sends the value — `undefined` in a PATCH
         body is dropped by `JSON.stringify`, so an omitted field could never switch a command back
-        to `manual`. Round-trip covered in `packages/core/test/store.test.ts`.
-- [ ] **2. `log_line` readiness probe** — needs a matched flag on `ProcessWrapper`; `probeOnce` is stateless
-- [ ] **3. Watch-and-restart** — `watch` globs are already in the schema and UI form with no consumer; `transitiveDependents()` already exists
-- [ ] **4. Failure diagnosis** — pure assembly over data already stored
 - [ ] **5. Resource alerts** — blocked on wiring `MetricCollector`, which currently has zero consumers
 
 Deferred: retention + FTS folds into backlog item 6; `restart_on_unhealthy` (restart on a health flip while the
