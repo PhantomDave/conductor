@@ -51,6 +51,7 @@ unbounded loop.
 ---
 
 ## 2. `log_line` readiness probe
+
 **The gap.** Conductor's healthchecks are `port` / `http` / `command` / `none`. Plenty
 of dev tools announce readiness _only_ on stdout and never open a port you can
 meaningfully poll — `webpack` printing `compiled successfully`, a migration runner,
@@ -75,6 +76,7 @@ log path, and have the `log_line` case read that flag. Still small, but it touch
 ---
 
 ## 3. Watch-and-restart
+
 **The gap.** Conductor has no file watching at all. Restarting after an edit is manual,
 and restarting the services _downstream_ of the edited one is manual and easy to forget.
 
@@ -95,7 +97,6 @@ Coalesce events that arrive during an in-flight restart so a formatter run that 
 
 **Depends on #1** — it's the same restart machinery with a different trigger. Build it
 second.
-
 
 ## 4. Resource alerts that never kill
 
@@ -132,8 +133,10 @@ unhealthy dependencies. **No new subsystem — pure assembly over existing state
 Conductor stores every one of those inputs already.
 
 Two implementation details worth copying verbatim:
+
 - Detect the probe-cycle boundary by watching for the attempt number to _decrease_,
   so you show the last full cycle rather than an arbitrary window.
+
 ---
 
 ## Sharpens an existing backlog item: FTS5 + log retention
@@ -149,11 +152,13 @@ sweep, `0` disables.
 
 The paired half is FTS5 with a **trigram** tokenizer as an _external-content_ index
 (`content='logs'`, no duplicated payload). Three points from their migration's rationale:
+
 - **Trigram, not the default tokenizer** — log search is substring search. `eout` must
 - **The index is a candidate filter, not the answer.** It narrows the rows; the exact
   matcher still runs per line. This is what keeps results correct rather than
 - **Regex stays on the linear path**, and terms under 3 characters have no trigram at
   all and fall back to scanning. Know the fallbacks before promising the speedup.
+
 ---
 
 ## Considered and deliberately rejected
@@ -191,6 +196,7 @@ Retention + FTS folds into backlog item 6 whenever that comes up.
 ## Progress
 
 Build order follows the section above. Checked items are in the working tree, not committed.
+
 - [x] **1. Restart policies** — `restart: manual | on_failure | always` on `CommandSchema`, keyed on process exit
   - [x] `restart` field in `packages/core/src/config/schema.ts`
   - [x] Mirrored in the API command schema (`packages/core/src/api.ts`)
