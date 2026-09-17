@@ -10,17 +10,17 @@ is just the current, deduplicated action list. Don't add new detail here — add
 Confirmed done by reading the code, not by trusting the doc. Safe to delete these entries from
 `IMPROVEMENT_BACKLOG.md` and the `IDEAS.md` progress list next time either file is touched.
 
-| Item | Evidence |
-| --- | --- |
-| Backlog #1 — `conductor logs` end-to-end | [logs.ts](../packages/cli/src/commands/logs.ts) hits `GET /api/logs`, `--follow` opens an `EventSource` on `/api/logs/stream` |
-| Backlog #2 — `conductor stop <profile>` | [ps.ts](../packages/cli/src/commands/ps.ts) `registerStopCommand` calls `POST /api/profiles/:profile/stop` |
-| Backlog #3 — docker-compose route naming | [api.ts:304](../packages/core/src/api.ts) canonical `/api/docker-compose/parse`, `:306` legacy alias kept, [API.md:118-119](./API.md) documents both |
-| Backlog #5 — numeric query param guards | [api.ts:74-92](../packages/core/src/api.ts), `z.coerce.number().int().min/max(...)` on `limit`/`offset`/`pid` |
-| Backlog #8 — audit entries for env delete | [api.ts:857](../packages/core/src/api.ts) `insertAuditEntry("delete-env", ...)` |
-| IDEAS #1 — restart policies | Shipped in #65; schema, API, `SpawnQueue` backoff, tests, `CommandForm.tsx` — see IDEAS.md's own progress checklist |
-| TS7 Phase 1 — oxlint replaces ESLint | `.oxlintrc.json` present, no `eslint.config.js`, `"lint": "oxlint --deny-warnings"` |
-| TS7 Phase 2 — React hooks lint rules | Merged in #62 |
-| TS7 Phase 3 — TypeScript 7 bump | Merged in #63 |
+| Item                                      | Evidence                                                                                                                                             |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backlog #1 — `conductor logs` end-to-end  | [logs.ts](../packages/cli/src/commands/logs.ts) hits `GET /api/logs`, `--follow` opens an `EventSource` on `/api/logs/stream`                        |
+| Backlog #2 — `conductor stop <profile>`   | [ps.ts](../packages/cli/src/commands/ps.ts) `registerStopCommand` calls `POST /api/profiles/:profile/stop`                                           |
+| Backlog #3 — docker-compose route naming  | [api.ts:304](../packages/core/src/api.ts) canonical `/api/docker-compose/parse`, `:306` legacy alias kept, [API.md:118-119](./API.md) documents both |
+| Backlog #5 — numeric query param guards   | [api.ts:74-92](../packages/core/src/api.ts), `z.coerce.number().int().min/max(...)` on `limit`/`offset`/`pid`                                        |
+| Backlog #8 — audit entries for env delete | [api.ts:857](../packages/core/src/api.ts) `insertAuditEntry("delete-env", ...)`                                                                      |
+| IDEAS #1 — restart policies               | Shipped in #65; schema, API, `SpawnQueue` backoff, tests, `CommandForm.tsx` — see IDEAS.md's own progress checklist                                  |
+| TS7 Phase 1 — oxlint replaces ESLint      | `.oxlintrc.json` present, no `eslint.config.js`, `"lint": "oxlint --deny-warnings"`                                                                  |
+| TS7 Phase 2 — React hooks lint rules      | Merged in #62                                                                                                                                        |
+| TS7 Phase 3 — TypeScript 7 bump           | Merged in #63                                                                                                                                        |
 
 One loose end from #3, not worth its own item: the audit label at
 [api.ts:297](../packages/core/src/api.ts) is still `"parse-docker compose"` (with the old space). Fix it

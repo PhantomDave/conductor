@@ -1,0 +1,4 @@
+# Generated design-canvas export (bundled editor + JS) — its deeply-nested
+# minified code makes Prettier oscillate between two formattings on
+# successive runs instead of converging, so it can't be kept in check.
+design/ui-directions/conductor-redesign-directions.html

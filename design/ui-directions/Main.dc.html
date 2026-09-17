@@ -1,89 +1,255 @@
 <!doctype html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <script src="./support.js"></script>
-</head>
-<body>
-<x-dc>
-<helmet>
-  <style>
-    body { margin: 0; background: #080a08; }
-    a { color: #4ade80; } a:hover { color: #86efac; }
-    .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace; }
-    .row { display: grid; grid-template-columns: 1.6fr 0.8fr 0.6fr 0.9fr 0.9fr 0.6fr 0.8fr; align-items: center; padding: 10px 18px; border-bottom: 1px solid #1a1f1a; }
-    .row:hover { background: #0f130f; }
-    .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-  </style>
-</helmet>
-<div class="mono" style="width:1280px; height:820px; background:#080a08; color:#a8b5a8; box-sizing:border-box; display:flex; overflow:hidden; font-size:13px;">
+  <head>
+    <meta charset="utf-8" />
+    <script src="./support.js"></script>
+  </head>
+  <body>
+    <x-dc>
+      <helmet>
+        <style>
+          body {
+            margin: 0;
+            background: #080a08;
+          }
+          a {
+            color: #4ade80;
+          }
+          a:hover {
+            color: #86efac;
+          }
+          .mono {
+            font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+          }
+          .row {
+            display: grid;
+            grid-template-columns: 1.6fr 0.8fr 0.6fr 0.9fr 0.9fr 0.6fr 0.8fr;
+            align-items: center;
+            padding: 10px 18px;
+            border-bottom: 1px solid #1a1f1a;
+          }
+          .row:hover {
+            background: #0f130f;
+          }
+          .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+          }
+        </style>
+      </helmet>
+      <div
+        class="mono"
+        style="
+          width: 1280px;
+          height: 820px;
+          background: #080a08;
+          color: #a8b5a8;
+          box-sizing: border-box;
+          display: flex;
+          overflow: hidden;
+          font-size: 13px;
+        "
+      >
+        <div
+          style="
+            width: 220px;
+            flex-shrink: 0;
+            border-right: 1px solid #1a1f1a;
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+          "
+        >
+          <div style="padding: 0 18px 20px 18px; display: flex; align-items: center; gap: 9px">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <rect
+                x="1"
+                y="1"
+                width="22"
+                height="22"
+                rx="5"
+                fill="#0d130d"
+                stroke="#1f2e1f"
+                stroke-width="1"
+              />
+              <path
+                d="M8 8 L13 12 L8 16"
+                stroke="#4ade80"
+                stroke-width="2.1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              />
+              <rect x="14.5" y="14.5" width="4.5" height="2.1" rx="0.5" fill="#4ade80" />
+            </svg>
+            <span style="color: #e8f0e8; font-size: 15px; font-weight: 600">conductor</span>
+          </div>
+          <div
+            style="
+              padding: 0 18px;
+              color: #3a453a;
+              font-size: 11px;
+              letter-spacing: 0.05em;
+              margin-bottom: 6px;
+            "
+          >
+            NAV
+          </div>
+          <div style="padding: 7px 18px; color: #7d8a7d">&gt; processes</div>
+          <div
+            style="
+              padding: 7px 18px;
+              color: #4ade80;
+              background: #0f150f;
+              border-left: 2px solid #4ade80;
+            "
+          >
+            &nbsp;&nbsp;flow
+          </div>
+          <div style="padding: 7px 18px; color: #7d8a7d">&nbsp;&nbsp;profiles</div>
+          <div style="padding: 7px 18px; color: #7d8a7d">&nbsp;&nbsp;commands</div>
+          <div style="padding: 7px 18px; color: #7d8a7d">&nbsp;&nbsp;env</div>
+          <div
+            style="
+              padding: 0 18px;
+              color: #3a453a;
+              font-size: 11px;
+              letter-spacing: 0.05em;
+              margin: 18px 0 6px 0;
+            "
+          >
+            # running
+          </div>
+          <div style="padding: 5px 18px; color: #7d8a7d; display: flex; align-items: center">
+            <span class="dot" style="background: #4ade80; box-shadow: 0 0 6px #4ade80"></span
+            >postgres
+          </div>
+          <div style="padding: 5px 18px; color: #7d8a7d; display: flex; align-items: center">
+            <span class="dot" style="background: #4ade80; box-shadow: 0 0 6px #4ade80"></span>api
+          </div>
+          <div style="padding: 5px 18px; color: #7d8a7d; display: flex; align-items: center">
+            <span class="dot" style="background: #f5a623"></span>web
+          </div>
+          <div style="padding: 5px 18px; color: #7d8a7d; display: flex; align-items: center">
+            <span class="dot" style="background: #e5484d"></span>worker
+          </div>
+          <div style="flex: 1"></div>
+          <div
+            style="
+              padding: 10px 18px;
+              color: #3a453a;
+              font-size: 11px;
+              border-top: 1px solid #1a1f1a;
+              margin-top: 10px;
+            "
+          >
+            v0.9.2-beta · local
+          </div>
+        </div>
 
-  <div style="width:220px; flex-shrink:0; border-right:1px solid #1a1f1a; padding:20px 0; display:flex; flex-direction:column;">
-    <div style="padding:0 18px 20px 18px; display:flex; align-items:center; gap:9px;">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <rect x="1" y="1" width="22" height="22" rx="5" fill="#0d130d" stroke="#1f2e1f" stroke-width="1"/>
-        <path d="M8 8 L13 12 L8 16" stroke="#4ade80" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        <rect x="14.5" y="14.5" width="4.5" height="2.1" rx="0.5" fill="#4ade80"/>
-      </svg>
-      <span style="color:#e8f0e8; font-size:15px; font-weight:600;">conductor</span>
-    </div>
-    <div style="padding:0 18px; color:#3a453a; font-size:11px; letter-spacing:0.05em; margin-bottom:6px;">NAV</div>
-    <div style="padding:7px 18px; color:#7d8a7d;">&gt; processes</div>
-    <div style="padding:7px 18px; color:#4ade80; background:#0f150f; border-left:2px solid #4ade80;">&nbsp;&nbsp;flow</div>
-    <div style="padding:7px 18px; color:#7d8a7d;">&nbsp;&nbsp;profiles</div>
-    <div style="padding:7px 18px; color:#7d8a7d;">&nbsp;&nbsp;commands</div>
-    <div style="padding:7px 18px; color:#7d8a7d;">&nbsp;&nbsp;env</div>
-    <div style="padding:0 18px; color:#3a453a; font-size:11px; letter-spacing:0.05em; margin:18px 0 6px 0;"># running</div>
-    <div style="padding:5px 18px; color:#7d8a7d; display:flex; align-items:center;"><span class="dot" style="background:#4ade80; box-shadow:0 0 6px #4ade80;"></span>postgres</div>
-    <div style="padding:5px 18px; color:#7d8a7d; display:flex; align-items:center;"><span class="dot" style="background:#4ade80; box-shadow:0 0 6px #4ade80;"></span>api</div>
-    <div style="padding:5px 18px; color:#7d8a7d; display:flex; align-items:center;"><span class="dot" style="background:#f5a623;"></span>web</div>
-    <div style="padding:5px 18px; color:#7d8a7d; display:flex; align-items:center;"><span class="dot" style="background:#e5484d;"></span>worker</div>
-    <div style="flex:1;"></div>
-    <div style="padding:10px 18px; color:#3a453a; font-size:11px; border-top:1px solid #1a1f1a; margin-top:10px;">v0.9.2-beta · local</div>
-  </div>
+        <div style="flex: 1; display: flex; flex-direction: column; min-width: 0">
+          <div
+            style="
+              padding: 16px 24px;
+              border-bottom: 1px solid #1a1f1a;
+              display: flex;
+              justify-content: space-between;
+              align-items: baseline;
+            "
+          >
+            <div style="color: #e8f0e8; font-size: 15px">
+              $ conductor ps <span style="color: #3a453a">--profile dev</span>
+            </div>
+            <div style="color: #3a453a; font-size: 12px">4 processes · updated 2s ago</div>
+          </div>
 
-  <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
-    <div style="padding:16px 24px; border-bottom:1px solid #1a1f1a; display:flex; justify-content:space-between; align-items:baseline;">
-      <div style="color:#e8f0e8; font-size:15px;">$ conductor ps <span style="color:#3a453a;">--profile dev</span></div>
-      <div style="color:#3a453a; font-size:12px;">4 processes · updated 2s ago</div>
-    </div>
+          <div style="padding: 14px 24px 4px 24px; color: #4ade80; font-size: 12px">
+            # processes ────────────────────────────────────────────────
+          </div>
 
-    <div style="padding:14px 24px 4px 24px; color:#4ade80; font-size:12px;"># processes ────────────────────────────────────────────────</div>
+          <div
+            class="row"
+            style="
+              color: #3a453a;
+              font-size: 11px;
+              letter-spacing: 0.03em;
+              border-bottom: 1px solid #232923;
+            "
+          >
+            <div>COMMAND</div>
+            <div>PROFILE</div>
+            <div>PID</div>
+            <div>STATUS</div>
+            <div>HEALTH</div>
+            <div>CPU</div>
+            <div>MEM</div>
+          </div>
+          <div class="row">
+            <div style="color: #e8f0e8">postgres</div>
+            <div>dev</div>
+            <div>41021</div>
+            <div><span class="dot" style="background: #4ade80"></span>running</div>
+            <div style="color: #4ade80">healthy</div>
+            <div>1.2%</div>
+            <div>84 MB</div>
+          </div>
+          <div class="row">
+            <div style="color: #e8f0e8">api</div>
+            <div>dev</div>
+            <div>41055</div>
+            <div><span class="dot" style="background: #4ade80"></span>running</div>
+            <div style="color: #4ade80">healthy</div>
+            <div>4.8%</div>
+            <div>156 MB</div>
+          </div>
+          <div class="row">
+            <div style="color: #e8f0e8">web</div>
+            <div>dev</div>
+            <div>41077</div>
+            <div><span class="dot" style="background: #f5a623"></span>starting</div>
+            <div style="color: #7d8a7d">unknown</div>
+            <div>0.3%</div>
+            <div>42 MB</div>
+          </div>
+          <div class="row">
+            <div style="color: #e8f0e8">worker</div>
+            <div>dev</div>
+            <div>—</div>
+            <div><span class="dot" style="background: #e5484d"></span>failed</div>
+            <div style="color: #e5484d">unhealthy</div>
+            <div>—</div>
+            <div>—</div>
+          </div>
 
-    <div class="row" style="color:#3a453a; font-size:11px; letter-spacing:0.03em; border-bottom:1px solid #232923;">
-      <div>COMMAND</div><div>PROFILE</div><div>PID</div><div>STATUS</div><div>HEALTH</div><div>CPU</div><div>MEM</div>
-    </div>
-    <div class="row">
-      <div style="color:#e8f0e8;">postgres</div><div>dev</div><div>41021</div>
-      <div><span class="dot" style="background:#4ade80;"></span>running</div>
-      <div style="color:#4ade80;">healthy</div><div>1.2%</div><div>84 MB</div>
-    </div>
-    <div class="row">
-      <div style="color:#e8f0e8;">api</div><div>dev</div><div>41055</div>
-      <div><span class="dot" style="background:#4ade80;"></span>running</div>
-      <div style="color:#4ade80;">healthy</div><div>4.8%</div><div>156 MB</div>
-    </div>
-    <div class="row">
-      <div style="color:#e8f0e8;">web</div><div>dev</div><div>41077</div>
-      <div><span class="dot" style="background:#f5a623;"></span>starting</div>
-      <div style="color:#7d8a7d;">unknown</div><div>0.3%</div><div>42 MB</div>
-    </div>
-    <div class="row">
-      <div style="color:#e8f0e8;">worker</div><div>dev</div><div>—</div>
-      <div><span class="dot" style="background:#e5484d;"></span>failed</div>
-      <div style="color:#e5484d;">unhealthy</div><div>—</div><div>—</div>
-    </div>
+          <div style="padding: 20px 24px 4px 24px; color: #f5a623; font-size: 12px">
+            # notifications ─────────────────────────────────────────
+          </div>
+          <div style="padding: 8px 24px; color: #c9a86a; font-size: 12px">
+            [warn] worker exited with code 1 — dependency 'api' healthcheck took 4.2s
+          </div>
+          <div style="padding: 0 24px; color: #7d8a7d; font-size: 12px">
+            [info] web is waiting on 'api' health before starting
+          </div>
 
-    <div style="padding:20px 24px 4px 24px; color:#f5a623; font-size:12px;"># notifications ─────────────────────────────────────────</div>
-    <div style="padding:8px 24px; color:#c9a86a; font-size:12px;">[warn] worker exited with code 1 — dependency 'api' healthcheck took 4.2s</div>
-    <div style="padding:0 24px; color:#7d8a7d; font-size:12px;">[info] web is waiting on 'api' health before starting</div>
-
-    <div style="flex:1;"></div>
-    <div style="padding:10px 24px; border-top:1px solid #1a1f1a; color:#3a453a; font-size:11px; display:flex; gap:16px;">
-      <span>[r] restart</span><span>[s] stop</span><span>[l] logs</span><span>[/] filter</span>
-    </div>
-  </div>
-</div>
-</x-dc>
-</body>
+          <div style="flex: 1"></div>
+          <div
+            style="
+              padding: 10px 24px;
+              border-top: 1px solid #1a1f1a;
+              color: #3a453a;
+              font-size: 11px;
+              display: flex;
+              gap: 16px;
+            "
+          >
+            <span>[r] restart</span><span>[s] stop</span><span>[l] logs</span
+            ><span>[/] filter</span>
+          </div>
+        </div>
+      </div>
+    </x-dc>
+  </body>
 </html>

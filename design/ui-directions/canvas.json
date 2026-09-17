@@ -9,9 +9,22 @@
   ],
   "annotations": [
     { "id": "label-main", "x": 0, "y": -50, "w": 400, "text": "Processes" },
-    { "id": "label-flow", "x": 1380, "y": -50, "w": 400, "text": "Flow (new) — whole-config dependency map" },
+    {
+      "id": "label-flow",
+      "x": 1380,
+      "y": -50,
+      "w": 400,
+      "text": "Flow (new) — whole-config dependency map"
+    },
     { "id": "label-icon", "x": 0, "y": 910, "w": 400, "text": "App icon + in-UI mark" },
-    { "id": "label-sketches", "x": 0, "y": -50, "w": 500, "text": "Earlier direction sketches (not chosen) — kept for reference", "page": "sketches" }
+    {
+      "id": "label-sketches",
+      "x": 0,
+      "y": -50,
+      "w": 500,
+      "text": "Earlier direction sketches (not chosen) — kept for reference",
+      "page": "sketches"
+    }
   ],
   "pages": [
     { "id": "product", "name": "Conductor" },
