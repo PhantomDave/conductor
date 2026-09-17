@@ -143,6 +143,8 @@ export async function waitForHealthy(
   opts?: {
     onAttempt?: (attempt: number, result: ProbeResult) => void;
     logLineState?: LogLineState;
+    /** Returns false once the probed process has died, to fail fast instead of retrying. */
+    isAlive?: () => boolean;
   },
 ): Promise<void> {
   if (!healthcheck || healthcheck.type === "none") return;
@@ -160,6 +162,12 @@ export async function waitForHealthy(
 
     if (result.ok) return;
     lastDetail = result.detail;
+
+    if (opts?.isAlive && !opts.isAlive()) {
+      throw new HealthcheckError(
+        `Healthcheck for "${commandLabel}" aborted: process exited before becoming healthy`,
+      );
+    }
 
     if (Date.now() >= deadline) break;
     await new Promise((r) => setTimeout(r, healthcheck.interval_ms));

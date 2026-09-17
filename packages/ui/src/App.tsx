@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+import { notifications as toasts } from "@mantine/notifications";
 import { AppShell, Badge, Box, Button, Group, Stack, Text, Title } from "@mantine/core";
 import { LogViewer } from "./components/LogViewer";
 import { EnvironmentManager } from "./components/EnvironmentManager";
@@ -11,10 +13,35 @@ import { ConductorMark } from "./components/ConductorMark";
 import { SectionHeading } from "./components/SectionHeading";
 import { useUiStore } from "./store/ui";
 import { useProcesses } from "./hooks/useProcesses";
+import { useNotifications } from "./hooks/useNotifications";
+
+const TOAST_COLOR: Record<string, string> = { recovered: "green", unhealthy: "orange" };
+
+/** Pops a toast for every notification that arrives after the first load. */
+function useNotificationToasts() {
+  const { data } = useNotifications();
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    const items = data.notifications;
+    if (seen.current) {
+      for (const n of items) {
+        if (seen.current.has(n.id)) continue;
+        toasts.show({
+          color: TOAST_COLOR[n.type] ?? "red",
+          title: n.commandName ?? n.commandId,
+          message: n.reason,
+        });
+      }
+    }
+    seen.current = new Set(items.map((n) => n.id));
+  }, [data]);
+}
 
 export default function App() {
   const { view, selectedProcessKey, selectProcess, setView } = useUiStore();
   const { data: processes } = useProcesses();
+  useNotificationToasts();
 
   // Re-derived from the live process list on every poll so pid/status/logs stay correct
   const selectedProcess = selectedProcessKey

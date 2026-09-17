@@ -618,3 +618,67 @@ describe("SpawnQueue - restart policies", () => {
     expect(makeCommand({ id: "d", name: "D", run: "true" }).restart).toBe("manual");
   });
 });
+
+describe("SpawnQueue - crash and unhealthy notifications", () => {
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  test("records a crashed notification when a started service exits non-zero", async () => {
+    const cmd = makeCommand({
+      id: "crasher",
+      name: "Crasher",
+      run: `bun -e "setTimeout(() => process.exit(3), 300)"`,
+    });
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    try {
+      await queue.startOne("crasher");
+      await wait(1500);
+      const crashed = queue.listNotifications().find((n) => n.type === "crashed");
+      expect(crashed?.commandId).toBe("crasher");
+      expect(crashed?.exitCode).toBe(3);
+    } finally {
+      await queue.stopAll();
+    }
+  }, 10_000);
+
+  test("does not report a deliberate stop as a crash", async () => {
+    const cmd = makeCommand({
+      id: "daemon",
+      name: "Daemon",
+      run: `bun -e "setInterval(() => {}, 1000)"`,
+    });
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    try {
+      await queue.startOne("daemon");
+      await wait(300);
+      await queue.stopOne("daemon");
+      await wait(300);
+      expect(queue.listNotifications().some((n) => n.type === "crashed")).toBe(false);
+    } finally {
+      await queue.stopAll();
+    }
+  }, 10_000);
+
+  test("a crash during startup fails fast instead of exhausting healthcheck retries", async () => {
+    const cmd = makeCommand({
+      id: "early",
+      name: "Early",
+      run: `bun -e "process.exit(1)"`,
+      healthcheck: {
+        type: "command",
+        command: "exit 1",
+        interval_ms: 200,
+        retries: 50,
+        timeout_ms: 30_000,
+      },
+    });
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    const started = Date.now();
+    try {
+      await queue.startOne("early").catch(() => {});
+      expect(Date.now() - started).toBeLessThan(4000);
+      expect(queue.listNotifications().some((n) => n.type === "crashed")).toBe(true);
+    } finally {
+      await queue.stopAll();
+    }
+  }, 10_000);
+});

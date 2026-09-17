@@ -261,6 +261,22 @@ describe("waitForHealthy", () => {
     }
   });
 
+  test("fails fast once the probed process is no longer alive", async () => {
+    const port = await getClosedPort();
+    let attempts = 0;
+    const started = Date.now();
+    expect(
+      waitForHealthy(
+        "test/dead",
+        healthcheck({ type: "port", port, interval_ms: 500, retries: 30, timeout_ms: 30_000 }),
+        {},
+        { onAttempt: () => attempts++, isAlive: () => false },
+      ),
+    ).rejects.toThrow(/exited before becoming healthy/);
+    expect(attempts).toBe(1);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
   test("throws HealthcheckError after exhausting retries", async () => {
     const port = await getClosedPort();
     expect(

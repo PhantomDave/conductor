@@ -7,6 +7,8 @@ const NOTIFICATION_TYPE_COLOR: Record<string, string> = {
   dependency_failed: "orange",
   healthcheck_failed: "yellow",
   recovered: "green",
+  crashed: "red",
+  unhealthy: "orange",
 };
 
 const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
@@ -14,6 +16,8 @@ const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
   dependency_failed: "Blocked Dependency",
   healthcheck_failed: "Healthcheck Failed",
   recovered: "Recovered",
+  crashed: "Crashed",
+  unhealthy: "Unhealthy",
 };
 
 export function NotificationsTab() {
