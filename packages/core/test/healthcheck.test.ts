@@ -299,8 +299,10 @@ describe("waitForHealthy", () => {
       "test/log-line",
       healthcheck({ type: "log_line", pattern: "ready", interval_ms: 30, retries: 20 }),
       {},
-      { onAttempt: (_i, result) => results.push(result.ok) },
-      { hasMatchedLogLine: () => matched },
+      {
+        onAttempt: (_i, result) => results.push(result.ok),
+        logLineState: { hasMatchedLogLine: () => matched },
+      },
     );
     expect(results.at(-1)).toBe(true);
     expect(results.some((ok) => !ok)).toBe(true); // actually retried, didn't just get lucky

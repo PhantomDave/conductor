@@ -310,16 +310,11 @@ export class SpawnQueue {
       wrapper.onExit((exitCode) => this.onProcessExit(cmd, wrapper, exitCode, spawnedAt));
 
       // Await healthcheck with per-attempt logging
-      await waitForHealthy(
-        `${this.profile}/${cmd.id}`,
-        cmd.healthcheck,
-        env,
-        {
-          onAttempt: (attempt, result) =>
-            this.recordHealthProbeAttempt(wrapper, cmd, attempt, result),
-        },
-        wrapper,
-      );
+      await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env, {
+        onAttempt: (attempt, result) =>
+          this.recordHealthProbeAttempt(wrapper, cmd, attempt, result),
+        logLineState: wrapper,
+      });
 
       // Mark wrapper running once the healthcheck (or its absence) has passed
       wrapper.markHealthy("healthy");

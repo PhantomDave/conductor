@@ -152,12 +152,18 @@ export class ProcessWrapper {
   private intentionalStop = false;
   /** Set once a `log_line` healthcheck's pattern has appeared in stdout/stderr. */
   private logLineMatched = false;
+  /** Interpolated `log_line` pattern, precomputed once so pumpStream doesn't re-derive it per line. */
+  private readonly logLinePattern: string | undefined;
 
   constructor(
     private readonly commandConfig: CommandConfig,
     private readonly profile: string,
     private readonly env: Record<string, string>,
-  ) {}
+  ) {
+    const hc = commandConfig.healthcheck;
+    this.logLinePattern =
+      hc?.type === "log_line" && hc.pattern ? interpolateString(hc.pattern, env) : undefined;
+  }
 
   onLog(handler: LogHandler): void {
     this.logHandlers.push(handler);
@@ -352,7 +358,6 @@ export class ProcessWrapper {
    */
   async start(): Promise<void> {
     this.intentionalStop = false;
-    this.logLineMatched = false;
 
     // CRITICAL: Kill any lingering subprocess (and its process group) before
     // spawning the new one. Even if stop() was called, a zombie process may
@@ -410,6 +415,11 @@ export class ProcessWrapper {
       startedAt: new Date(),
       subprocess,
     };
+    // Reset only after this.process points at the new subprocess, so any
+    // stray match from the old subprocess's still-draining stream (during
+    // the kill-and-wait above) is rejected by checkLogLineMatch's owner
+    // guard instead of being misattributed to this new lifecycle.
+    this.logLineMatched = false;
 
     this.pumpStream(subprocess.stdout, "stdout", this.process);
     this.pumpStream(subprocess.stderr, "stderr", this.process);
@@ -439,17 +449,19 @@ export class ProcessWrapper {
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
+      // Checked against the raw accumulated buffer (not just completed
+      // lines) so a readiness message with no trailing newline is still
+      // detected without waiting for the stream to close.
+      this.checkLogLineMatch(owner, buffer);
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
-        this.checkLogLineMatch(owner, line);
         this.emitLogFor(owner, line, kind);
       }
     }
 
     if (buffer.length > 0) {
-      this.checkLogLineMatch(owner, buffer);
       this.emitLogFor(owner, buffer, kind);
     }
   }
@@ -460,10 +472,9 @@ export class ProcessWrapper {
    * stream, still draining after a restart, can't flip the flag `start()`
    * already reset for the new one.
    */
-  private checkLogLineMatch(owner: ManagedProcess, line: string): void {
-    if (owner !== this.process || this.logLineMatched) return;
-    const hc = this.commandConfig.healthcheck;
-    if (hc?.type === "log_line" && hc.pattern && line.includes(hc.pattern)) {
+  private checkLogLineMatch(owner: ManagedProcess, text: string): void {
+    if (!this.logLinePattern || owner !== this.process || this.logLineMatched) return;
+    if (text.includes(this.logLinePattern)) {
       this.logLineMatched = true;
     }
   }

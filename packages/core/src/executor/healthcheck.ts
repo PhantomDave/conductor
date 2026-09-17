@@ -140,8 +140,10 @@ export async function waitForHealthy(
   commandLabel: string,
   healthcheck: HealthcheckConfig | undefined,
   env: Record<string, string> = {},
-  opts?: { onAttempt?: (attempt: number, result: ProbeResult) => void },
-  logLineState?: LogLineState,
+  opts?: {
+    onAttempt?: (attempt: number, result: ProbeResult) => void;
+    logLineState?: LogLineState;
+  },
 ): Promise<void> {
   if (!healthcheck || healthcheck.type === "none") return;
 
@@ -151,7 +153,7 @@ export async function waitForHealthy(
   let attemptsRun = 0;
 
   for (let attempt = 0; attempt < healthcheck.retries; attempt++) {
-    const result = await probeOnce(healthcheck, env, logLineState);
+    const result = await probeOnce(healthcheck, env, opts?.logLineState);
     attemptsRun++;
 
     if (opts?.onAttempt) opts.onAttempt(attempt, result);
