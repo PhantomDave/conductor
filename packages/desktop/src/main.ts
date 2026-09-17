@@ -91,6 +91,15 @@ function sidecarBinaryName(): string {
   return process.platform === "win32" ? "conductor-server.exe" : "conductor-server";
 }
 
+/** Resolves the app icon, whether running from source (dev) or from a
+ * packaged app (extraResources) - see resolvePaths() for the same pattern. */
+function resolveIconPath(): string {
+  if (app.isPackaged) {
+    return join(process.resourcesPath, "icon.png");
+  }
+  return join(__dirname, "..", "build", "icon.png");
+}
+
 /** Resolves the sidecar server binary and the built UI bundle, whether
  * we're running from source (dev) or from a packaged app (extraResources). */
 function resolvePaths(): { sidecarPath: string; uiDistPath: string } {
@@ -195,6 +204,7 @@ async function createWindow(port: number) {
       width: 1280,
       height: 860,
       title: "Conductor",
+      icon: resolveIconPath(),
       show: false, // Don't show until ready
       webPreferences: {
         contextIsolation: true,

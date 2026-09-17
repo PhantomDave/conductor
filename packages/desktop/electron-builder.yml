@@ -27,6 +27,8 @@ extraResources:
     to: sidecar
   - from: ../ui/dist
     to: ui-dist
+  - from: build/icon.png
+    to: icon.png
 
 mac:
   category: public.app-category.developer-tools
