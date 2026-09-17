@@ -310,10 +310,16 @@ export class SpawnQueue {
       wrapper.onExit((exitCode) => this.onProcessExit(cmd, wrapper, exitCode, spawnedAt));
 
       // Await healthcheck with per-attempt logging
-      await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env, {
-        onAttempt: (attempt, result) =>
-          this.recordHealthProbeAttempt(wrapper, cmd, attempt, result),
-      });
+      await waitForHealthy(
+        `${this.profile}/${cmd.id}`,
+        cmd.healthcheck,
+        env,
+        {
+          onAttempt: (attempt, result) =>
+            this.recordHealthProbeAttempt(wrapper, cmd, attempt, result),
+        },
+        wrapper,
+      );
 
       // Mark wrapper running once the healthcheck (or its absence) has passed
       wrapper.markHealthy("healthy");
@@ -379,7 +385,12 @@ export class SpawnQueue {
     env: Record<string, string>,
   ): void {
     const hc = cmd.healthcheck;
-    if (!hc || hc.type === "none") return;
+    // `log_line` is a startup-only signal: a line either appeared in output
+    // or it didn't, and it can't un-appear, so re-probing it on an interval
+    // would just report "healthy" forever after the first match (or
+    // "unhealthy" forever if the pattern never showed) — unlike port/http/
+    // command probes, it has no way to detect the service going down later.
+    if (!hc || hc.type === "none" || hc.type === "log_line") return;
 
     // Stop any monitor from a previous lifecycle of this command
     this.monitors.get(cmd.id)?.stop();

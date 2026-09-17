@@ -13,6 +13,16 @@ export interface ProbeResult {
 }
 
 /**
+ * Narrow view of `ProcessWrapper` for the `log_line` probe: whether the
+ * pattern has appeared in the live process's output so far. `probeOnce`
+ * itself stays stateless and just reads this; the wrapper (which sees every
+ * output line via `pumpStream`) is what tracks it.
+ */
+export interface LogLineState {
+  hasMatchedLogLine(): boolean;
+}
+
+/**
  * Polls a TCP port until a connection succeeds or retries are exhausted.
  */
 async function checkPort(port: number): Promise<boolean> {
@@ -74,10 +84,21 @@ async function checkCommand(
 export async function probeOnce(
   healthcheck: HealthcheckConfig,
   env: Record<string, string>,
+  logLineState?: LogLineState,
 ): Promise<ProbeResult> {
   const start = Date.now();
   try {
     switch (healthcheck.type) {
+      case "log_line": {
+        if (!healthcheck.pattern)
+          return { ok: false, latencyMs: 0, detail: "healthcheck.pattern is required" };
+        const ok = logLineState?.hasMatchedLogLine() ?? false;
+        return {
+          ok,
+          latencyMs: Date.now() - start,
+          detail: `log line containing "${healthcheck.pattern}"`,
+        };
+      }
       case "port": {
         if (!healthcheck.port)
           return { ok: false, latencyMs: 0, detail: "healthcheck.port is required" };
@@ -120,6 +141,7 @@ export async function waitForHealthy(
   healthcheck: HealthcheckConfig | undefined,
   env: Record<string, string> = {},
   opts?: { onAttempt?: (attempt: number, result: ProbeResult) => void },
+  logLineState?: LogLineState,
 ): Promise<void> {
   if (!healthcheck || healthcheck.type === "none") return;
 
@@ -129,7 +151,7 @@ export async function waitForHealthy(
   let attemptsRun = 0;
 
   for (let attempt = 0; attempt < healthcheck.retries; attempt++) {
-    const result = await probeOnce(healthcheck, env);
+    const result = await probeOnce(healthcheck, env, logLineState);
     attemptsRun++;
 
     if (opts?.onAttempt) opts.onAttempt(attempt, result);

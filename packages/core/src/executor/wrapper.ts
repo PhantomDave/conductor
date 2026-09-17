@@ -150,6 +150,8 @@ export class ProcessWrapper {
    * status alone cannot tell a deliberate teardown from a crash.
    */
   private intentionalStop = false;
+  /** Set once a `log_line` healthcheck's pattern has appeared in stdout/stderr. */
+  private logLineMatched = false;
 
   constructor(
     private readonly commandConfig: CommandConfig,
@@ -182,6 +184,11 @@ export class ProcessWrapper {
   /** Whether the last exit came from a stop() we asked for, rather than a crash. */
   get stoppedIntentionally(): boolean {
     return this.intentionalStop;
+  }
+
+  /** Whether the current process's output has matched the `log_line` healthcheck pattern. */
+  hasMatchedLogLine(): boolean {
+    return this.logLineMatched;
   }
 
   /**
@@ -345,6 +352,7 @@ export class ProcessWrapper {
    */
   async start(): Promise<void> {
     this.intentionalStop = false;
+    this.logLineMatched = false;
 
     // CRITICAL: Kill any lingering subprocess (and its process group) before
     // spawning the new one. Even if stop() was called, a zombie process may
@@ -435,12 +443,28 @@ export class ProcessWrapper {
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
+        this.checkLogLineMatch(owner, line);
         this.emitLogFor(owner, line, kind);
       }
     }
 
     if (buffer.length > 0) {
+      this.checkLogLineMatch(owner, buffer);
       this.emitLogFor(owner, buffer, kind);
+    }
+  }
+
+  /**
+   * Flags a `log_line` healthcheck as matched once `pattern` appears in
+   * output. Guarded to `owner === this.process` so a previous subprocess's
+   * stream, still draining after a restart, can't flip the flag `start()`
+   * already reset for the new one.
+   */
+  private checkLogLineMatch(owner: ManagedProcess, line: string): void {
+    if (owner !== this.process || this.logLineMatched) return;
+    const hc = this.commandConfig.healthcheck;
+    if (hc?.type === "log_line" && hc.pattern && line.includes(hc.pattern)) {
+      this.logLineMatched = true;
     }
   }
 
