@@ -5,10 +5,12 @@ import { z } from "zod";
  * before starting, instead of just waiting for the process to spawn.
  */
 export const HealthcheckSchema = z.object({
-  type: z.enum(["none", "port", "http", "command"]).default("none"),
+  type: z.enum(["none", "port", "http", "command", "log_line"]).default("none"),
   port: z.number().int().positive().optional(),
   url: z.string().optional(),
   command: z.string().optional(),
+  // Substring to match against stdout/stderr lines, for `type: "log_line"`.
+  pattern: z.string().min(1).optional(),
   interval_ms: z.number().int().positive().default(1000),
   timeout_ms: z.number().int().positive().default(30_000),
   retries: z.number().int().positive().default(30),

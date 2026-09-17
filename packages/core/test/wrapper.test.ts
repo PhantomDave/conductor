@@ -119,6 +119,42 @@ describe("ProcessWrapper.start", () => {
     expect(lines).toEqual(["a", "b", "c"]);
   });
 
+  test("flags hasMatchedLogLine once a log_line healthcheck pattern appears in output", async () => {
+    const cmd = makeCommand({
+      id: "log-line-match",
+      name: "Log Line Match",
+      run: `bun -e "console.log('booting'); console.log('server ready on :3000')"`,
+      healthcheck: {
+        type: "log_line",
+        pattern: "ready on",
+        interval_ms: 1000,
+        timeout_ms: 30000,
+        retries: 30,
+      },
+    });
+    const wrapper = new ProcessWrapper(cmd, "test", testEnv());
+    await runToExit(wrapper);
+    expect(wrapper.hasMatchedLogLine()).toBe(true);
+  });
+
+  test("hasMatchedLogLine stays false when the pattern never appears", async () => {
+    const cmd = makeCommand({
+      id: "log-line-no-match",
+      name: "Log Line No Match",
+      run: `bun -e "console.log('booting')"`,
+      healthcheck: {
+        type: "log_line",
+        pattern: "ready on",
+        interval_ms: 1000,
+        timeout_ms: 30000,
+        retries: 30,
+      },
+    });
+    const wrapper = new ProcessWrapper(cmd, "test", testEnv());
+    await runToExit(wrapper);
+    expect(wrapper.hasMatchedLogLine()).toBe(false);
+  });
+
   test("tags every log entry with the spawned pid, command id, and profile", async () => {
     const cmd = makeCommand({ id: "tagged", name: "Tagged", run: `bun -e "console.log('hi')"` });
     const wrapper = new ProcessWrapper(cmd, "my-profile", testEnv());

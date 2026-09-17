@@ -150,12 +150,20 @@ export class ProcessWrapper {
    * status alone cannot tell a deliberate teardown from a crash.
    */
   private intentionalStop = false;
+  /** Set once a `log_line` healthcheck's pattern has appeared in stdout/stderr. */
+  private logLineMatched = false;
+  /** Interpolated `log_line` pattern, precomputed once so pumpStream doesn't re-derive it per line. */
+  private readonly logLinePattern: string | undefined;
 
   constructor(
     private readonly commandConfig: CommandConfig,
     private readonly profile: string,
     private readonly env: Record<string, string>,
-  ) {}
+  ) {
+    const hc = commandConfig.healthcheck;
+    this.logLinePattern =
+      hc?.type === "log_line" && hc.pattern ? interpolateString(hc.pattern, env) : undefined;
+  }
 
   onLog(handler: LogHandler): void {
     this.logHandlers.push(handler);
@@ -182,6 +190,11 @@ export class ProcessWrapper {
   /** Whether the last exit came from a stop() we asked for, rather than a crash. */
   get stoppedIntentionally(): boolean {
     return this.intentionalStop;
+  }
+
+  /** Whether the current process's output has matched the `log_line` healthcheck pattern. */
+  hasMatchedLogLine(): boolean {
+    return this.logLineMatched;
   }
 
   /**
@@ -402,6 +415,11 @@ export class ProcessWrapper {
       startedAt: new Date(),
       subprocess,
     };
+    // Reset only after this.process points at the new subprocess, so any
+    // stray match from the old subprocess's still-draining stream (during
+    // the kill-and-wait above) is rejected by checkLogLineMatch's owner
+    // guard instead of being misattributed to this new lifecycle.
+    this.logLineMatched = false;
 
     const owner = this.process;
     this.pumpStream(subprocess.stdout, "stdout", owner).catch((err) => {
@@ -446,6 +464,10 @@ export class ProcessWrapper {
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
+      // Checked against the raw accumulated buffer (not just completed
+      // lines) so a readiness message with no trailing newline is still
+      // detected without waiting for the stream to close.
+      this.checkLogLineMatch(owner, buffer);
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
 
@@ -456,6 +478,19 @@ export class ProcessWrapper {
 
     if (buffer.length > 0) {
       this.emitLogFor(owner, buffer, kind);
+    }
+  }
+
+  /**
+   * Flags a `log_line` healthcheck as matched once `pattern` appears in
+   * output. Guarded to `owner === this.process` so a previous subprocess's
+   * stream, still draining after a restart, can't flip the flag `start()`
+   * already reset for the new one.
+   */
+  private checkLogLineMatch(owner: ManagedProcess, text: string): void {
+    if (!this.logLinePattern || owner !== this.process || this.logLineMatched) return;
+    if (text.includes(this.logLinePattern)) {
+      this.logLineMatched = true;
     }
   }
 

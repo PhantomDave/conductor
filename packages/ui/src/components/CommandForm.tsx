@@ -339,6 +339,7 @@ function CommandFormFields({
           { value: "port", label: "TCP port" },
           { value: "http", label: "HTTP request" },
           { value: "command", label: "Shell command exits 0" },
+          { value: "log_line", label: "Log line contains text" },
         ]}
         value={healthcheck.type}
         onChange={(v) =>
@@ -366,6 +367,15 @@ function CommandFormFields({
           placeholder="curl -f http://localhost:3000/health"
           value={healthcheck.command ?? ""}
           onChange={(e) => setHealthcheck((prev) => ({ ...prev, command: e.currentTarget.value }))}
+        />
+      )}
+      {healthcheck.type === "log_line" && (
+        <TextInput
+          label="Pattern"
+          placeholder="compiled successfully"
+          description="Healthy once a stdout/stderr line contains this substring."
+          value={healthcheck.pattern ?? ""}
+          onChange={(e) => setHealthcheck((prev) => ({ ...prev, pattern: e.currentTarget.value }))}
         />
       )}
       {healthcheck.type !== "none" && (

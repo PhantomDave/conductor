@@ -187,6 +187,47 @@ describe("probeOnce - type: command", () => {
   });
 });
 
+describe("probeOnce - type: log_line", () => {
+  test("is healthy once the state reports a match", async () => {
+    const result = await probeOnce(
+      healthcheck({ type: "log_line", pattern: "ready" }),
+      {},
+      {
+        hasMatchedLogLine: () => true,
+      },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test("is unhealthy while the state reports no match", async () => {
+    const result = await probeOnce(
+      healthcheck({ type: "log_line", pattern: "ready" }),
+      {},
+      {
+        hasMatchedLogLine: () => false,
+      },
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  test("is unhealthy with no state supplied at all", async () => {
+    const result = await probeOnce(healthcheck({ type: "log_line", pattern: "ready" }), {});
+    expect(result.ok).toBe(false);
+  });
+
+  test("fails with a clear detail when pattern is not configured", async () => {
+    const result = await probeOnce(
+      healthcheck({ type: "log_line" }),
+      {},
+      {
+        hasMatchedLogLine: () => true,
+      },
+    );
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("pattern");
+  });
+});
+
 describe("waitForHealthy", () => {
   test("resolves immediately when there's no healthcheck configured", async () => {
     expect(waitForHealthy("test/none", undefined, {})).resolves.toBeUndefined();
@@ -243,5 +284,25 @@ describe("waitForHealthy", () => {
       ),
     ).rejects.toThrow();
     expect(attempts).toEqual([0, 1, 2]);
+  });
+
+  test("threads the log-line state through and resolves once it flips to matched", async () => {
+    let matched = false;
+    setTimeout(() => {
+      matched = true;
+    }, 100);
+
+    const results: boolean[] = [];
+    await waitForHealthy(
+      "test/log-line",
+      healthcheck({ type: "log_line", pattern: "ready", interval_ms: 30, retries: 20 }),
+      {},
+      {
+        onAttempt: (_i, result) => results.push(result.ok),
+        logLineState: { hasMatchedLogLine: () => matched },
+      },
+    );
+    expect(results.at(-1)).toBe(true);
+    expect(results.some((ok) => !ok)).toBe(true); // actually retried, didn't just get lucky
   });
 });

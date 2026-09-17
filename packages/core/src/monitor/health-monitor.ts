@@ -29,7 +29,10 @@ export class HealthMonitor {
 
   start(): void {
     const intervalMs = this.options.intervalMs ?? this.healthcheck?.interval_ms ?? 5000;
-    if (intervalMs < 1000 || !this.healthcheck) return;
+    // log_line has no LogLineState here, so probeOnce would always report
+    // unhealthy — callers are expected to exclude it (see queue.ts's
+    // startHealthMonitor guard); skip it here too as a defense in depth.
+    if (intervalMs < 1000 || !this.healthcheck || this.healthcheck.type === "log_line") return;
 
     this.intervalId = setInterval(async () => {
       try {
