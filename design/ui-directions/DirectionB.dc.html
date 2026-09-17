@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #f7f5f1; }
+    a { color: #6c4fd8; } a:hover { color: #5638c4; }
+    .disp { font-family: "Space Grotesk", system-ui, sans-serif; }
+    .body-f { font-family: "IBM Plex Sans", system-ui, sans-serif; }
+    .pcard { background: #fffdf9; border: 1px solid #eae5db; border-radius: 16px; padding: 20px 22px; box-shadow: 0 1px 2px rgba(30,25,15,0.03); }
+  </style>
+</helmet>
+<div class="body-f" style="width:1280px; height:820px; background:#f7f5f1; color:#2a2620; box-sizing:border-box; display:flex; overflow:hidden;">
+
+  <div style="width:236px; flex-shrink:0; padding:28px 18px; display:flex; flex-direction:column; gap:2px;">
+    <div class="disp" style="font-size:19px; font-weight:700; padding:0 10px 26px 10px; color:#1e1a14;">Conductor</div>
+    <div style="padding:10px 14px; border-radius:10px; background:#eee6ff; color:#5638c4; font-weight:500; font-size:14px;">Processes</div>
+    <div style="padding:10px 14px; border-radius:10px; color:#5b5548; font-size:14px;">Profiles</div>
+    <div style="padding:10px 14px; border-radius:10px; color:#5b5548; font-size:14px;">Commands</div>
+    <div style="padding:10px 14px; border-radius:10px; color:#5b5548; font-size:14px;">Environment</div>
+    <div style="height:1px; background:#eae5db; margin:18px 10px;"></div>
+    <div class="disp" style="padding:0 14px; font-size:11px; letter-spacing:0.06em; color:#a39c8c; margin-bottom:8px;">RUNNING</div>
+    <div style="padding:8px 14px; border-radius:10px; color:#3a3529; font-size:13px; display:flex; align-items:center; gap:8px;"><span style="width:7px;height:7px;border-radius:50%;background:#4fae6e;"></span>postgres</div>
+    <div style="padding:8px 14px; border-radius:10px; color:#3a3529; font-size:13px; display:flex; align-items:center; gap:8px;"><span style="width:7px;height:7px;border-radius:50%;background:#4fae6e;"></span>api</div>
+    <div style="padding:8px 14px; border-radius:10px; color:#3a3529; font-size:13px; display:flex; align-items:center; gap:8px;"><span style="width:7px;height:7px;border-radius:50%;background:#d6a13a;"></span>web</div>
+  </div>
+
+  <div style="flex:1; padding:28px 32px; display:flex; flex-direction:column; gap:20px; min-width:0;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+      <div>
+        <div class="disp" style="font-size:26px; font-weight:600; color:#1e1a14;">Processes</div>
+        <div style="font-size:13px; color:#847c6a; margin-top:4px;">Live view of your dev profile · 4 commands</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <div style="padding:9px 16px; border-radius:10px; border:1px solid #eae5db; background:#fffdf9; font-size:13px; color:#3a3529;">Stop all</div>
+        <div style="padding:9px 16px; border-radius:10px; background:#6c4fd8; color:#fff; font-size:13px; font-weight:500;">Run profile</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:14px;">
+      <div class="pcard">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div class="disp" style="font-weight:600; font-size:15px; color:#1e1a14;">postgres</div>
+          <div style="font-size:11px; padding:3px 9px; border-radius:20px; background:#e4f3e8; color:#2f7a49;">healthy</div>
+        </div>
+        <div style="font-size:12px; color:#a39c8c; margin-top:3px;">dev · pid 41021</div>
+        <div style="display:flex; gap:18px; margin-top:14px; font-size:12px; color:#5b5548;">
+          <div>CPU <b style="color:#2a2620;">1.2%</b></div><div>Mem <b style="color:#2a2620;">84 MB</b></div>
+        </div>
+      </div>
+      <div class="pcard">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div class="disp" style="font-weight:600; font-size:15px; color:#1e1a14;">api</div>
+          <div style="font-size:11px; padding:3px 9px; border-radius:20px; background:#e4f3e8; color:#2f7a49;">healthy</div>
+        </div>
+        <div style="font-size:12px; color:#a39c8c; margin-top:3px;">dev · pid 41055</div>
+        <div style="display:flex; gap:18px; margin-top:14px; font-size:12px; color:#5b5548;">
+          <div>CPU <b style="color:#2a2620;">4.8%</b></div><div>Mem <b style="color:#2a2620;">156 MB</b></div>
+        </div>
+      </div>
+      <div class="pcard">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div class="disp" style="font-weight:600; font-size:15px; color:#1e1a14;">web</div>
+          <div style="font-size:11px; padding:3px 9px; border-radius:20px; background:#faefd9; color:#96701c;">starting</div>
+        </div>
+        <div style="font-size:12px; color:#a39c8c; margin-top:3px;">dev · pid 41077</div>
+        <div style="display:flex; gap:18px; margin-top:14px; font-size:12px; color:#5b5548;">
+          <div>CPU <b style="color:#2a2620;">0.3%</b></div><div>Mem <b style="color:#2a2620;">42 MB</b></div>
+        </div>
+      </div>
+      <div class="pcard" style="border-color:#f3d9d5;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div class="disp" style="font-weight:600; font-size:15px; color:#1e1a14;">worker</div>
+          <div style="font-size:11px; padding:3px 9px; border-radius:20px; background:#fbe4e1; color:#b0402f;">failed</div>
+        </div>
+        <div style="font-size:12px; color:#a39c8c; margin-top:3px;">dev · exited (1)</div>
+        <div style="font-size:12px; color:#b0402f; margin-top:14px;">dependency 'api' health took 4.2s</div>
+      </div>
+    </div>
+
+    <div class="disp" style="font-size:13px; color:#847c6a; margin-top:6px;">Notifications</div>
+    <div class="pcard" style="padding:14px 18px; display:flex; flex-direction:column; gap:8px;">
+      <div style="font-size:13px; color:#3a3529;">⚠ worker exited with code 1 — dependency healthcheck was slow</div>
+      <div style="font-size:13px; color:#847c6a;">web is waiting on api's health before starting</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

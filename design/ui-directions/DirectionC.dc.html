@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #0a0e17; }
+    a { color: #7dd3fc; } a:hover { color: #bae6fd; }
+    .f { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .node { position: absolute; width: 168px; border-radius: 14px; padding: 14px 16px; box-sizing: border-box; }
+    .pulse { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.08); }
+  </style>
+</helmet>
+<div class="f" style="width:1280px; height:820px; background:#0a0e17; color:#c7d0e0; box-sizing:border-box; display:flex; flex-direction:column; overflow:hidden;">
+
+  <div style="display:flex; justify-content:space-between; align-items:center; padding:20px 28px; border-bottom:1px solid #1a2233;">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div style="font-weight:700; font-size:16px; color:#eef2fb;">Conductor</div>
+      <div style="display:flex; gap:6px; background:#121a2b; border-radius:10px; padding:4px;">
+        <div style="padding:6px 14px; border-radius:8px; background:#22314e; color:#eef2fb; font-size:12px;">dev</div>
+        <div style="padding:6px 14px; border-radius:8px; color:#7c8aa8; font-size:12px;">staging</div>
+      </div>
+    </div>
+    <div style="font-size:12px; color:#5b6a8a;">4 services · dependency order shown below</div>
+  </div>
+
+  <div style="flex:1; display:flex; min-width:0;">
+    <div style="flex:1; position:relative; padding:40px;">
+      <svg style="position:absolute; inset:0; width:100%; height:100%;" viewBox="0 0 780 560" preserveAspectRatio="none">
+        <path d="M 228 260 L 320 260" stroke="#2c3a56" stroke-width="2" fill="none"/>
+        <path d="M 488 260 C 540 260, 540 130, 592 130" stroke="#2c3a56" stroke-width="2" fill="none"/>
+        <path d="M 488 260 C 540 260, 540 390, 592 390" stroke="#3a2c2c" stroke-width="2" fill="none"/>
+        <circle cx="320" cy="260" r="3" fill="#4ade80"/>
+        <circle cx="592" cy="130" r="3" fill="#f5a623"/>
+      </svg>
+
+      <div class="node pulse" style="left:40px; top:220px; background:#121a2b; border:1px solid #2c3a56;">
+        <div style="font-size:10px; color:#5b6a8a; letter-spacing:0.05em;">DATABASE</div>
+        <div style="font-weight:600; color:#eef2fb; margin-top:2px;">postgres</div>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:10px; font-size:11px; color:#4ade80;">
+          <span style="width:6px;height:6px;border-radius:50%;background:#4ade80;"></span>running · healthy
+        </div>
+      </div>
+
+      <div class="node pulse" style="left:320px; top:220px; background:#121a2b; border:1px solid #2c3a56;">
+        <div style="font-size:10px; color:#5b6a8a; letter-spacing:0.05em;">SERVER</div>
+        <div style="font-weight:600; color:#eef2fb; margin-top:2px;">api</div>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:10px; font-size:11px; color:#4ade80;">
+          <span style="width:6px;height:6px;border-radius:50%;background:#4ade80;"></span>running · healthy
+        </div>
+      </div>
+
+      <div class="node" style="left:592px; top:90px; background:#151107; border:1px solid #4a3a1a;">
+        <div style="font-size:10px; color:#8a7a5b; letter-spacing:0.05em;">FRONTEND</div>
+        <div style="font-weight:600; color:#eef2fb; margin-top:2px;">web</div>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:10px; font-size:11px; color:#f5a623;">
+          <span style="width:6px;height:6px;border-radius:50%;background:#f5a623;"></span>starting
+        </div>
+      </div>
+
+      <div class="node" style="left:592px; top:350px; background:#170f0f; border:1px solid #4a2c2c;">
+        <div style="font-size:10px; color:#9a6b6b; letter-spacing:0.05em;">WORKER</div>
+        <div style="font-weight:600; color:#eef2fb; margin-top:2px;">worker</div>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:10px; font-size:11px; color:#f2726b;">
+          <span style="width:6px;height:6px;border-radius:50%;background:#f2726b;"></span>failed
+        </div>
+      </div>
+    </div>
+
+    <div style="width:320px; flex-shrink:0; border-left:1px solid #1a2233; padding:22px; display:flex; flex-direction:column; gap:16px;">
+      <div>
+        <div style="font-size:11px; color:#5b6a8a; letter-spacing:0.05em;">SELECTED</div>
+        <div style="font-weight:700; font-size:17px; color:#eef2fb; margin-top:4px;">worker</div>
+        <div style="font-size:12px; color:#7c8aa8; margin-top:2px;">depends on api → exited (1)</div>
+      </div>
+      <div style="background:#121a2b; border:1px solid #2c3a56; border-radius:10px; padding:12px 14px; font-size:12px; color:#c7d0e0; font-family: ui-monospace, monospace; line-height:1.6;">
+        <div style="color:#7c8aa8;">12:04:11 connecting to api…</div>
+        <div style="color:#7c8aa8;">12:04:15 healthcheck 200 OK</div>
+        <div style="color:#f2726b;">12:04:22 uncaught exception</div>
+        <div style="color:#f2726b;">12:04:22 process exited (1)</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <div style="flex:1; text-align:center; padding:9px; border-radius:8px; background:#22314e; color:#eef2fb; font-size:12px;">Restart</div>
+        <div style="flex:1; text-align:center; padding:9px; border-radius:8px; border:1px solid #2c3a56; color:#c7d0e0; font-size:12px;">Full logs</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

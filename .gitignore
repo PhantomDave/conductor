@@ -57,3 +57,6 @@ coverage/
 # Vite
 .vite/
 *.local
+
+# Graphify knowledge graph (generated, per-machine)
+graphify-out/

@@ -1,0 +1,39 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev:core",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev:core"],
+      "port": 4000
+    },
+    {
+      "name": "dev:ui",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev:ui"],
+      "port": 3000
+    },
+    {
+      "name": "redesign-core",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "/home/dave/Documents/davestools/conductor-redesign-terminal-ui/packages/core",
+        "dev"
+      ],
+      "port": 4000
+    },
+    {
+      "name": "redesign-ui",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "/home/dave/Documents/davestools/conductor-redesign-terminal-ui/packages/ui",
+        "dev"
+      ],
+      "port": 4001
+    }
+  ]
+}
