@@ -24,6 +24,16 @@
     "externalBin": ["binaries/conductor-server"],
     "resources": {
       "../../ui/dist/": "ui-dist"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/PhantomDave/conductor/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk4NzU0NzdCOTBCNUI1MjIKUldRaXRiV1FlMGQxbUZYUVZ6cHV4enB3Y3JpYndsbHRyZVJLOFNZUit6NDFuVUtSQm80WDV6RkIK"
     }
   }
 }

@@ -12,6 +12,7 @@ use tauri::{image::Image, AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindo
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_updater::UpdaterExt;
 
 struct SidecarState {
     child: Mutex<Option<CommandChild>>,
@@ -159,10 +160,44 @@ async fn stop_sidecar(state: &SidecarState) {
     }
 }
 
+/// Checks for an update and installs it if one is available, mirroring
+/// Electron's autoUpdater.checkForUpdatesAndNotify() - but tauri-plugin-updater
+/// installs immediately on download rather than deferring to next quit, so we
+/// explicitly restart once the install finishes. `log_if_current` distinguishes
+/// the menu-triggered check (should say something either way) from the silent
+/// startup check (Electron only logs there, never prompts).
+async fn check_for_updates(app: AppHandle, log_if_current: bool) {
+    let updater = match app.updater() {
+        Ok(updater) => updater,
+        Err(err) => {
+            eprintln!("[updater] unavailable: {err}");
+            return;
+        }
+    };
+    match updater.check().await {
+        Ok(Some(update)) => {
+            println!("[updater] update {} available, downloading", update.version);
+            if let Err(err) = update.download_and_install(|_, _| {}, || {}).await {
+                eprintln!("[updater] download/install failed: {err}");
+                return;
+            }
+            println!("[updater] installed, restarting");
+            app.request_restart();
+        }
+        Ok(None) => {
+            if log_if_current {
+                println!("[updater] already up to date");
+            }
+        }
+        Err(err) => eprintln!("[updater] check failed: {err}"),
+    }
+}
+
 fn build_menu(app: &AppHandle) -> tauri::Result<()> {
     let app_menu = SubmenuBuilder::new(app, "Conductor")
         .about(None)
         .separator()
+        .text("check_for_updates", "Check for Updates...")
         .quit()
         .build()?;
     let edit_menu = SubmenuBuilder::new(app, "Edit")
@@ -231,11 +266,21 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(SidecarState {
             child: Mutex::new(None),
             exited: Arc::new(AtomicBool::new(false)),
         })
         .setup(|app| {
+            app.on_menu_event(|app, event| {
+                if event.id() == "check_for_updates" {
+                    let handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        check_for_updates(handle, true).await;
+                    });
+                }
+            });
+
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let state = handle.state::<SidecarState>();
@@ -244,6 +289,16 @@ fn main() {
                     handle.exit(1);
                 }
             });
+
+            // Silent startup check, packaged builds only - same gating as
+            // Electron's app.isPackaged check before checkForUpdatesAndNotify().
+            if !cfg!(debug_assertions) {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    check_for_updates(handle, false).await;
+                });
+            }
+
             Ok(())
         })
         .build(tauri::generate_context!())
