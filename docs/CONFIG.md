@@ -103,7 +103,7 @@ Any environment variable whose **name** appears in the top-level `env_secrets` a
 
 ## Healthchecks
 
-Choose one of four types per command:
+Choose one of five types per command:
 
 | Type               | Description                                                                 | Required Fields              |
 | ------------------ | --------------------------------------------------------------------------- | ---------------------------- |
@@ -111,6 +111,9 @@ Choose one of four types per command:
 | `"port"`           | Wait for a TCP port to accept connections. Socket timeout: 2 s.             | `port` (number)              |
 | `"http"`           | Wait for an HTTP endpoint to respond with status < 500. Fetch timeout: 2 s. | `url` (string, complete URL) |
 | `"command"`        | Execute a shell command and wait for exit code 0.                           | `command` (string)           |
+| `"log_line"`       | Wait for a stdout/stderr line containing a substring.                       | `pattern` (string)           |
+
+`log_line` polls the process's own output (already collected for logging) rather than the network or a subprocess: on each of the `retries` attempts, spaced `interval_ms` apart, it checks whether any line since startup has contained `pattern`. This suits a service that only announces readiness on stdout (e.g. a dev server printing `compiled successfully`) with no port or endpoint to probe yet. It's a one-shot signal — a line either appeared or it didn't, and it can't un-appear — so unlike the other types, it does not run in the continuous post-startup health monitor.
 
 ### Healthcheck Common Fields
 

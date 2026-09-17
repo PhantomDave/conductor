@@ -81,6 +81,34 @@ describe("SpawnQueue.startOne - dependency ordering", () => {
   });
 });
 
+describe("SpawnQueue - log_line healthcheck", () => {
+  test("becomes healthy once the pattern appears in the process's own output", async () => {
+    // Exercises the actual wiring in startSingleProcess: waitForHealthy only
+    // sees a match if the wrapper is threaded through as the logLineState
+    // arg. If that wiring were dropped, this healthcheck would exhaust its
+    // retries and the wrapper would end up "failed" instead of "running".
+    const cmd = makeCommand({
+      id: "server",
+      name: "Server",
+      run: `bun -e "console.log('booting'); console.log('ready on :3000'); setInterval(() => {}, 1000)"`,
+      healthcheck: {
+        type: "log_line",
+        pattern: "ready on",
+        interval_ms: 20,
+        timeout_ms: 5000,
+        retries: 100,
+      },
+    });
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+
+    await queue.startOne("server");
+
+    expect(queue.getWrapper("server")?.status).toBe("running");
+
+    await queue.stopAll();
+  });
+});
+
 describe("SpawnQueue.startAll - circular dependencies", () => {
   test("rejects with a clear error instead of hanging", async () => {
     const a = makeCommand({ id: "a", name: "A", run: `bun -e "1"`, deps: ["b"] });

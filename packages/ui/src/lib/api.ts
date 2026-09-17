@@ -13,10 +13,11 @@ export interface ProcessInfo {
 }
 
 export interface HealthcheckInfo {
-  type: "none" | "port" | "http" | "command";
+  type: "none" | "port" | "http" | "command" | "log_line";
   port?: number;
   url?: string;
   command?: string;
+  pattern?: string;
   interval_ms: number;
   timeout_ms: number;
   retries: number;
