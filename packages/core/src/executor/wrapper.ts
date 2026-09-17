@@ -421,18 +421,31 @@ export class ProcessWrapper {
     // guard instead of being misattributed to this new lifecycle.
     this.logLineMatched = false;
 
-    this.pumpStream(subprocess.stdout, "stdout", this.process);
-    this.pumpStream(subprocess.stderr, "stderr", this.process);
+    // The stream pumps and the exit hook below live as long as the subprocess
+    // and nothing awaits them, so a failure in one is reported on this
+    // process's own stderr log instead of becoming an unhandled rejection.
+    const managed = this.process;
+    const reportFailure = (what: string) => (err: unknown) =>
+      this.emitLogFor(
+        managed,
+        `[conductor] ${what} failed: ${err instanceof Error ? err.message : String(err)}`,
+        "stderr",
+      );
 
-    subprocess.exited.then((exitCode) => {
-      if (this.process) {
-        this.process.status = exitCode === 0 ? "stopped" : "failed";
-        this.process.exitCode = exitCode;
-        this.process.endedAt = new Date();
-        this.markUnhealthy();
-      }
-      for (const cb of this.exitHandlers) cb(exitCode);
-    });
+    this.pumpStream(subprocess.stdout, "stdout", managed).catch(reportFailure("reading stdout"));
+    this.pumpStream(subprocess.stderr, "stderr", managed).catch(reportFailure("reading stderr"));
+
+    subprocess.exited
+      .then((exitCode) => {
+        if (this.process) {
+          this.process.status = exitCode === 0 ? "stopped" : "failed";
+          this.process.exitCode = exitCode;
+          this.process.endedAt = new Date();
+          this.markUnhealthy();
+        }
+        for (const cb of this.exitHandlers) cb(exitCode);
+      })
+      .catch(reportFailure("exit handling"));
   }
 
   private async pumpStream(
@@ -573,16 +586,14 @@ export class ProcessWrapper {
 
     // Wait for the process to actually exit (or timeout), then update state immediately
     const exitedInTime = await Promise.race([
-      new Promise<boolean>((resolve) => {
-        subprocess.exited.then((code) => {
-          if (this.process) {
-            this.process.status = "stopped";
-            this.process.exitCode ??= code;
-            this.process.endedAt = new Date();
-            this.markUnhealthy();
-          }
-          resolve(true);
-        });
+      subprocess.exited.then((code) => {
+        if (this.process) {
+          this.process.status = "stopped";
+          this.process.exitCode ??= code;
+          this.process.endedAt = new Date();
+          this.markUnhealthy();
+        }
+        return true;
       }),
       new Promise<boolean>((resolve) => setTimeout(() => resolve(false), remainingMs)),
     ]);

@@ -242,7 +242,7 @@ describe("ProcessWrapper.stop", () => {
   test("is a no-op when the process was never started", async () => {
     const cmd = makeCommand({ id: "never-started", name: "Never Started", run: `bun -e "1"` });
     const wrapper = new ProcessWrapper(cmd, "test", testEnv());
-    await expect(wrapper.stop()).resolves.toBeUndefined();
+    expect(wrapper.stop()).resolves.toBeUndefined();
   });
 
   test("forceKillAndWait reports an intentional kill as stopped, not failed", async () => {

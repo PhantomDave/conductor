@@ -79,16 +79,18 @@ export function ProfileGridView() {
   };
 
   // Helpers
-  const handleCreateProfile = async () => {
+  // The form handlers use mutate (not mutateAsync): a failure is already
+  // reported by the hook's onError, and mutate never leaves a rejected
+  // promise unhandled the way an un-awaited mutateAsync does.
+  const handleCreateProfile = () => {
     if (!newProfileName.trim()) return;
-    await createMutation.mutateAsync({
-      name: newProfileName.trim(),
-      description: newProfileDesc || undefined,
-    });
-    closeCreateModal();
+    createMutation.mutate(
+      { name: newProfileName.trim(), description: newProfileDesc || undefined },
+      { onSuccess: closeCreateModal },
+    );
   };
 
-  const handleEditProfile = async () => {
+  const handleEditProfile = () => {
     if (!editName.trim()) return;
     const changes: { newName?: string; description?: string } = {};
     if (editName !== editTargetName) changes.newName = editName;
@@ -99,20 +101,29 @@ export function ProfileGridView() {
       setEditModalOpen(false);
       return;
     }
-    await updateMutation.mutateAsync({ oldName: editTargetName, changes });
-    setEditModalOpen(false);
-    setEditTargetName("");
+    updateMutation.mutate(
+      { oldName: editTargetName, changes },
+      {
+        onSuccess: () => {
+          setEditModalOpen(false);
+          setEditTargetName("");
+        },
+      },
+    );
   };
 
-  const handleDuplicateProfile = async () => {
+  const handleDuplicateProfile = () => {
     if (!duplicateNewName.trim()) return;
-    await duplicateMutation.mutateAsync({
-      sourceName: duplicateSourceName,
-      newName: duplicateNewName.trim(),
-    });
-    setDuplicateModalOpen(false);
-    setDuplicateSourceName("");
-    setDuplicateNewName("");
+    duplicateMutation.mutate(
+      { sourceName: duplicateSourceName, newName: duplicateNewName.trim() },
+      {
+        onSuccess: () => {
+          setDuplicateModalOpen(false);
+          setDuplicateSourceName("");
+          setDuplicateNewName("");
+        },
+      },
+    );
   };
 
   const handleDeleteProfile = async () => {

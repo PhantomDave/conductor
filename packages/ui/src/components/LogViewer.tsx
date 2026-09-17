@@ -53,9 +53,14 @@ export function LogViewer({ process }: { process: ProcessInfo }) {
     const pid = process.pid;
     let cancelled = false;
 
-    fetchLogs({ pid, limit: 500 }).then((history) => {
-      if (!cancelled) setLogState({ pid, rows: history });
-    });
+    fetchLogs({ pid, limit: 500 })
+      .then((history) => {
+        if (!cancelled) setLogState({ pid, rows: history });
+      })
+      .catch(() => {
+        // Nothing to recover: the SSE stream below replays recent history as
+        // well, so a failed fetch only costs the instant first paint.
+      });
 
     // Live tail: SSE already replays recent history too, but we've just
     // fetched it above for an instant first paint, so dedupe by id.

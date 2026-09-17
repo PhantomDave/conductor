@@ -77,7 +77,7 @@ describe("SpawnQueue.startOne - dependency ordering", () => {
 
   test("throws a clear error for an unknown command id", async () => {
     const queue = new SpawnQueue("test", [], () => testEnv());
-    await expect(queue.startOne("nope")).rejects.toThrow(/Unknown command "nope"/);
+    expect(queue.startOne("nope")).rejects.toThrow(/Unknown command "nope"/);
   });
 });
 
@@ -115,7 +115,7 @@ describe("SpawnQueue.startAll - circular dependencies", () => {
     const b = makeCommand({ id: "b", name: "B", run: `bun -e "1"`, deps: ["a"] });
     const queue = new SpawnQueue("test", [a, b], () => testEnv());
 
-    await expect(queue.startAll()).rejects.toThrow(/Circular dependency/);
+    expect(queue.startAll()).rejects.toThrow(/Circular dependency/);
   });
 
   test("a cycle in one profile's commands doesn't block starting an unrelated command", async () => {
@@ -157,7 +157,7 @@ describe("SpawnQueue.startOne - dependency failure", () => {
     const queue = new SpawnQueue("test", [flaky, dependent], () => testEnv());
 
     try {
-      await expect(queue.startOne("dependent")).rejects.toThrow(/[Dd]ependency/);
+      expect(queue.startOne("dependent")).rejects.toThrow(/[Dd]ependency/);
 
       // The failed dependency itself is recorded, and nothing was blocked
       // downstream of "dependent" since nothing depends on it.
@@ -317,7 +317,7 @@ describe("SpawnQueue - transitive dependency failure", () => {
 
     try {
       const start = Date.now();
-      await expect(queue.startOne("a")).rejects.toThrow(/[Bb]locked/);
+      expect(queue.startOne("a")).rejects.toThrow(/[Bb]locked/);
       const elapsed = Date.now() - start;
 
       expect(elapsed).toBeLessThan(2000); // well under the 60s per-dependency timeout
@@ -336,7 +336,7 @@ describe("SpawnQueue - dangling dependency reference", () => {
     const queue = new SpawnQueue("test", [cmd], () => testEnv());
 
     const start = Date.now();
-    await expect(queue.startOne("a")).rejects.toThrow(/not a known command/);
+    expect(queue.startOne("a")).rejects.toThrow(/not a known command/);
     expect(Date.now() - start).toBeLessThan(2000);
   });
 });
