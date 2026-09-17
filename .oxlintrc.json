@@ -38,7 +38,13 @@
     // React hooks (reported as react-hooks(...)) and effect hygiene.
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "error",
-    "react/set-state-in-effect": "error"
+    "react/set-state-in-effect": "error",
+
+    // Type-aware rules (require oxlint-tsgolint; only checked by `oxlint
+    // --type-aware`, run separately as `lint:types` — see Phase 4).
+    "typescript/no-floating-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/restrict-template-expressions": "error"
   },
   "overrides": [
     {

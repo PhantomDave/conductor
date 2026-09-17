@@ -113,7 +113,7 @@ export function useUpsertEnvVar() {
     mutationFn: upsertEnvVar,
     onSuccess: (_data, vars) => {
       notifications.show({ color: "green", message: `Saved "${vars.key}"` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({ color: "red", title: "Failed to save env var", message: error.message });
@@ -127,7 +127,7 @@ export function useDeleteEnvVar() {
     mutationFn: deleteEnvVar,
     onSuccess: () => {
       notifications.show({ color: "green", message: "Deleted" });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -145,7 +145,7 @@ export function useImportEnvVars() {
     mutationFn: importEnvVars,
     onSuccess: (count) => {
       notifications.show({ color: "green", message: `Imported ${count} variable(s)` });
-      invalidate();
+      return invalidate();
     },
     onError: (error: Error) => {
       notifications.show({
@@ -168,9 +168,11 @@ export function useImportConfig() {
       });
       // Everything the imported config could have changed - profiles,
       // commands, base_path, default_shell - needs a fresh fetch.
-      queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      queryClient.invalidateQueries({ queryKey: ["base-path"] });
-      queryClient.invalidateQueries({ queryKey: ["shells"] });
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profiles"] }),
+        queryClient.invalidateQueries({ queryKey: ["base-path"] }),
+        queryClient.invalidateQueries({ queryKey: ["shells"] }),
+      ]);
     },
     onError: (error: Error) => {
       notifications.show({

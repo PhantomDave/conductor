@@ -1,6 +1,6 @@
 # TypeScript 7 Migration Plan
 
-**Status:** in progress (decisions settled 2026-09-11, see [Decisions](#decisions)) · **Baseline:** `main` after #57 and #58 (TypeScript 6.0.3, ESLint + typescript-eslint, strict lint in CI; Dependabot proposes TS 7 bumps, which fail Lint until Phase 1 lands)
+**Status:** done (all four phases complete, decisions settled 2026-09-11, see [Decisions](#decisions)) · **Baseline:** `main` after #57 and #58 (TypeScript 6.0.3, ESLint + typescript-eslint, strict lint in CI; Dependabot proposes TS 7 bumps, which fail Lint until Phase 1 lands)
 
 ## Goal
 
@@ -86,12 +86,21 @@ Add `oxlint-tsgolint` and run `oxlint --type-aware`. Baseline on the #57 tree:
 
 By package: ui 50, core 17, desktop 2. Fix every finding (no baseline file, no blanket disables). Type-aware lint runs as its **own required CI step** (`lint:types`), so it can be switched off separately if tsgolint regresses. If the phase gets large, split it into consecutive PRs (per rule or package), each green and merged before the next.
 
+**Done.** `lint:types` (`oxlint --type-aware --deny-warnings`) is wired in as its own step in `.github/workflows/ci.yml`, separate from `lint`. Every real finding was fixed at the call site (no baseline file, no blanket `oxlint-disable`):
+
+- `typescript/restrict-template-expressions` (`packages/desktop/src/main.ts`): retyped the `forward` helper's `chunk` param as `Buffer | string` and called `.toString()` before interpolating.
+- `typescript/no-floating-promises` in `packages/core/src/executor/wrapper.ts`: attached `.catch(...)` to the `pumpStream` calls (reporting via `emitLogFor`) and to the bookkeeping `subprocess.exited.then(...)`, matching the existing swallow-and-log convention already used elsewhere in that file.
+- `typescript/no-floating-promises` in `packages/core/test/healthcheck.test.ts`: three `finally` blocks called `server.stop(true)` without awaiting it — a real bug (unawaited async `Bun.serve()` close, risking flaky port reuse in CI) — fixed with `await`.
+- `typescript/await-thenable` (10 findings across `queue.test.ts`, `healthcheck.test.ts`, `wrapper.test.ts`): all were a stray `await` on `expect(...).rejects/resolves...`, which `bun:test` types as `void` and blocks synchronously regardless of `await`. Verified empirically (scratch test files) rather than assumed, including the two cases with timing- or order-sensitive follow-up assertions; safe to delete in every case.
+- `typescript/no-floating-promises` across `packages/ui` (39 findings, mostly cache-invalidation calls in `useMutation`/`useQuery` `onSuccess`/`onSettled` callbacks): matched the pattern already present in `useEnvVars.ts` (`useUpdateBasePath`/`useUpdateDefaultShell`) of `return`ing the invalidation promise so the mutation only settles once the cache refresh lands; multi-call sites combined with `Promise.all`. The three `ProfileGridView.tsx` form-submit handlers got an explicit `void` (no existing void convention in `packages/ui`, so this establishes one for fire-and-forget handlers whose errors are already surfaced via the mutation's `onError` notification). `LogViewer.tsx`'s initial history fetch got a `.catch(() => {})` — a failed backlog fetch degrades gracefully since the live SSE tail still streams new lines.
+
 ## Verification checklist (every phase)
 
 ```bash
 bun install --frozen-lockfile
 bun run format:check
 bun run lint
+bun run lint:types
 bun run typecheck
 bun test
 bun run build

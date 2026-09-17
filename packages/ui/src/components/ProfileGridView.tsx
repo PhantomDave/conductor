@@ -245,7 +245,7 @@ export function ProfileGridView() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            handleCreateProfile();
+            void handleCreateProfile();
           }}
         >
           <Stack gap="md">
@@ -286,7 +286,7 @@ export function ProfileGridView() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              handleEditProfile();
+              void handleEditProfile();
             }}
           >
             <Stack gap="md">
@@ -335,7 +335,7 @@ export function ProfileGridView() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            handleDuplicateProfile();
+            void handleDuplicateProfile();
           }}
         >
           <Stack gap="md">

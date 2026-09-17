@@ -137,10 +137,10 @@ function CommandFormFields({
         setIsSubmitting(true);
         updateStandaloneCommand(editing.id, input)
           .then(() => {
-            invCmdLib();
-            invProfiles();
+            const invalidated = Promise.all([invCmdLib(), invProfiles()]);
             notifications.show({ color: "green", message: `Updated command "${input.name}"` });
             onClose();
+            return invalidated;
           })
           .catch((err: Error) => {
             notifications.show({
@@ -161,10 +161,10 @@ function CommandFormFields({
         setIsSubmitting(true);
         createStandaloneCommand(input)
           .then((created) => {
-            invCmdLib();
-            invProfiles();
+            const invalidated = Promise.all([invCmdLib(), invProfiles()]);
             notifications.show({ color: "green", message: `Created command "${created.name}"` });
             onClose();
+            return invalidated;
           })
           .catch((err: Error) => {
             notifications.show({
