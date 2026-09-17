@@ -3,7 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 export interface Notification {
   id: string;
   timestamp: number;
-  type: "failed_start" | "dependency_failed" | "healthcheck_failed";
+  type:
+    | "failed_start"
+    | "dependency_failed"
+    | "healthcheck_failed"
+    | "recovered"
+    | "crashed"
+    | "unhealthy";
   profile: string;
   commandId: string;
   commandName?: string;

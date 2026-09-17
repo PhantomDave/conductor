@@ -17,7 +17,13 @@ const STABLE_UPTIME_MS = 60_000;
 export interface Notification {
   id: string;
   timestamp: number;
-  type: "failed_start" | "dependency_failed" | "healthcheck_failed" | "recovered";
+  type:
+    | "failed_start"
+    | "dependency_failed"
+    | "healthcheck_failed"
+    | "recovered"
+    | "crashed"
+    | "unhealthy";
   profile: string;
   commandId: string;
   commandName?: string;
@@ -308,16 +314,40 @@ export class SpawnQueue {
       // *changes*, and a crash with no healthcheck configured reports nothing).
       const spawnedAt = Date.now();
       wrapper.onExit((exitCode) => this.onProcessExit(cmd, wrapper, exitCode, spawnedAt));
+      // A crash *after* startup has no other path to a notification — startup
+      // crashes are reported by the catch below instead.
+      let started = false;
+      wrapper.onExit((exitCode) => {
+        if (!started || exitCode === 0 || wrapper.stoppedIntentionally) return;
+        if (this.wrappers.get(cmd.id) !== wrapper) return;
+        this.pendingRecovery.add(cmd.id);
+        this.recordNotification(
+          "crashed",
+          cmd.id,
+          `${cmd.name} crashed (exit code ${exitCode})`,
+          exitCode,
+          this.transitiveDependents(cmd.id),
+        );
+      });
 
       // Await healthcheck with per-attempt logging
       await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env, {
         onAttempt: (attempt, result) =>
           this.recordHealthProbeAttempt(wrapper, cmd, attempt, result),
         logLineState: wrapper,
+        // Stop probing a process that already died instead of burning every retry.
+        isAlive: () => wrapper.status === "starting",
       });
+
+      // A probe can pass against something else (e.g. an orphan still holding
+      // the port) after this process already died — don't call that healthy.
+      if (wrapper.status !== "starting") {
+        throw new Error(`process exited before becoming healthy`);
+      }
 
       // Mark wrapper running once the healthcheck (or its absence) has passed
       wrapper.markHealthy("healthy");
+      started = true;
 
       // Start continuous monitoring so the service going unhealthy after
       // startup (crash, port loss, OOM) is detected and health flips.
@@ -336,8 +366,18 @@ export class SpawnQueue {
       wrapper.markFailed();
       const reason = err instanceof Error ? err.message : String(err);
       const affectedDownstream = this.transitiveDependents(cmd.id);
+      const exitCode = wrapper.getSnapshot()?.exitCode;
       // Determine notification type based on where it failed
-      if (this.isSpawnError(reason)) {
+      if (exitCode != null && exitCode !== 0 && !wrapper.stoppedIntentionally) {
+        this.recordNotification(
+          "crashed",
+          cmd.id,
+          `${cmd.name} crashed during startup (exit code ${exitCode})`,
+          exitCode,
+          affectedDownstream,
+        );
+        wrapper.log(`[startup] process exited with code ${exitCode}`, "stdout");
+      } else if (this.isSpawnError(reason)) {
         // Spawn-level failure: process never started properly at all
         this.recordNotification(
           "failed_start",
@@ -401,6 +441,16 @@ export class SpawnQueue {
             : `[healthcheck] service unhealthy: ${detail}`,
           "stdout",
         );
+        // The exit handler reports crashes; only notify for a live-but-unhealthy service.
+        if (!isHealthy && wrapper.status === "running") {
+          this.recordNotification(
+            "unhealthy",
+            cmd.id,
+            `${cmd.name} unhealthy: ${detail}`,
+            undefined,
+            this.transitiveDependents(cmd.id),
+          );
+        }
       },
       { intervalMs: hc.interval_ms },
     );
