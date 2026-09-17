@@ -21,8 +21,8 @@ struct SidecarState {
 
 fn find_free_port() -> std::io::Result<u16> {
     // Bind port 0 and read back whatever the OS picked, then drop the
-    // listener so the sidecar can bind it - same trick as Electron's
-    // findFreePort(), avoids clashing with anything else on the machine.
+    // listener so the sidecar can bind it, avoiding clashes with anything
+    // else on the machine.
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     listener.local_addr().map(|addr| addr.port())
 }
@@ -46,8 +46,7 @@ async fn wait_for_healthy(port: u16, timeout: Duration) -> Result<(), String> {
 
 /// Resolves the built UI bundle, whether we're running from source (dev,
 /// staged next to this monorepo checkout) or from a packaged app (bundled
-/// as a `resources` entry) - same dev/packaged split as Electron's
-/// resolvePaths(). The sidecar binary itself doesn't need resolving here:
+/// as a `resources` entry). The sidecar binary itself doesn't need resolving here:
 /// `app.shell().sidecar()` already knows how to find it in both modes.
 fn ui_dist_path(app: &AppHandle) -> Result<PathBuf, String> {
     if cfg!(debug_assertions) {
@@ -64,8 +63,8 @@ fn ui_dist_path(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 /// Relays a sidecar output line to our own stdout/stderr, tolerating a
-/// stream that cannot be written to - same reasoning as Electron's
-/// forward(): losing a log line is fine, losing the app is not.
+/// stream that cannot be written to: losing a log line is fine, losing
+/// the app is not.
 fn forward(prefix: &str, line: &[u8]) {
     use std::io::Write;
     let text = String::from_utf8_lossy(line);
@@ -124,8 +123,7 @@ async fn start_sidecar(app: &AppHandle, state: &SidecarState) -> Result<u16, Str
 
 /// Sends SIGTERM and gives the sidecar up to 5s to run its own graceful
 /// shutdown (which stops every managed dev process it started) before
-/// escalating to SIGKILL - same two-step teardown as Electron's
-/// stopSidecar(). CommandChild::kill() alone is a hard kill, not this.
+/// escalating to SIGKILL. CommandChild::kill() alone is a hard kill, not this.
 async fn stop_sidecar(state: &SidecarState) {
     let Some(child) = state.child.lock().unwrap().take() else {
         return;
@@ -160,12 +158,11 @@ async fn stop_sidecar(state: &SidecarState) {
     }
 }
 
-/// Checks for an update and installs it if one is available, mirroring
-/// Electron's autoUpdater.checkForUpdatesAndNotify() - but tauri-plugin-updater
+/// Checks for an update and installs it if one is available. tauri-plugin-updater
 /// installs immediately on download rather than deferring to next quit, so we
 /// explicitly restart once the install finishes. `log_if_current` distinguishes
 /// the menu-triggered check (should say something either way) from the silent
-/// startup check (Electron only logs there, never prompts).
+/// startup check (which only logs, never prompts).
 async fn check_for_updates(app: AppHandle, log_if_current: bool) {
     let updater = match app.updater() {
         Ok(updater) => updater,
@@ -215,7 +212,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
 }
 
 async fn create_window(app: &AppHandle, port: u16) -> Result<(), String> {
-    let icon_bytes = include_bytes!("../../../desktop/build/icon.png");
+    let icon_bytes = include_bytes!("../icons/icon-source.png");
     let icon = Image::from_bytes(icon_bytes).map_err(|e| e.to_string())?;
 
     let origin = format!("http://127.0.0.1:{port}");
@@ -290,8 +287,7 @@ fn main() {
                 }
             });
 
-            // Silent startup check, packaged builds only - same gating as
-            // Electron's app.isPackaged check before checkForUpdatesAndNotify().
+            // Silent startup check, packaged builds only.
             if !cfg!(debug_assertions) {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
