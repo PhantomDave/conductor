@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
+import { notifyError } from "../lib/notify";
 import {
   createProfile,
   deleteProfile,
@@ -34,13 +35,7 @@ export function useCreateProfile() {
       notifications.show({ color: "green", message: `Created profile "${name}"` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to create profile",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to create profile"),
   });
 }
 
@@ -52,13 +47,7 @@ export function useDeleteProfile() {
       notifications.show({ color: "green", message: `Deleted profile "${profile}"` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to delete profile",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to delete profile"),
   });
 }
 
@@ -71,13 +60,7 @@ export function useRenameProfile() {
       notifications.show({ color: "green", message: `Renamed "${oldName}" to "${newName}"` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to rename profile",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to rename profile"),
   });
 }
 
@@ -98,13 +81,7 @@ export function useUpdateProfile() {
       notifications.show({ color: "green", message: `Updated ${label}` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to update profile",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to update profile"),
   });
 }
 
@@ -117,13 +94,7 @@ export function useDuplicateProfile() {
       notifications.show({ color: "green", message: `Duplicated profile as "${newName}"` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to duplicate profile",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to duplicate profile"),
   });
 }
 
@@ -133,13 +104,7 @@ export function useExportProfile() {
     onSuccess: (_data, profile) => {
       notifications.show({ color: "green", message: `Exported profile "${profile}"` });
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to export profile",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to export profile"),
   });
 }
 
@@ -152,13 +117,7 @@ export function useCreateCommand() {
       notifications.show({ color: "green", message: `Created command "${command.name}"` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to create command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to create command"),
   });
 }
 
@@ -178,13 +137,7 @@ export function useUpdateCommand() {
       notifications.show({ color: "green", message: `Updated command "${command.name}"` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to update command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to update command"),
   });
 }
 
@@ -197,13 +150,7 @@ export function useDeleteCommand() {
       notifications.show({ color: "green", message: "Command deleted" });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to delete command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to delete command"),
   });
 }
 
@@ -228,13 +175,7 @@ export function useDuplicateCommand() {
       });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to duplicate command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to duplicate command"),
   });
 }
 
@@ -257,13 +198,7 @@ export function useMoveCommand() {
       });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to move command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to move command"),
   });
 }
 
@@ -287,26 +222,14 @@ export function useExportConfig() {
         message: "Configuration exported successfully",
       });
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to export config",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to export config"),
   });
 }
 
 export function useParseDockerCompose() {
   return useMutation({
     mutationFn: (yamlText: string) => parseDockerCompose(yamlText),
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to parse docker compose",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to parse docker compose"),
   });
 }
 
@@ -322,13 +245,7 @@ export function useAttachCommandToProfile() {
       });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to add command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to add command"),
   });
 }
 
@@ -353,12 +270,6 @@ export function useSyncCommandsToProfile() {
       });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to update commands",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to update commands"),
   });
 }

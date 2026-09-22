@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { CommandConfig } from "../config/schema";
 import { ProcessWrapper, type LogHandler, type HealthChangeHandler } from "./wrapper";
 import { waitForHealthy, type ProbeResult } from "./healthcheck";
@@ -816,7 +817,7 @@ export class SpawnQueue {
   ): void {
     const cmd = this.commands.find((c) => c.id === commandId);
     const notification: Notification = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      id: randomUUID(),
       timestamp: Date.now(),
       type,
       profile: this.profile,

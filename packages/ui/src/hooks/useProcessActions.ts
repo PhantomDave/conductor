@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
+import { notifyError } from "../lib/notify";
 import {
   executeCommand,
   restartCommand,
@@ -23,13 +24,7 @@ export function useExecuteCommand() {
       notifications.show({ color: "green", message: `Started "${commandId}" (${profile})` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to start command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to start command"),
   });
 }
 
@@ -41,13 +36,7 @@ export function useRunProfile() {
       notifications.show({ color: "green", message: `Started all commands in "${profile}"` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to run profile",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to run profile"),
   });
 }
 
@@ -59,13 +48,7 @@ export function useStopProfile() {
       notifications.show({ color: "green", message: `Stopped "${profile}"` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to stop profile",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to stop profile"),
   });
 }
 
@@ -77,13 +60,7 @@ export function useStopProcess() {
       notifications.show({ color: "green", message: `Stopped process ${pid}` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to stop process",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to stop process"),
   });
 }
 
@@ -105,13 +82,7 @@ export function useStopAllProcesses() {
         message: `Stopped ${count} process${count === 1 ? "" : "es"}`,
       });
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to stop processes",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to stop processes"),
     onSettled: () => {
       return invalidate();
     },
@@ -127,12 +98,6 @@ export function useRestartCommand() {
       notifications.show({ color: "green", message: `Restarted "${commandId}"` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to restart command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to restart command"),
   });
 }
