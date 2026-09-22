@@ -31,7 +31,7 @@ as-is (not renumbered) since `TODO.md` cross-references these entries by number.
   - Metrics cleanup exists: `/home/runner/work/conductor/conductor/packages/core/src/db/queries.ts` (`deleteMetricBefore`)
 - **Impact:** Long-running usage may produce unbounded database growth.
 - **Scope:**
-  - Add configurable log retention (time-based and/or max rows)
+  - Add configurable log retention (time-based and/or max rows and/or last-N-sessions per profile)
   - Periodic cleanup task + manual cleanup command/API
 - **Acceptance criteria:**
   - Log DB growth is bounded by configured policy

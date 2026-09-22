@@ -39,10 +39,15 @@ in passing next time that line is touched.
    (`api.ts:592,597,613,632`). Add plural aliases, mark canonical in `API.md`, deprecate the singular
    ones on a timeline.
 
-3. **Backlog #6 + IDEAS "Sharpens" — log retention with FTS5.** Metrics already purge via
-   `deleteMetricBefore`; logs don't. IDEAS.md attaches real numbers to this: 3.1× storage amplification
-   without a trigram-tokenized FTS5 index, 7-day default window is the reference implementation's choice.
-   Build retention and the FTS5 index together — the doc explains why they're one change, not two.
+3. **Backlog #6 + IDEAS "Sharpens" — log retention with FTS5, on two axes.** Metrics already purge
+   via `deleteMetricBefore`; logs don't. IDEAS.md attaches real numbers to this: 3.1× storage
+   amplification without a trigram-tokenized FTS5 index, 7-day default window is the reference
+   implementation's choice. A second, configurable axis is also wanted: retention **by session**
+   (one session = one full `POST /api/profiles/:profile/run`, not a single command restart) —
+   keep the last N sessions per profile, N configurable next to `base_path`/`default_shell`. See
+   IDEAS.md's "Session-scoped retention" section for the `sessions` table / `logs.session_id`
+   shape. Build retention (both axes) and the FTS5 index together — the doc explains why they're
+   one change, not two.
 
 4. **IDEAS #4 — resource alerts that never kill.** `MetricCollector` is already wired (`bin/server.ts`,
    since #36) — sampling, retention, and `GET /api/processes/:pid/metrics` all work. What's actually open:

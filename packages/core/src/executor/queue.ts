@@ -1,7 +1,7 @@
 import type { CommandConfig } from "../config/schema";
 import { ProcessWrapper, type LogHandler, type HealthChangeHandler } from "./wrapper";
 import { waitForHealthy, type ProbeResult } from "./healthcheck";
-import { HealthMonitor } from "../monitor";
+import { FileWatcher, HealthMonitor } from "../monitor";
 
 /** Consecutive auto-restarts allowed before the queue stops respawning a command. */
 const MAX_RESTART_ATTEMPTS = 5;
@@ -45,6 +45,12 @@ export class SpawnQueue {
   private pendingRecovery = new Set<string>();
   // Continuous health monitors per command (running services probed on interval)
   private monitors = new Map<string, HealthMonitor>();
+  // `watch` glob watchers per command. They outlive restarts (only stopOne/
+  // stopAll close them) so changes landing mid-restart are coalesced, not lost.
+  private watchers = new Map<string, FileWatcher>();
+  /** Watch-triggered restarts in flight, and those that saw more changes meanwhile. */
+  private watchRestarting = new Set<string>();
+  private watchPending = new Set<string>();
   // Single-flight in-progress starts, keyed by command id. Ensures a
   // dependency shared by multiple commands (or a command started twice in
   // quick succession) is only ever spawned once concurrently, instead of
@@ -288,6 +294,57 @@ export class SpawnQueue {
     }, delayMs);
   }
 
+  /**
+   * Starts a file watcher for a command with `watch` globs, once — later
+   * spawns reuse it. Globs edited via setCommands apply after a stop + start.
+   */
+  private ensureWatcher(cmd: CommandConfig, wrapper: ProcessWrapper): void {
+    if (cmd.watch.length === 0 || this.watchers.has(cmd.id)) return;
+    const watcher = new FileWatcher(wrapper.resolvedCwd(), cmd.watch, (path) => {
+      void this.onWatchChange(cmd.id, path);
+    });
+    const error = watcher.start();
+    if (error) {
+      wrapper.log(`[watch] cannot watch ${wrapper.resolvedCwd()}: ${error}`, "stderr");
+      return;
+    }
+    this.watchers.set(cmd.id, watcher);
+  }
+
+  /**
+   * Restarts a command after a watched file changed, plus every running
+   * command that transitively depends on it. Changes arriving while that
+   * restart is in flight collapse into a single follow-up restart.
+   */
+  private async onWatchChange(commandId: string, path: string): Promise<void> {
+    if (this.watchRestarting.has(commandId)) {
+      this.watchPending.add(commandId);
+      return;
+    }
+    this.watchRestarting.add(commandId);
+    try {
+      do {
+        this.watchPending.delete(commandId);
+        const wrapper = this.wrappers.get(commandId);
+        // Stopped on purpose (stop button, stopByPid) → leave it stopped.
+        if (!wrapper || wrapper.stoppedIntentionally) return;
+        wrapper.log(`[watch] ${path} changed — restarting`, "stdout");
+
+        const dependents = this.transitiveDependents(commandId).filter(
+          (id) => this.wrappers.get(id)?.status === "running",
+        );
+        // Take dependents down first so none of them talks to a half-restarted
+        // dependency; startMany then brings them back up in dependency order.
+        await Promise.all(dependents.map((id) => this.stopProcess(id)));
+        await this.restartOne(commandId).catch(() => {}); // failure is already notified
+        if (dependents.length > 0) await this.startMany(dependents);
+      } while (this.watchPending.has(commandId));
+    } finally {
+      this.watchRestarting.delete(commandId);
+      this.watchPending.delete(commandId);
+    }
+  }
+
   /** Internal: spawn one process and await its healthcheck. Returns whether it became healthy. */
   private async startSingleProcess(
     cmd: CommandConfig,
@@ -303,6 +360,7 @@ export class SpawnQueue {
     this.setupHealthObserver(wrapper, cmd);
 
     this.wrappers.set(cmd.id, wrapper);
+    this.ensureWatcher(cmd, wrapper);
 
     // Attempt a start — if we throw here (e.g. spawn failure), record failed_start
     try {
@@ -670,7 +728,7 @@ export class SpawnQueue {
     const wasUnhealthy =
       oldWrapper != null && (oldWrapper.status === "failed" || oldWrapper.health === "unhealthy");
 
-    await this.stopOne(commandId);
+    await this.stopProcess(commandId);
 
     if (wasUnhealthy) {
       this.pendingRecovery.add(commandId);
@@ -680,14 +738,23 @@ export class SpawnQueue {
   }
 
   async stopAll(): Promise<void> {
+    for (const watcher of this.watchers.values()) watcher.stop();
+    this.watchers.clear();
     for (const monitor of this.monitors.values()) monitor.stop();
     this.monitors.clear();
     const stops = [...this.wrappers.values()].map((w) => w.stop());
     await Promise.all(stops);
   }
 
-  /** Stops the given command's process (if any) and its continuous health monitor. */
+  /** Stops the given command's process (if any), its health monitor and its file watcher. */
   async stopOne(commandId: string): Promise<void> {
+    this.watchers.get(commandId)?.stop();
+    this.watchers.delete(commandId);
+    await this.stopProcess(commandId);
+  }
+
+  /** Stops the process and health monitor but keeps the file watcher (restarts use this). */
+  private async stopProcess(commandId: string): Promise<void> {
     this.monitors.get(commandId)?.stop();
     this.monitors.delete(commandId);
     const wrapper = this.wrappers.get(commandId);

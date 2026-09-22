@@ -162,6 +162,45 @@ The paired half is FTS5 with a **trigram** tokenizer as an _external-content_ in
 
 ---
 
+## Session-scoped retention (second axis, same backlog item)
+
+Requested addition: keep logs by **session** — a session is one full profile
+start (`POST /api/profiles/:profile/run`, [api.ts:718](../packages/core/src/api.ts)) — with
+the session count configurable, not just the time window above. A single command's
+`execute`/`restart` ([api.ts:667](../packages/core/src/api.ts),
+[api.ts:692](../packages/core/src/api.ts)) does not open a new session; only a
+profile-level run does.
+
+Shape:
+
+- **`sessions` table**: `id INTEGER PRIMARY KEY, profile TEXT NOT NULL, started_at TEXT NOT NULL`.
+  One row inserted per `/api/profiles/:profile/run` call, before `queue.startMany`
+  ([api.ts:742](../packages/core/src/api.ts)).
+- **`logs.session_id INTEGER`** (nullable). The `onLog` closure in
+  [server.ts:73](../packages/core/bin/server.ts) already has `entry.profile` on every row; it
+  needs the current session id for that profile threaded in (e.g. a `Map<profile, sessionId>`
+  updated whenever a new session row is created — `onLog` has no request context of its own).
+  Commands started standalone via `/api/commands/:id/execute` (no profile run) get a null
+  `session_id` and simply sit outside session-based retention, same as they already do for the
+  time-window one.
+- **Config**: `log_retention_sessions` on `ConductorConfigSchema`, next to `base_path` /
+  `default_shell` ([schema.ts:76-80](../packages/core/src/config/schema.ts)). Default a small
+  number (e.g. 10), `0` disables — same convention the time-window default above already uses.
+  Exposed and edited the same way those two fields are: a GET/PUT route and a control in
+  [EnvironmentManager.tsx](../packages/ui/src/components/EnvironmentManager.tsx), which already
+  hosts both.
+- **Sweep**: on each new session insert, delete `logs` rows for that profile whose `session_id`
+  is older than the Nth most recent session (`... WHERE session_id IN (SELECT id FROM sessions
+  WHERE profile = ? ORDER BY started_at DESC LIMIT -1 OFFSET ?)`). Same trigger point as the
+  time-window sweep — one cleanup pass, not two.
+
+This is additive to, not instead of, the FTS5 + time-window piece above: if the FTS5 index lands
+as an external-content index keyed to `logs.rowid`, a session-based delete has to keep it in sync
+exactly like the time-window delete does — same shadow-table concern, applies to whichever sweep
+deletes the row.
+
+---
+
 ## Considered and deliberately rejected
 
 **A control socket.** A 0600 Unix domain socket with a line-delimited

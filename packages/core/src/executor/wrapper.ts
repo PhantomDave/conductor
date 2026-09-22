@@ -198,6 +198,19 @@ export class ProcessWrapper {
   }
 
   /**
+   * Working directory the process runs in. `cwd` may reference env vars
+   * (e.g. "${BASE_PATH}/backend/Api"); a still-relative result (including
+   * the default ".") resolves against BASE_PATH, not the Conductor server's
+   * own cwd — that's what made relative `cwd`s land inside the Conductor repo.
+   */
+  resolvedCwd(): string {
+    const interpolatedCwd = interpolateString(this.commandConfig.cwd, this.env);
+    return isAbsolute(interpolatedCwd)
+      ? interpolatedCwd
+      : resolvePath(this.env.BASE_PATH ?? process.cwd(), interpolatedCwd);
+  }
+
+  /**
    * Subscribe to subprocess exit (fires once when the managed process
    * terminates for any reason: natural exit, stop, or kill).
    */
@@ -367,17 +380,7 @@ export class ProcessWrapper {
       await killTreeAndWait(this.process.subprocess);
     }
 
-    // Allow `cwd` to reference resolved env vars (e.g. "${BASE_PATH}/backend/Api")
-    // so a single value can drive every command's working directory. If the
-    // result is still relative (including the default "."), resolve it
-    // against BASE_PATH rather than leaving it for the OS to interpret
-    // relative to wherever the Conductor server process itself was
-    // launched from - that's what caused relative `cwd`s to silently
-    // resolve inside the Conductor repo instead of the target project.
-    const interpolatedCwd = interpolateString(this.commandConfig.cwd, this.env);
-    const cwd = isAbsolute(interpolatedCwd)
-      ? interpolatedCwd
-      : resolvePath(this.env.BASE_PATH ?? process.cwd(), interpolatedCwd);
+    const cwd = this.resolvedCwd();
 
     let cmd: string[];
     // A command containing newlines is always multi-statement and must run
@@ -535,10 +538,7 @@ export class ProcessWrapper {
         const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
         // Resolve cwd the same way the main process does so that relative
         // stop commands (e.g. `docker compose stop`) run from the correct dir.
-        const interpolatedCwd = interpolateString(this.commandConfig.cwd, this.env);
-        const cwd = isAbsolute(interpolatedCwd)
-          ? interpolatedCwd
-          : resolvePath(this.env.BASE_PATH ?? process.cwd(), interpolatedCwd);
+        const cwd = this.resolvedCwd();
         const stopProc = spawn({
           cmd: [bin, flag, this.commandConfig.stop_command],
           cwd,
