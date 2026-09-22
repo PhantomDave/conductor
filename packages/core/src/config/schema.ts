@@ -78,6 +78,12 @@ export const ConductorConfigSchema = z.object({
   // healthchecks (a binary path, e.g. "/bin/zsh" or "C:\\...\\pwsh.exe").
   // Falls back to $SHELL/%COMSPEC% when unset - see executor/shell.ts.
   default_shell: z.string().optional(),
+  // Retention for the logs table, on two independent axes; 0 disables
+  // either one. log_retention_days is a global time window (hourly sweep).
+  // log_retention_sessions keeps only the last N `POST /profiles/:p/run`
+  // sessions per profile, swept on every run.
+  log_retention_days: z.number().int().min(0).max(3650).default(7),
+  log_retention_sessions: z.number().int().min(0).default(10),
   global_env: z.record(z.string(), z.string()).default({}),
   // Root-level command definitions (single source of truth, reused across profiles)
   commands: z.array(CommandSchema).default([]),

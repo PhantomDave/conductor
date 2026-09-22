@@ -210,6 +210,46 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     }
   });
 
+  // --- Log retention (time-window + session-scoped, edited together) ----
+
+  app.get("/api/log-retention", async () => {
+    const config = deps.store.getConfig();
+    return {
+      log_retention_days: config.log_retention_days,
+      log_retention_sessions: config.log_retention_sessions,
+    };
+  });
+
+  app.put<{ Body: { log_retention_days: number; log_retention_sessions: number } }>(
+    "/api/log-retention",
+    async (request, reply) => {
+      const parsed = z
+        .object({
+          log_retention_days: z.number().int().min(0),
+          log_retention_sessions: z.number().int().min(0),
+        })
+        .safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: parsed.error.issues[0]?.message ?? "Invalid log retention settings" });
+      }
+      try {
+        deps.store.setLogRetention({
+          days: parsed.data.log_retention_days,
+          sessions: parsed.data.log_retention_sessions,
+        });
+        deps.queries.insertAuditEntry(
+          "set-log-retention",
+          `days=${parsed.data.log_retention_days} sessions=${parsed.data.log_retention_sessions}`,
+        );
+        return parsed.data;
+      } catch (err) {
+        return handleConfigError(err, reply);
+      }
+    },
+  );
+
   // --- Config example compiler (.env.example -> .env, etc.) --------------
 
   const ConfigureInputSchema = z.object({
@@ -412,6 +452,8 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
           tags: [],
           env_secrets: [],
           base_path: config.base_path,
+          log_retention_days: config.log_retention_days,
+          log_retention_sessions: config.log_retention_sessions,
           commands: profileCommands,
           profiles: {
             [request.params.profile]: profile,
@@ -731,6 +773,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       // overwrites files that already exist.
       const configReport = deps.store.compileConfigExamples(profile);
 
+      // A "session" is one profile run — tag every log line from here on
+      // with this session id so session-scoped retention can find them.
+      deps.queries.insertSession(profile);
+      deps.queries.pruneOldSessions(profile, config.log_retention_sessions);
+
       const queue = deps.store.getQueue();
       try {
         // Start every command in this profile concurrently rather than one
@@ -910,6 +957,29 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       limit,
     });
     return { logs: logs.reverse() };
+  });
+
+  // Runs both retention sweeps immediately, using the currently configured
+  // thresholds — makes the periodic cleanup observable/testable on demand
+  // instead of waiting for the hourly timer or the next profile run.
+  app.post("/api/logs/prune", async () => {
+    const config = deps.store.getConfig();
+    const cutoff = new Date(
+      Date.now() - config.log_retention_days * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const logsDeletedByAge =
+      config.log_retention_days > 0 ? deps.queries.deleteLogsBefore(cutoff) : 0;
+
+    let sessionsPruned = 0;
+    for (const profile of Object.keys(config.profiles)) {
+      sessionsPruned += deps.queries.pruneOldSessions(profile, config.log_retention_sessions);
+    }
+
+    deps.queries.insertAuditEntry(
+      "prune-logs",
+      `age=${logsDeletedByAge} session=${sessionsPruned}`,
+    );
+    return { logs_deleted: logsDeletedByAge, sessions_pruned_logs: sessionsPruned };
   });
 
   // Server-Sent Events endpoint for real-time log streaming, scoped to a

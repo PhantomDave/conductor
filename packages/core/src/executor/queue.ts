@@ -50,7 +50,9 @@ export class SpawnQueue {
   private watchers = new Map<string, FileWatcher>();
   /** Watch-triggered restarts in flight, and those that saw more changes meanwhile. */
   private watchRestarting = new Set<string>();
-  private watchPending = new Set<string>();
+  // commandId -> latest path for a change that arrived while a restart for
+  // that command was already in flight (see onWatchChange).
+  private watchPendingPath = new Map<string, string>();
   // Single-flight in-progress starts, keyed by command id. Ensures a
   // dependency shared by multiple commands (or a command started twice in
   // quick succession) is only ever spawned once concurrently, instead of
@@ -318,13 +320,16 @@ export class SpawnQueue {
    */
   private async onWatchChange(commandId: string, path: string): Promise<void> {
     if (this.watchRestarting.has(commandId)) {
-      this.watchPending.add(commandId);
+      this.watchPendingPath.set(commandId, path);
       return;
     }
     this.watchRestarting.add(commandId);
     try {
       do {
-        this.watchPending.delete(commandId);
+        // A change that arrived while the previous iteration was mid-restart
+        // wins over the path this call started with - it's the more recent one.
+        path = this.watchPendingPath.get(commandId) ?? path;
+        this.watchPendingPath.delete(commandId);
         const wrapper = this.wrappers.get(commandId);
         // Stopped on purpose (stop button, stopByPid) → leave it stopped.
         if (!wrapper || wrapper.stoppedIntentionally) return;
@@ -338,10 +343,10 @@ export class SpawnQueue {
         await Promise.all(dependents.map((id) => this.stopProcess(id)));
         await this.restartOne(commandId).catch(() => {}); // failure is already notified
         if (dependents.length > 0) await this.startMany(dependents);
-      } while (this.watchPending.has(commandId));
+      } while (this.watchPendingPath.has(commandId));
     } finally {
       this.watchRestarting.delete(commandId);
-      this.watchPending.delete(commandId);
+      this.watchPendingPath.delete(commandId);
     }
   }
 

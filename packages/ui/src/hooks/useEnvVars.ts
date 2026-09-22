@@ -9,6 +9,9 @@ import {
   updateBasePath,
   fetchShells,
   updateDefaultShell,
+  fetchLogRetention,
+  updateLogRetention,
+  pruneLogsNow,
   compileConfigExamples,
   importConfig,
 } from "../lib/api";
@@ -88,6 +91,50 @@ export function useUpdateDefaultShell() {
       notifications.show({
         color: "red",
         title: "Failed to update default shell",
+        message: error.message,
+      });
+    },
+  });
+}
+
+export function useLogRetention() {
+  return useQuery({
+    queryKey: ["log-retention"],
+    queryFn: fetchLogRetention,
+  });
+}
+
+export function useUpdateLogRetention() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateLogRetention,
+    onSuccess: () => {
+      notifications.show({ color: "green", message: "Log retention updated" });
+      return queryClient.invalidateQueries({ queryKey: ["log-retention"] });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to update log retention",
+        message: error.message,
+      });
+    },
+  });
+}
+
+export function usePruneLogsNow() {
+  return useMutation({
+    mutationFn: pruneLogsNow,
+    onSuccess: (result) => {
+      notifications.show({
+        color: "green",
+        message: `Pruned ${result.logs_deleted} log(s) by age, ${result.sessions_pruned_logs} log(s) by session limit`,
+      });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        color: "red",
+        title: "Failed to prune logs",
         message: error.message,
       });
     },

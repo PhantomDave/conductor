@@ -114,6 +114,20 @@ export class ConfigStore {
     this.mutableQueue.setCommands(this.config.commands);
   }
 
+  /**
+   * Updates both log retention knobs together (they're edited as one
+   * concern in the UI/CLI). Unlike setBasePath/setDefaultShell, retention
+   * doesn't affect command env resolution, so no queue refresh is needed.
+   */
+  setLogRetention(input: { days: number; sessions: number }): void {
+    this.config = validateConfig({
+      ...this.config,
+      log_retention_days: input.days,
+      log_retention_sessions: input.sessions,
+    });
+    this.persist();
+  }
+
   private persist(): void {
     saveConfig(this.filePath, this.config);
   }

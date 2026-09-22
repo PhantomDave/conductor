@@ -67,6 +67,7 @@ export interface LogRow {
   level: string;
   stream: "stdout" | "stderr";
   message: string;
+  session_id: number | null;
 }
 
 const API_BASE = "/api";
@@ -403,6 +404,35 @@ export async function updateDefaultShell(shell: string | null): Promise<ShellsIn
     body: JSON.stringify({ default_shell: shell }),
   });
   return parseJsonOrThrow(res, "Failed to update default shell");
+}
+
+export interface LogRetentionInfo {
+  log_retention_days: number;
+  log_retention_sessions: number;
+}
+
+export async function fetchLogRetention(): Promise<LogRetentionInfo> {
+  const res = await fetch(`${API_BASE}/log-retention`);
+  return parseJsonOrThrow(res, "Failed to fetch log retention settings");
+}
+
+export async function updateLogRetention(input: LogRetentionInfo): Promise<LogRetentionInfo> {
+  const res = await fetch(`${API_BASE}/log-retention`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseJsonOrThrow(res, "Failed to update log retention settings");
+}
+
+export interface PruneLogsResult {
+  logs_deleted: number;
+  sessions_pruned_logs: number;
+}
+
+export async function pruneLogsNow(): Promise<PruneLogsResult> {
+  const res = await fetch(`${API_BASE}/logs/prune`, { method: "POST" });
+  return parseJsonOrThrow(res, "Failed to prune logs");
 }
 
 export interface ConductorConfigInfo {
