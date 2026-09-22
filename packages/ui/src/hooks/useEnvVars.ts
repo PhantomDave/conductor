@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
+import { notifyError } from "../lib/notify";
 import {
   fetchEnvVars,
   upsertEnvVar,
@@ -33,13 +34,7 @@ export function useCompileConfigExamples() {
         });
       }
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to compile config files",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to compile config files"),
   });
 }
 
@@ -60,13 +55,7 @@ export function useUpdateBasePath() {
       // once the fresh value is in the cache.
       return queryClient.invalidateQueries({ queryKey: ["base-path"] });
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to update base path",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to update base path"),
   });
 }
 
@@ -87,13 +76,7 @@ export function useUpdateDefaultShell() {
       // once the fresh value is in the cache.
       return queryClient.invalidateQueries({ queryKey: ["shells"] });
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to update default shell",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to update default shell"),
   });
 }
 
@@ -112,13 +95,7 @@ export function useUpdateLogRetention() {
       notifications.show({ color: "green", message: "Log retention updated" });
       return queryClient.invalidateQueries({ queryKey: ["log-retention"] });
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to update log retention",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to update log retention"),
   });
 }
 
@@ -131,13 +108,7 @@ export function usePruneLogsNow() {
         message: `Pruned ${result.logs_deleted} log(s) by age, ${result.sessions_pruned_logs} log(s) by session limit`,
       });
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to prune logs",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to prune logs"),
   });
 }
 
@@ -162,9 +133,7 @@ export function useUpsertEnvVar() {
       notifications.show({ color: "green", message: `Saved "${vars.key}"` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({ color: "red", title: "Failed to save env var", message: error.message });
-    },
+    onError: notifyError("Failed to save env var"),
   });
 }
 
@@ -176,13 +145,7 @@ export function useDeleteEnvVar() {
       notifications.show({ color: "green", message: "Deleted" });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to delete env var",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to delete env var"),
   });
 }
 
@@ -194,13 +157,7 @@ export function useImportEnvVars() {
       notifications.show({ color: "green", message: `Imported ${count} variable(s)` });
       return invalidate();
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to import env vars",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to import env vars"),
   });
 }
 
@@ -221,12 +178,6 @@ export function useImportConfig() {
         queryClient.invalidateQueries({ queryKey: ["shells"] }),
       ]);
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to import config",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to import config"),
   });
 }

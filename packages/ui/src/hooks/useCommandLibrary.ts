@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { notifications } from "@mantine/notifications";
+import { notifyError } from "../lib/notify";
 import {
   fetchAllCommands,
   updateStandaloneCommand,
@@ -25,13 +25,7 @@ export function useCommandLibrary() {
         queryClient.invalidateQueries({ queryKey: ["profiles"] }),
       ]);
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to create command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to create command"),
   });
 
   const updateMutation = useMutation({
@@ -43,13 +37,7 @@ export function useCommandLibrary() {
         queryClient.invalidateQueries({ queryKey: ["profiles"] }),
       ]);
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to update command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to update command"),
   });
 
   const deleteMutation = useMutation({
@@ -60,13 +48,7 @@ export function useCommandLibrary() {
         queryClient.invalidateQueries({ queryKey: ["profiles"] }),
       ]);
     },
-    onError: (error: Error) => {
-      notifications.show({
-        color: "red",
-        title: "Failed to delete command",
-        message: error.message,
-      });
-    },
+    onError: notifyError("Failed to delete command"),
   });
 
   return {
