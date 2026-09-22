@@ -115,7 +115,7 @@ Fastify server on port 4000; CORS scoped to localhost any port.
 | Profiles CRUD         | `GET/POST /api/profiles`; `PUT/DELETE/:profile`; `POST/:profile/duplicate`; `GET/:profile/export`                                                                                                                                       | Full management; store-backed                 |
 | Commands (root)       | `GET/POST /api/command`; `PUT/:id`; `DELETE/:id`                                                                                                                                                                                        | Root commands; delete touches all profiles    |
 | Profile↔Command links | `POST/:profile/commands` (create root cmd + add); `PUT/:profile/commands/:id`; `POST/:profile/commands/sync {add?,remove?}`; `POST/:profile/commands/:id/duplicate {targetProfile?}`; `POST/:profile/commands/:id/move {targetProfile}` | Full linking graph                            |
-| Processes             | `GET /api/processes` (queue.listSnapshots); `DELETE /:pid`; `GET /:pid/metrics?from&to` (real, MetricCollector-sampled)                                                                                                                                       | Active runs                                   |
+| Processes             | `GET /api/processes` (queue.listSnapshots); `DELETE /:pid`; `GET /:pid/metrics?from&to` (real, MetricCollector-sampled)                                                                                                                 | Active runs                                   |
 | Notifications         | `GET /api/notifications?limit&offset`                                                                                                                                                                                                   | Events from executor                          |
 | Env vars              | `GET/PUT /api/env` (scope global\|profile); `DELETE/:id`; `POST /env/import {scope, profile, text}`                                                                                                                                     | SQLite persisted; looksSecret auto-detect     |
 | Logs + SSE            | `GET /logs?pid&commandId&profile&limit` returns reversed; `GET /logs/stream/:pid` (SSE)                                                                                                                                                 | 500-line replay + live tail + 15 s heartbeats |
@@ -174,16 +174,16 @@ packages/core/src/monitor/ has three modules: `HealthMonitor` and `FileWatcher` 
 
 ## Monorepo Scripts
 
-| Script          | What it runs                                         |
-| --------------- | ---------------------------------------------------- |
-| `dev:core`      | @conductor/core dev server                           |
-| `dev:ui`        | Vite dev on port 3000                                |
-| `dev:cli`       | CLI dev (run directly)                               |
-| `dev:desktop-tauri`   | Builds sidecar + UI, starts Tauri dev            |
-| `build`         | Core build → CLI build → UI build                    |
-| `build:desktop-tauri` | Sidecar + UI + `tauri build` dist              |
-| `test`          | bun test                                             |
-| `lint`          | oxlint (`.oxlintrc.json`) over all .ts/.tsx/.js/.mjs |
-| `typecheck`     | TypeScript 7 (`tsc --noEmit`) across all packages    |
+| Script                | What it runs                                         |
+| --------------------- | ---------------------------------------------------- |
+| `dev:core`            | @conductor/core dev server                           |
+| `dev:ui`              | Vite dev on port 3000                                |
+| `dev:cli`             | CLI dev (run directly)                               |
+| `dev:desktop-tauri`   | Builds sidecar + UI, starts Tauri dev                |
+| `build`               | Core build → CLI build → UI build                    |
+| `build:desktop-tauri` | Sidecar + UI + `tauri build` dist                    |
+| `test`                | bun test                                             |
+| `lint`                | oxlint (`.oxlintrc.json`) over all .ts/.tsx/.js/.mjs |
+| `typecheck`           | TypeScript 7 (`tsc --noEmit`) across all packages    |
 
 ==================end of section===============================================

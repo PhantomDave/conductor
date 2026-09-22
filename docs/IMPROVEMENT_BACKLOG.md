@@ -51,4 +51,3 @@ as-is (not renumbered) since `TODO.md` cross-references these entries by number.
 - **Acceptance criteria:**
   - Both singular and plural routes work during migration
   - Docs mark canonical route and deprecation timeline
-

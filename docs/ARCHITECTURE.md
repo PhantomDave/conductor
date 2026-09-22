@@ -106,14 +106,14 @@ The broadcaster at `packages/core/src/logs/broadcaster.ts` uses a pub/sub patter
 
 ## SQLite Schema Overview
 
-| Table             | Key fields                                                               | Purpose                                                                      |
-| ----------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| execution_history | id, command_id, profile, start_time, end_time, exit_code, duration_ms    | Audit of every run attempt per command                                       |
-| logs              | id, process_id, command_id, profile, timestamp, level, stream, message   | All captured stdout/stderr + error output; index by command_id and timestamp |
-| process_metadata  | pid (composite PK), command_id, profile, created_at, ended_at, exit_code | Snapshot of each started process for recovery & ps queries                   |
+| Table             | Key fields                                                               | Purpose                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| execution_history | id, command_id, profile, start_time, end_time, exit_code, duration_ms    | Audit of every run attempt per command                                                                                           |
+| logs              | id, process_id, command_id, profile, timestamp, level, stream, message   | All captured stdout/stderr + error output; index by command_id and timestamp                                                     |
+| process_metadata  | pid (composite PK), command_id, profile, created_at, ended_at, exit_code | Snapshot of each started process for recovery & ps queries                                                                       |
 | process_metrics   | id, pid, timestamp, cpu_percent, memory_bytes                            | Sampled every 5s by `MetricCollector` (bin/server.ts); queried via GET /api/processes/:pid/metrics — no UI chart consumes it yet |
-| env_vars          | id (PK), scope, profile, key, value, secret                              | Managed env vars: global or per-profile; kept separate from .conductor.yml   |
-| audit_log         | id (PK), timestamp, action, actor, details                               | Every mutation event for auditing/debugging                                  |
+| env_vars          | id (PK), scope, profile, key, value, secret                              | Managed env vars: global or per-profile; kept separate from .conductor.yml                                                       |
+| audit_log         | id (PK), timestamp, action, actor, details                               | Every mutation event for auditing/debugging                                                                                      |
 
 ## Configuration Store vs Config File
 
@@ -162,11 +162,11 @@ Tests live in `packages/core/test/`: 12 files covering config loading/validation
 
 ## CI/CD (.github/workflows)
 
-| Workflow         | When it runs                     | What it does                                                                                                                                                                                                                                        |
-| ---------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`         | Every push / PR to main branches | lint-and-typecheck (format:check + lint + lint:types type-aware oxlint-tsgolint + typecheck), test (ubuntu/macos/windows matrix), build (core → cli → ui), cli-smoke-test (cp .conductor.example.yml → .conductor.yml; config validate; run dev)   |
-| `release.yml`    | On release published             | Per-OS compile of sidecar + tauri-action upload to same GitHub Release                                                                                                                                                                              |
-| `dependabot.yml` | Automatic dependency bumps       | Dependabot bot config for Bun ecosystem                                                                                                                                                                                                             |
+| Workflow         | When it runs                     | What it does                                                                                                                                                                                                                                     |
+| ---------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ci.yml`         | Every push / PR to main branches | lint-and-typecheck (format:check + lint + lint:types type-aware oxlint-tsgolint + typecheck), test (ubuntu/macos/windows matrix), build (core → cli → ui), cli-smoke-test (cp .conductor.example.yml → .conductor.yml; config validate; run dev) |
+| `release.yml`    | On release published             | Per-OS compile of sidecar + tauri-action upload to same GitHub Release                                                                                                                                                                           |
+| `dependabot.yml` | Automatic dependency bumps       | Dependabot bot config for Bun ecosystem                                                                                                                                                                                                          |
 
 ## CLI vs API Comparison
 
