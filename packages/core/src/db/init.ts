@@ -17,7 +17,12 @@ import schemaSql from "./schema.sql" with { type: "text" };
  * the base schema. Safe to call multiple times (idempotent DDL).
  */
 export function openDatabase(filePath: string): Database {
-  mkdirSync(dirname(filePath), { recursive: true });
+  // ":memory:" is SQLite's special in-memory identifier, not a real path -
+  // dirname() resolves it to "." and mkdirSync of the cwd throws EEXIST on
+  // Windows (POSIX no-ops instead), so skip it for that one sigil value.
+  if (filePath !== ":memory:") {
+    mkdirSync(dirname(filePath), { recursive: true });
+  }
 
   const db = new Database(filePath, { create: true });
   db.exec("PRAGMA journal_mode = WAL;");
