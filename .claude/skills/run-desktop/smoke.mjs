@@ -39,29 +39,15 @@ if (missing.length) {
   process.exit(2);
 }
 
-function findChromium() {
-  const cacheDir = path.join(os.homedir(), ".cache/ms-playwright");
-  const versions = fs
-    .readdirSync(cacheDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && /^chromium-\d+$/.test(d.name))
-    .map((d) => ({ name: d.name, num: Number(d.name.slice("chromium-".length)) }))
-    .sort((a, b) => b.num - a.num);
-  for (const { name } of versions) {
-    const bin = path.join(cacheDir, name, "chrome-linux64/chrome");
-    if (fs.existsSync(bin)) return bin;
-  }
-  console.error(`MISSING a cached Chromium build under ${cacheDir}\n  fix: npx playwright install chromium`);
+const chromiumBin = chromium.executablePath();
+if (!fs.existsSync(chromiumBin)) {
+  console.error(`MISSING Chromium at ${chromiumBin}\n  fix: npx playwright install chromium`);
   process.exit(2);
 }
-const chromiumBin = findChromium();
 
 fs.rmSync(outDir, { recursive: true, force: true });
 const workspace = path.join(outDir, "workspace"); // sidecar cwd — isolates its auto-created .conductor.yml + SQLite DB
 fs.mkdirSync(workspace, { recursive: true });
-const watchdog = setTimeout(() => {
-  console.error("WATCHDOG: smoke test exceeded 60s");
-  process.exit(2);
-}, 60_000);
 
 const serverLog = [];
 const consoleErrors = [];
@@ -78,9 +64,15 @@ const server = spawn(sidecarBin, [], {
 });
 server.stdout.on("data", (d) => serverLog.push(String(d)));
 server.stderr.on("data", (d) => serverLog.push(String(d)));
+server.on("error", (e) => serverLog.push(`spawn error: ${e.message}\n`));
 
 const baseUrl = `http://localhost:${PORT}`;
 let browser;
+const watchdog = setTimeout(() => {
+  console.error("WATCHDOG: smoke test exceeded 60s");
+  server.kill("SIGKILL");
+  browser?.close().finally(() => process.exit(2));
+}, 60_000);
 try {
   const up = await (async () => {
     for (let i = 0; i < 50; i++) {
@@ -173,7 +165,10 @@ try {
 }
 
 const exitCode = await new Promise((resolve) => {
-  const t = setTimeout(() => resolve(null), 5_000);
+  const t = setTimeout(() => {
+    server.kill("SIGKILL"); // didn't respond to SIGTERM in time — don't leave it holding the port
+    resolve(null);
+  }, 5_000);
   server.once("exit", (code) => {
     clearTimeout(t);
     resolve(code);

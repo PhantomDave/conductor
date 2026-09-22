@@ -22,20 +22,6 @@ as-is (not renumbered) since `TODO.md` cross-references these entries by number.
   - CI runs CLI/UI tests
   - Failing behavior in command parsing/API contract is caught by tests
 
-## 5) Add input guards for numeric query params in API
-
-- **Priority:** Medium
-- **Problem:** Some numeric query params (`limit`, `offset`, `pid`) are parsed without robust NaN/bounds validation.
-- **Evidence:**
-  - `/home/runner/work/conductor/conductor/packages/core/src/api.ts` (`/api/notifications`, `/api/processes/:pid/metrics`, `/api/logs`)
-- **Impact:** Invalid inputs can trigger confusing behavior and inconsistent pagination/filtering.
-- **Scope:**
-  - Validate/coerce with zod for querystring params
-  - Enforce sane min/max values centrally
-- **Acceptance criteria:**
-  - Invalid numeric input returns 400 with actionable message
-  - Upper/lower bounds are documented and enforced
-
 ## 6) Add retention controls for logs table growth
 
 - **Priority:** Medium
@@ -66,15 +52,3 @@ as-is (not renumbered) since `TODO.md` cross-references these entries by number.
   - Both singular and plural routes work during migration
   - Docs mark canonical route and deprecation timeline
 
-## 8) Add audit entries for all env mutation operations
-
-- **Priority:** Low
-- **Problem:** Most mutating API operations write to `audit_log`, but env deletion currently does not.
-- **Evidence:**
-  - `/home/runner/work/conductor/conductor/packages/core/src/api.ts` (`DELETE /api/env/:id`)
-  - `/home/runner/work/conductor/conductor/packages/core/src/db/queries.ts` (`insertAuditEntry`)
-- **Impact:** Reduces traceability for sensitive configuration lifecycle events.
-- **Scope:** Write audit records for env delete (and verify parity across env endpoints).
-- **Acceptance criteria:**
-  - Env create/update/import/delete all emit audit entries with useful details
-  - Documentation confirms expected audit coverage
