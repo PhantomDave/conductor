@@ -1,14 +1,17 @@
-// Smoke test for the Conductor Electron desktop app (dev mode).
+// Smoke test for the Conductor desktop app's sidecar (packages/core/dist-bin/conductor-server).
 //
-//   node .claude/skills/run-desktop/smoke.mjs [desktopDir] [outDir]
+//   node .claude/skills/run-desktop/smoke.mjs [outDir]
 //
-// Launches the REAL app, deliberately WITHOUT --no-sandbox (that switch caused
-// the blank-white-window renderer crash fixed in #56), waits for the dashboard
-// to render, checks the sidecar API from inside the page, drives the UI (nav ->
-// Environment -> switch a scope tab), screenshots, then quits and checks the
-// main-process log for renderer deaths and a clean sidecar shutdown.
+// This host can't screenshot a real GTK/Wayland window (no capture path — see
+// the desktop-screenshot-tooling-limits memory), so instead of driving the
+// Tauri shell directly this runs the same sidecar binary Tauri's Rust host
+// spawns, with the same CONDUCTOR_UI_DIST env var it sets, and points headless
+// Chromium at its HTTP URL. Tauri and the sidecar serve byte-identical
+// HTML/JS, so this proves everything except the native shell itself (see
+// TROUBLESHOOTING.md's "Tauri desktop won't launch" section for that half).
 // Exit code 0 = pass, 1 = a check failed, 2 = prerequisites missing / hang.
-import { _electron as electron } from "playwright-core";
+import { chromium } from "playwright-core";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -19,19 +22,16 @@ import console from "node:console";
 import process from "node:process";
 import { setTimeout, clearTimeout } from "node:timers";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-const desktopDir = path.resolve(process.argv[2] ?? path.join(repoRoot, "packages/desktop"));
-const outDir = path.resolve(process.argv[3] ?? path.join(os.tmpdir(), "conductor-electron-smoke"));
+const PORT = 4199; // scratch port, unlikely to collide with a real `conductor run` (default 4000)
 
-const electronBin = path.join(desktopDir, "node_modules/electron/dist/electron");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const outDir = path.resolve(process.argv[2] ?? path.join(os.tmpdir(), "conductor-sidecar-smoke"));
+
+const sidecarBin = path.join(repoRoot, "packages/core/dist-bin/conductor-server");
+const uiDist = path.join(repoRoot, "packages/ui/dist");
 const prereqs = [
-  [electronBin, "node packages/desktop/node_modules/electron/install.js"],
-  [path.join(desktopDir, "dist/main.js"), "bun run --cwd packages/desktop build:main"],
-  [
-    path.join(desktopDir, "../core/dist-bin/conductor-server"),
-    "bun run --cwd packages/core build:sidecar",
-  ],
-  [path.join(desktopDir, "../ui/dist/index.html"), "bun run --cwd packages/ui build"],
+  [sidecarBin, "bun run --cwd packages/core build:sidecar"],
+  [path.join(uiDist, "index.html"), "bun run --cwd packages/ui build"],
 ];
 const missing = prereqs.filter(([p]) => !fs.existsSync(p));
 if (missing.length) {
@@ -39,14 +39,31 @@ if (missing.length) {
   process.exit(2);
 }
 
-fs.rmSync(outDir, { recursive: true, force: true });
-fs.mkdirSync(outDir, { recursive: true });
-const watchdog = setTimeout(() => {
-  console.error("WATCHDOG: smoke test exceeded 150s");
+function findChromium() {
+  const cacheDir = path.join(os.homedir(), ".cache/ms-playwright");
+  const versions = fs
+    .readdirSync(cacheDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && /^chromium-\d+$/.test(d.name))
+    .map((d) => ({ name: d.name, num: Number(d.name.slice("chromium-".length)) }))
+    .sort((a, b) => b.num - a.num);
+  for (const { name } of versions) {
+    const bin = path.join(cacheDir, name, "chrome-linux64/chrome");
+    if (fs.existsSync(bin)) return bin;
+  }
+  console.error(`MISSING a cached Chromium build under ${cacheDir}\n  fix: npx playwright install chromium`);
   process.exit(2);
-}, 150_000);
+}
+const chromiumBin = findChromium();
 
-const mainLog = [];
+fs.rmSync(outDir, { recursive: true, force: true });
+const workspace = path.join(outDir, "workspace"); // sidecar cwd — isolates its auto-created .conductor.yml + SQLite DB
+fs.mkdirSync(workspace, { recursive: true });
+const watchdog = setTimeout(() => {
+  console.error("WATCHDOG: smoke test exceeded 60s");
+  process.exit(2);
+}, 60_000);
+
+const serverLog = [];
 const consoleErrors = [];
 const failures = [];
 const check = (ok, label, detail = "") => {
@@ -55,25 +72,36 @@ const check = (ok, label, detail = "") => {
 };
 
 const t0 = Date.now();
-const app = await electron.launch({
-  executablePath: electronBin,
-  args: [desktopDir],
-  // Isolate userData (the sidecar's cwd + SQLite DB) from the real ~/.config.
-  env: { ...process.env, XDG_CONFIG_HOME: path.join(outDir, "xdg-config") },
-  timeout: 60_000,
+const server = spawn(sidecarBin, [], {
+  cwd: workspace,
+  env: { ...process.env, CONDUCTOR_PORT: String(PORT), CONDUCTOR_UI_DIST: uiDist },
 });
-const proc = app.process();
-proc.stdout?.on("data", (d) => mainLog.push(String(d)));
-proc.stderr?.on("data", (d) => mainLog.push(String(d)));
+server.stdout.on("data", (d) => serverLog.push(String(d)));
+server.stderr.on("data", (d) => serverLog.push(String(d)));
 
+const baseUrl = `http://localhost:${PORT}`;
+let browser;
 try {
-  const page = await app.firstWindow({ timeout: 60_000 });
+  const up = await (async () => {
+    for (let i = 0; i < 50; i++) {
+      try {
+        if ((await globalThis.fetch(`${baseUrl}/api/health`)).ok) return true;
+      } catch {
+        // not listening yet
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return false;
+  })();
+  check(up, "sidecar came up and answered /api/health");
+  console.log(`      spawn→up ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+
+  browser = await chromium.launch({ executablePath: chromiumBin, headless: true });
+  const page = await browser.newPage();
   page.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text()));
   page.on("pageerror", (e) => consoleErrors.push("pageerror: " + e.message));
 
-  await page.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\//, { timeout: 60_000 });
-  await page.waitForLoadState("load");
-  check(true, "window loaded sidecar URL", page.url());
+  await page.goto(baseUrl, { timeout: 30_000, waitUntil: "load" });
 
   // A blank white window = #root never gets children / body has no text.
   const rendered = await page
@@ -82,27 +110,13 @@ try {
         (globalThis.document.querySelector("#root")?.children.length ?? 0) > 0 &&
         globalThis.document.body.innerText.trim().length > 20,
       null,
-      { timeout: 30_000 },
+      { timeout: 15_000 },
     )
     .then(
       () => true,
       () => false,
     );
   check(rendered, "dashboard rendered (non-blank #root)");
-  console.log(`      launch→render ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-
-  const wins = await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows().map((w) => ({
-      title: w.getTitle(),
-      visible: w.isVisible(),
-      crashed: w.webContents.isCrashed(),
-    })),
-  );
-  check(
-    wins.length === 1 && wins[0].visible && !wins[0].crashed,
-    "main window visible, renderer alive",
-    JSON.stringify(wins),
-  );
 
   const api = await page.evaluate(async () => {
     const [h, p, pr] = await Promise.all(
@@ -112,7 +126,7 @@ try {
   });
   check(
     api.health === 200 && api.profiles === 200 && api.processes === 200,
-    "sidecar API healthy from renderer",
+    "sidecar API healthy from the page",
     JSON.stringify(api),
   );
   await page.screenshot({ path: path.join(outDir, "01-dashboard.png") });
@@ -148,25 +162,26 @@ try {
 
   check(
     consoleErrors.length === 0,
-    "no renderer console errors",
+    "no browser console errors",
     consoleErrors.slice(0, 5).join(" | "),
   );
 } catch (err) {
   check(false, "smoke run threw", err.message);
 } finally {
-  await app.close().catch(() => {});
+  await browser?.close().catch(() => {});
   clearTimeout(watchdog);
 }
 
-const log = mainLog.join("");
-fs.writeFileSync(path.join(outDir, "main-process.log"), log);
-check(/Window loaded, showing/.test(log), "main process reached 'Window loaded, showing'");
-check(
-  !/Renderer process gone: reason=(?!clean-exit)/.test(log),
-  "no abnormal renderer death in main log",
-);
-check(!/Failed to (load|start Conductor|create window)/.test(log), "no load/start failures");
-check(/sidecar exited \(code=0/.test(log), "sidecar shut down cleanly (exit code 0)");
+const exitCode = await new Promise((resolve) => {
+  const t = setTimeout(() => resolve(null), 5_000);
+  server.once("exit", (code) => {
+    clearTimeout(t);
+    resolve(code);
+  });
+  server.kill("SIGTERM"); // same signal Tauri's Rust host sends on app quit
+});
+check(exitCode === 0, "sidecar shut down cleanly on SIGTERM", `exit code ${exitCode}`);
+fs.writeFileSync(path.join(outDir, "server.log"), serverLog.join(""));
 
 console.log(`\nartifacts: ${outDir}`);
 console.log(failures.length ? `SMOKE FAILED (${failures.length})` : "SMOKE PASSED");

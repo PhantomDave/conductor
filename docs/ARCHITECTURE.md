@@ -33,7 +33,8 @@ conductor/
 │   │   ├── wrapper.ts                ProcessWrapper (PID, killTree, status transitions)
 │   │   ├── healthcheck.ts            checkPort / checkHttp implementations
 │   │   └── shell.ts                  resolveShell fallback → $SHELL or %COMSPEC%
-│   ├── monitor/                      (stub — not wired yet; roadmap for CPU/metrics)
+│   ├── monitor/                      health-monitor.ts + file-watcher.ts (wired via SpawnQueue),
+│   │                                 metrics-collector.ts (wired via bin/server.ts, no UI consumer yet)
 │   ├── api.ts                        Fastify 5 HTTP server (~876 lines)
 │   └── index.ts                      15-line barrel export
 ├── packages/cli/src/                 CLI commands (Commander v15)
@@ -44,7 +45,8 @@ conductor/
 │   ├── components/                   CommandForm, ProcessBoard, LogViewer, etc.
 │   ├── hooks/                        useProcesses, useProfiles, useEnvVars, useNotifications, etc.
 │   └── lib/                          ansi.tsx, api.ts helpers
-├── packages/desktop/main.ts          Electron 43 shell: compiles sidecar + serves UI (CONDUCTOR_UI_DIST)
+├── packages/desktop-tauri/           Tauri 2 shell: Rust host spawns the sidecar, serves UI (CONDUCTOR_UI_DIST)
+│   └── src-tauri/                    Cargo project; stage-sidecar.mjs copies core's compiled binary in
 └── ... (CI workflows, docs, config examples, etc.)
 ```
 
@@ -109,7 +111,7 @@ The broadcaster at `packages/core/src/logs/broadcaster.ts` uses a pub/sub patter
 | execution_history | id, command_id, profile, start_time, end_time, exit_code, duration_ms    | Audit of every run attempt per command                                       |
 | logs              | id, process_id, command_id, profile, timestamp, level, stream, message   | All captured stdout/stderr + error output; index by command_id and timestamp |
 | process_metadata  | pid (composite PK), command_id, profile, created_at, ended_at, exit_code | Snapshot of each started process for recovery & ps queries                   |
-| process_metrics   | id, pid, timestamp, cpu_percent, memory_bytes                            | Time-series CPU/memory (schema-ready; monitor/ not wired)                    |
+| process_metrics   | id, pid, timestamp, cpu_percent, memory_bytes                            | Sampled every 5s by `MetricCollector` (bin/server.ts); queried via GET /api/processes/:pid/metrics — no UI chart consumes it yet |
 | env_vars          | id (PK), scope, profile, key, value, secret                              | Managed env vars: global or per-profile; kept separate from .conductor.yml   |
 | audit_log         | id (PK), timestamp, action, actor, details                               | Every mutation event for auditing/debugging                                  |
 
@@ -135,17 +137,21 @@ profiles:
     command_ids: [api, db]          # ← IDs reference root-level commands; no duplication here.
 ```
 
-## Desktop App Architecture (packages/desktop)
+## Desktop App Architecture (packages/desktop-tauri)
 
-The desktop shell is an Electron 43 + electron-builder application that compiles the core engine into a platform-specific sidecar binary (`bun build --compile → dist-bin/conductor-server`). The compiled binary runs the same Fastify API that the Node version exposes on localhost:4000. UI assets are built via Vite to `packages/ui/dist/`. Environment variable `CONDUCTOR_UI_DIST` tells Electron where to load static HTML/UI assets from — this enables serving the dashboard same-origin so the SPA can call `/api/*` without CORS issues (all served by Electron's dev server). Auto-update is handled through electron-builder's GitHub Release integration (`--publish always`). The compiled sidecar binary includes everything needed for `conductor run`, API, SQLite persistence, etc. — no Bun runtime required at install time since it bundles to a native executable.
+`packages/desktop` (Electron) is retired — no source left, just stale build output; `packages/desktop-tauri` (Tauri 2) is the desktop shell. The core engine still compiles to the same platform-specific sidecar binary (`bun build --compile → packages/core/dist-bin/conductor-server`); `scripts/stage-sidecar.mjs` copies it into `src-tauri/binaries/` with the target-triple suffix Tauri's `externalBin` mechanism expects. The Rust host (`src-tauri/src/main.rs`) spawns that sidecar and sets `CONDUCTOR_UI_DIST` on it, pointing at the Vite-built `packages/ui/dist/` — same same-origin trick as before, just launched by Rust instead of Electron's main process. Auto-update goes through Tauri's updater plugin against GitHub Releases (`tauri.conf.json`'s `plugins.updater`, signed with a minisign key) instead of electron-builder.
 
-## Monitoring (stub)
+## Monitoring
 
-The monitor directory under packages/core/src/monitor is empty and represents the roadmap item for CPU/memory metrics collection: polling process cpu_percent and memory_bytes via `/usr/bin/top` (macOS), `top -bn1` or psutil (Linux), and wmic/process query (Windows). Until wired, GET `/api/processes/:pid/metrics` returns `{ cpu: [], memory: [] }`.
+`packages/core/src/monitor/` has three modules, wired to different degrees:
+
+- **`health-monitor.ts`** — wired: `SpawnQueue` keeps a `HealthMonitor` per running command, polling its healthcheck and firing crash/recovery notifications.
+- **`file-watcher.ts`** — wired: `SpawnQueue` starts a `FileWatcher` per command with a non-empty `watch[]`, restarting it (and its running dependents) on a matching change. See [IDEAS.md §3](./IDEAS.md#3-watch-and-restart).
+- **`metrics-collector.ts`** — wired for collection only: `bin/server.ts` instantiates `MetricCollector`, sampling process-group CPU/RSS every 5s into `process_metrics` and feeding live values back into `/api/processes` snapshots. `GET /api/processes/:pid/metrics` returns real history, and `packages/ui/src/lib/api.ts` has a `fetchProcessMetrics` helper — but no UI component calls it yet, so there's no chart. See [IDEAS.md §4](./IDEAS.md#4-resource-alerts-that-never-kill).
 
 ## Testing Strategy
 
-Tests live in `packages/core/test/`: five test files covering config loading/validation, env resolution order, masker secret detection, example-template compile logic, and store mutation helpers (config → example-compiler). The test runner is bun:test which provides native assertion, mocking through globals, and parallel execution.
+Tests live in `packages/core/test/`: 12 files covering config loading/validation, env resolution order, masker secret detection, example-template compile logic, store mutation helpers, healthchecks, shell resolution, and the executor (`queue.test.ts`, `wrapper.test.ts` — restart policies, crash/unhealthy notifications, watch-and-restart). The test runner is bun:test which provides native assertion, mocking through globals, and parallel execution.
 
 ## Toolchain
 
@@ -156,11 +162,11 @@ Tests live in `packages/core/test/`: five test files covering config loading/val
 
 ## CI/CD (.github/workflows)
 
-| Workflow         | When it runs                     | What it does                                                                                                                                                                                             |
-| ---------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`         | Every push / PR to main branches | lint-and-typecheck (format:check + lint + typecheck), test (ubuntu/macos/windows matrix), build (core → cli → ui), cli-smoke-test (cp .conductor.example.yml → .conductor.yml; config validate; run dev) |
-| `release.yml`    | On release published             | Per-OS compile of sidecar + electron-builder upload to same GitHub Release                                                                                                                               |
-| `dependabot.yml` | Automatic dependency bumps       | Dependabot bot config for Bun ecosystem                                                                                                                                                                  |
+| Workflow         | When it runs                     | What it does                                                                                                                                                                                                                                        |
+| ---------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`         | Every push / PR to main branches | lint-and-typecheck (format:check + lint + lint:types type-aware oxlint-tsgolint + typecheck), test (ubuntu/macos/windows matrix), build (core → cli → ui), cli-smoke-test (cp .conductor.example.yml → .conductor.yml; config validate; run dev)   |
+| `release.yml`    | On release published             | Per-OS compile of sidecar + tauri-action upload to same GitHub Release                                                                                                                                                                              |
+| `dependabot.yml` | Automatic dependency bumps       | Dependabot bot config for Bun ecosystem                                                                                                                                                                                                             |
 
 ## CLI vs API Comparison
 

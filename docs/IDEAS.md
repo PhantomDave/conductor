@@ -100,14 +100,15 @@ second.
 
 ## 4. Resource alerts that never kill
 
-**The gap.** Nothing today. And more than the graph suggested: `MetricCollector` reads
-`/proc` for full process-group CPU and RSS, has an `onSample` callback ready for
-exactly this, does its own retention — and `grep "new MetricCollector"` returns **zero
-consumers**. It is written but never instantiated. The graph's note "Monitor Directory
-Stub — CPU/memory metrics roadmap, not wired" is accurate.
+**The gap.** `MetricCollector` is wired — instantiated in `bin/server.ts` (5s sampling,
+24h retention), its `onSample` hook already feeds live CPU/RSS into
+`ProcessWrapper`'s snapshots, and `GET /api/processes/:pid/metrics` returns real
+history. The collection half is done and has been since #36.
 
-So this is two steps: wire the collector, then hang thresholds off the `onSample` hook
-that already exists.
+What's actually missing is two things: the threshold/notify logic itself (no
+`max_cpu_pct` / `max_mem_mb` fields exist anywhere yet — `schema.ts` has nothing for
+them), and a UI consumer — `packages/ui/src/lib/api.ts` has a `fetchProcessMetrics`
+helper that nothing calls, so there's no chart either.
 
 **The rationale, not the feature.** `max_cpu_pct` / `max_mem_mb` should **notify and
 never kill**, deliberately: a dev process legitimately pegging
@@ -188,7 +189,7 @@ if one becomes the actual bottleneck.
 2. **`log_line` probe** — independent of #1, unblocks a class of services outright.
 3. **Watch-and-restart** — reuses #1's machinery.
 4. **Failure diagnosis panel** — no new subsystem, pure assembly.
-5. **Resource alerts** — wire `MetricCollector` first; the sampling is already done.
+5. **Resource alerts** — sampling (`MetricCollector`) is already wired; build threshold/notify logic and a UI chart.
 
 Retention + FTS folds into backlog item 6 whenever that comes up.
 ---
@@ -210,7 +211,19 @@ Build order follows the section above. Checked items are in the working tree, no
   - [x] UI: `Restart policy` select in `CommandForm.tsx` + `restart` on `CommandInfo`
         (`packages/ui/src/lib/api.ts`). The form always sends the value — `undefined` in a PATCH
         body is dropped by `JSON.stringify`, so an omitted field could never switch a command back
-- [ ] **5. Resource alerts** — blocked on wiring `MetricCollector`, which currently has zero consumers
+- [x] **2. `log_line` probe** — shipped in #66
+- [x] **3. Watch-and-restart** — `FileWatcher` (`packages/core/src/monitor/file-watcher.ts`), owned by `SpawnQueue`
+  - [x] One recursive `fs.watch` on the resolved `cwd`, `Bun.Glob` matching, 500ms debounce
+  - [x] Build-output/tool dirs (`node_modules`, `.git`, `dist`, `obj`, `target`, …) and lockfiles skipped before matching, so a build writing
+        under its own glob can't restart itself in a loop
+  - [x] Restarts the command, then every _running_ transitive dependent (stopped first, back up via `startMany` in
+        dep order); `transitiveDependents` stayed `private`, since the watcher callback lives on `SpawnQueue`
+  - [x] Watcher outlives restarts, so changes mid-restart coalesce into one follow-up; closed by `stopOne`/`stopAll`
+  - [x] `resolvedCwd()` on `ProcessWrapper` replaces two copies of the cwd-resolution logic
+  - [x] Runnable check: two cases in `packages/core/test/queue.test.ts` (glob/skip matching; 40-event burst → one
+        restart of the service and its dependent, then two mid-restart events → exactly one follow-up)
+  - [x] `watch` was already in schema, API and `CommandForm.tsx`; no CLI change (same as `restart`)
+- [ ] **5. Resource alerts** — `MetricCollector` is wired (collection done); not started: `max_cpu_pct`/`max_mem_mb` threshold config + notify logic, and a UI chart against `fetchProcessMetrics`
 
 Deferred: retention + FTS folds into backlog item 6; `restart_on_unhealthy` (restart on a health flip while the
 process is still alive) is a separate field from `restart`, not a fourth enum value.

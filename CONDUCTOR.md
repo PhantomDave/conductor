@@ -14,12 +14,12 @@ conductor/
 │   ├── logs/                 SSE broadcaster (pub/sub)
 │   ├── docker-compose/       YAML parser → Command suggestions
 │   ├── executor/             SpawnQueue + ProcessWrapper + healthchecks
-│   ├── monitor/              (stub — not yet implemented)
+│   ├── monitor/              HealthMonitor + FileWatcher (wired), MetricCollector (wired, no UI chart)
 │   ├── db/                   SQLite init, queries, schema.sql
 │   └── api.ts                Fastify API server (~876 lines)
 ├── packages/cli/src/commands /CLI commands (run | configure | list | config | env | ps | logs)
 ├── packages/ui/src/          React 19 + Vite + Mantine dashboard
-├── packages/desktop/main.ts Electron shell (sidecar compile + UI dist)
+├── packages/desktop-tauri/   Tauri 2 shell (sidecar compile + UI dist, Rust host in src-tauri/)
 └── .conductor.example.yml    Canonical config example
 ```
 
@@ -115,7 +115,7 @@ Fastify server on port 4000; CORS scoped to localhost any port.
 | Profiles CRUD         | `GET/POST /api/profiles`; `PUT/DELETE/:profile`; `POST/:profile/duplicate`; `GET/:profile/export`                                                                                                                                       | Full management; store-backed                 |
 | Commands (root)       | `GET/POST /api/command`; `PUT/:id`; `DELETE/:id`                                                                                                                                                                                        | Root commands; delete touches all profiles    |
 | Profile↔Command links | `POST/:profile/commands` (create root cmd + add); `PUT/:profile/commands/:id`; `POST/:profile/commands/sync {add?,remove?}`; `POST/:profile/commands/:id/duplicate {targetProfile?}`; `POST/:profile/commands/:id/move {targetProfile}` | Full linking graph                            |
-| Processes             | `GET /api/processes` (queue.listSnapshots); `DELETE /:pid`; `GET /:pid/metrics?from&to` (stubbed)                                                                                                                                       | Active runs                                   |
+| Processes             | `GET /api/processes` (queue.listSnapshots); `DELETE /:pid`; `GET /:pid/metrics?from&to` (real, MetricCollector-sampled)                                                                                                                                       | Active runs                                   |
 | Notifications         | `GET /api/notifications?limit&offset`                                                                                                                                                                                                   | Events from executor                          |
 | Env vars              | `GET/PUT /api/env` (scope global\|profile); `DELETE/:id`; `POST /env/import {scope, profile, text}`                                                                                                                                     | SQLite persisted; looksSecret auto-detect     |
 | Logs + SSE            | `GET /logs?pid&commandId&profile&limit` returns reversed; `GET /logs/stream/:pid` (SSE)                                                                                                                                                 | 500-line replay + live tail + 15 s heartbeats |
@@ -123,7 +123,7 @@ Fastify server on port 4000; CORS scoped to localhost any port.
 
 ### UI Serving
 
-If CONDUCTOR_UI_DIST env is set (Electron shell), Fastify serves build artifacts with SPA fallback to index.html. This achieves same-origin API/UI in production.
+If CONDUCTOR_UI_DIST env is set (Tauri's Rust host sets it on the sidecar it spawns), Fastify serves build artifacts with SPA fallback to index.html. This achieves same-origin API/UI in production.
 
 ## Database Layer (SQLite)
 
@@ -134,7 +134,7 @@ Tables:
 - `execution_history(id, command_id, profile, start_time, end_time, exit_code)`
 - `logs(id, process_id, timestamp, level, message)` — indexed on process_id; up to 500-line window
 - `process_metadata(id, command_id, profile, pid, created_at, ended_at, status)``
-- `process_metrics(pid, timestamp, cpu_percent, memory_bytes)` — queried via queries.queryMetrics (stubbed, monitor/ not wired)
+- `process_metrics(pid, timestamp, cpu_percent, memory_bytes)` — queried via queries.queryMetrics; sampled every 5s by MetricCollector
 - `env_vars(id, scope, profile, key, value, secret)` — upserted/deleted from API/env CLI
 - `audit_log(timestamp, action, actor, details)` — written on every config mutation
 
@@ -162,15 +162,15 @@ Environment priority (lowest → highest):
 3. Profile-level env (`profiles.dev.env`)
 4. Command-level env_overrides
 
-## Desktop Shell (packages/desktop)
+## Desktop Shell (packages/desktop-tauri)
 
-Electron 43 + electron-builder + esbuild: main bundle compiles @conductor/core as sidecar binary (bun build --compile → dist-bin/conductor-server), builds UI with Vite, and packages both via electron-builder. `CONDUCTOR_UI_DIST` points Electron to the UI directory for same-origin serving.
+`packages/desktop` (Electron) is retired — no source left, only stale build output. Tauri 2 is the shell now: `stage-sidecar.mjs` copies core's compiled binary (`bun build --compile → dist-bin/conductor-server`) into `src-tauri/binaries/` with the target-triple suffix Tauri's `externalBin` expects; the Rust host in `src-tauri/src/main.rs` spawns it and sets `CONDUCTOR_UI_DIST` for same-origin serving, same mechanism as before.
 
-Build: `bunx electron-builder --publish always` produces per-OS installers uploaded as GitHub Release assets in CI (release.yml triggers on release published). Separate from tag-based releases.
+Build: `bun run build:desktop-tauri` (stage sidecar + build UI + `tauri build`). Per-OS installers are uploaded as GitHub Release assets by `tauri-action` in CI (release.yml triggers on release published), with auto-update via Tauri's updater plugin instead of electron-builder.
 
-## Process Monitoring (Not Yet)
+## Process Monitoring
 
-packages/core/src/monitor/ is an empty directory — CPU/memory polling does not exist yet. The API endpoint `/api/processes/:pid/metrics` proxies to queries.queryMetrics which returns null by design. Marked as 🔄 Roadmap item.
+packages/core/src/monitor/ has three modules: `HealthMonitor` and `FileWatcher` are wired into `SpawnQueue` (crash/health notifications; watch-and-restart). `MetricCollector` is wired into `bin/server.ts` — it samples CPU/RSS every 5s and `/api/processes/:pid/metrics` returns real history — but no UI component calls the `fetchProcessMetrics` helper yet, so there's no chart. See [docs/IDEAS.md §4](docs/IDEAS.md#4-resource-alerts-that-never-kill).
 
 ## Monorepo Scripts
 
@@ -179,9 +179,9 @@ packages/core/src/monitor/ is an empty directory — CPU/memory polling does not
 | `dev:core`      | @conductor/core dev server                           |
 | `dev:ui`        | Vite dev on port 3000                                |
 | `dev:cli`       | CLI dev (run directly)                               |
-| `dev:desktop`   | Builds sidecar + UI, starts Electron                 |
+| `dev:desktop-tauri`   | Builds sidecar + UI, starts Tauri dev            |
 | `build`         | Core build → CLI build → UI build                    |
-| `build:desktop` | Sidecar + UI + electron-builder dist                 |
+| `build:desktop-tauri` | Sidecar + UI + `tauri build` dist              |
 | `test`          | bun test                                             |
 | `lint`          | oxlint (`.oxlintrc.json`) over all .ts/.tsx/.js/.mjs |
 | `typecheck`     | TypeScript 7 (`tsc --noEmit`) across all packages    |

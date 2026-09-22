@@ -3,54 +3,9 @@
 This file contains issue-ready improvements found during a full repository analysis.
 I could not create GitHub issues directly from this environment, so these are documented here for triage and copy/paste into Issues.
 
-## 1) Implement `conductor logs` end-to-end (CLI + follow mode)
-
-- **Priority:** High
-- **Problem:** The CLI `logs` command is still a stub and does not call the core API.
-- **Evidence:**
-  - `/home/runner/work/conductor/conductor/packages/cli/src/commands/logs.ts`
-  - `/home/runner/work/conductor/conductor/packages/core/src/api.ts` (`GET /api/logs`, `GET /api/logs/stream`)
-- **Impact:** Users cannot rely on CLI logs for non-UI workflows or remote terminals.
-- **Scope:**
-  - Wire `conductor logs` to `GET /api/logs`
-  - Support `--follow` via SSE (`/api/logs/stream`)
-  - Support current filters (`--grep`, `--level`, and optional pid/command/profile)
-- **Acceptance criteria:**
-  - `conductor logs` returns real records
-  - `conductor logs --follow` streams new events until interrupted
-  - Filters are actually applied server-side
-
-## 2) Implement `conductor stop <profile>` by calling core API
-
-- **Priority:** High
-- **Problem:** CLI stop command is currently informational text only.
-- **Evidence:**
-  - `/home/runner/work/conductor/conductor/packages/cli/src/commands/ps.ts` (`registerStopCommand`)
-  - `/home/runner/work/conductor/conductor/packages/core/src/api.ts` (`POST /api/profiles/:profile/stop`)
-- **Impact:** CLI behavior is misleading and blocks script automation.
-- **Scope:** Call `POST /api/profiles/:profile/stop`, return clear success/failure output.
-- **Acceptance criteria:**
-  - `conductor stop dev` stops profile processes
-  - Non-existing profile returns readable error
-  - Exit codes are script-friendly (0 success, non-zero failure)
-
-## 3) Normalize API route naming for Docker Compose parsing
-
-- **Priority:** Medium
-- **Problem:** Endpoint currently uses a space in path (`/api/docker compose/parse`), which is non-standard and awkward.
-- **Evidence:**
-  - `/home/runner/work/conductor/conductor/packages/core/src/api.ts`
-  - `/home/runner/work/conductor/conductor/packages/ui/src/lib/api.ts`
-  - `/home/runner/work/conductor/conductor/docs/API.md`
-- **Impact:** Increases integration friction and risks client/encoding bugs.
-- **Scope:**
-  - Add canonical endpoint `/api/docker-compose/parse`
-  - Keep legacy endpoint temporarily for compatibility
-  - Update docs and UI client to canonical path
-- **Acceptance criteria:**
-  - Canonical endpoint works everywhere
-  - Legacy route remains functional during migration window
-  - Documentation references canonical path
+Items 1, 2, 3, 5, and 8 shipped and were removed from this file — see
+[docs/TODO.md](./TODO.md)'s "Already shipped" table for the evidence. Numbering below is kept
+as-is (not renumbered) since `TODO.md` cross-references these entries by number.
 
 ## 4) Add CLI and UI automated tests
 

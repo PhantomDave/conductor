@@ -167,11 +167,11 @@ The dashboard shows live process status, env var management, command library, no
 
 ## Desktop App
 
-Electron shell with a compiled Bun sidecar binary:
+Tauri 2 shell with a compiled Bun sidecar binary:
 
 ```bash
-bun run dev:desktop     # builds sidecar + UI, launches Electron dev mode
-bun run build:desktop   # produces installers in packages/desktop/out
+bun run dev:desktop-tauri     # builds sidecar + UI, launches Tauri dev mode
+bun run build:desktop-tauri   # produces installers via `tauri build`
 ```
 
 The desktop app checks for updates automatically on launch via GitHub Releases. No separate daemon — it runs the engine in-process.
@@ -186,10 +186,11 @@ The desktop app checks for updates automatically on launch via GitHub Releases. 
 - ✅ SQLite persistence (execution history, logs, env vars, audit log)
 - ✅ Fastify HTTP API + SSE log stream
 - ✅ React + Mantine dashboard (single page, all panels)
-- ✅ Desktop app (Electron 43 + electron-builder, auto-update)
+- ✅ Desktop app (Tauri 2 + tauri-action, auto-update)
 - ✅ Docker Compose import (`POST /api/docker%20compose/parse`)
 - ✅ `configure` command — compiles `.env` and `appsettings.json` from `.example` templates
-- ✅ Process CPU/memory metrics collection + live dashboard charts
+- ✅ Process CPU/memory metrics collection (sampled + persisted; API returns real history)
+- 🔲 Live dashboard charts for those metrics — collector is wired, nothing in the UI reads it yet
 - 🔄 Live log wiring in UI LogViewer via SSE (server-side ready)
 - 🔲 Community template registry
 - 🔲 Standalone CLI binary distribution (npm, Homebrew)
@@ -202,7 +203,7 @@ conductor/
 │   ├── core/    Backend engine: config loader, executor, SQLite, Fastify API
 │   ├── cli/     `conductor` CLI (Commander v15)
 │   ├── ui/      React 19 + Vite + Mantine 9 dashboard
-│   └── desktop/ Electron shell (sidecar + dashboard, auto-update)
+│   └── desktop-tauri/ Tauri shell (sidecar + dashboard, auto-update)
 ├── docs/        Documentation
 ├── examples/    Example configs (empty — use .conductor.example.yml or guides)
 └── .conductor.example.yml

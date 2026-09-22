@@ -968,8 +968,8 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     });
   });
 
-  // If CONDUCTOR_UI_DIST points at a built UI bundle (set by the Electron
-  // desktop shell, or anyone self-hosting the dashboard), serve it from
+  // If CONDUCTOR_UI_DIST points at a built UI bundle (set by the Tauri
+  // desktop shell's Rust host, or anyone self-hosting the dashboard), serve it from
   // the same origin as the API - this lets a single process/port run the
   // whole app with no separate Vite server. Left unset (the default CLI
   // dev flow), this is a no-op and behavior is unchanged.
