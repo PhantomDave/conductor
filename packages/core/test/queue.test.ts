@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SpawnQueue } from "../src/executor/queue";
+import { watchMatches, type FileWatcher } from "../src/monitor";
 import { CommandSchema, type CommandConfig } from "../src/config/schema";
 
 // Same portability note as wrapper.test.ts: every command runs
@@ -679,6 +680,76 @@ describe("SpawnQueue - crash and unhealthy notifications", () => {
       expect(queue.listNotifications().some((n) => n.type === "crashed")).toBe(true);
     } finally {
       await queue.stopAll();
+    }
+  }, 10_000);
+});
+
+describe("SpawnQueue - watch-and-restart", () => {
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  test("watchMatches applies globs relative to cwd and skips build output", () => {
+    expect(watchMatches("src/deep/a.ts", ["src/**"])).toBe(true);
+    expect(watchMatches("src\\deep\\a.ts", ["src/**"])).toBe(true);
+    expect(watchMatches("Api.csproj", ["*.csproj"])).toBe(true);
+    expect(watchMatches("README.md", ["src/**", "*.csproj"])).toBe(false);
+    expect(watchMatches("src/node_modules/x.js", ["src/**"])).toBe(false);
+    expect(watchMatches("src/obj/Debug/a.g.cs", ["src/**"])).toBe(false);
+    expect(watchMatches("package-lock.json", ["*.json"])).toBe(false);
+    expect(watchMatches("api/bun.lock", ["**"])).toBe(false);
+    expect(watchMatches("package.json", ["*.json"])).toBe(true);
+    expect(watchMatches("src/bin/main.rs", ["src/**"])).toBe(true); // Cargo layout, real source
+  });
+
+  // Drives the watcher's notify() directly instead of writing files: recursive
+  // fs.watch event delivery differs across the ubuntu/macos/windows matrix.
+  test("a burst of changes restarts the command once, plus its running dependents", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "conductor-watch-"));
+    const api = makeCommand({
+      id: "api",
+      name: "Api",
+      run: `bun -e "setInterval(() => {}, 1000)"`,
+      cwd: dir,
+      watch: ["src/**"],
+    });
+    const web = makeCommand({
+      id: "web",
+      name: "Web",
+      run: `bun -e "setInterval(() => {}, 1000)"`,
+      deps: ["api"],
+    });
+    const queue = new SpawnQueue("test", [api, web], () => testEnv());
+    try {
+      const watchLogs: string[] = [];
+      await queue.startMany(["api", "web"], (e) => {
+        if (e.message.startsWith("[watch]")) watchLogs.push(e.message);
+      });
+      const apiPid = queue.getWrapper("api")?.pid;
+      const webPid = queue.getWrapper("web")?.pid;
+
+      // Reaching the private watcher on purpose — see the comment above the test.
+      const { watchers } = queue as unknown as { watchers: Map<string, FileWatcher> };
+      const watcher = watchers.get("api")!;
+      for (let i = 0; i < 40; i++) watcher.notify(`src/file${i}.ts`); // formatter-style burst
+      watcher.notify("README.md"); // unmatched — ignored
+
+      await wait(700); // debounce fired; the restart is now in flight
+      const midPid = queue.getWrapper("api")?.pid;
+      watcher.notify("src/late.ts"); // lands mid-restart → one follow-up restart
+      watcher.notify("src/later.ts");
+
+      await wait(3500);
+      const finalPid = queue.getWrapper("api")?.pid;
+      expect(finalPid).not.toBe(apiPid);
+      expect(finalPid).not.toBe(midPid);
+      expect(queue.getWrapper("web")?.pid).not.toBe(webPid);
+      expect(queue.getWrapper("web")?.status).toBe("running");
+      expect(watchLogs).toEqual([
+        "[watch] src/file39.ts changed — restarting",
+        "[watch] src/later.ts changed — restarting",
+      ]);
+    } finally {
+      await queue.stopAll();
+      rmSync(dir, { recursive: true, force: true });
     }
   }, 10_000);
 });
