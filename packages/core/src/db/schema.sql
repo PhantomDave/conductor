@@ -18,11 +18,46 @@ CREATE TABLE IF NOT EXISTS logs (
   timestamp TEXT NOT NULL,
   level TEXT NOT NULL DEFAULT 'info',
   stream TEXT NOT NULL DEFAULT 'stdout',
-  message TEXT NOT NULL
+  message TEXT NOT NULL,
+  -- Which `sessions` row (one profile `run`) this log belongs to. NULL for
+  -- logs from a single command execute/restart, or written before any run
+  -- this server process has seen - those are only reachable by the
+  -- time-window sweep, not the session-scoped one.
+  session_id INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_logs_command ON logs(command_id);
 CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_logs_session ON logs(session_id);
+
+-- One row per `POST /api/profiles/:profile/run` call, so log retention can
+-- keep "the last N sessions per profile" instead of only a time window.
+CREATE TABLE IF NOT EXISTS sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  profile TEXT NOT NULL,
+  started_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_profile ON sessions(profile, id);
+
+-- Trigram-tokenized so `grep` can substring-match log messages (not just
+-- word boundaries). External-content (content='logs') so message text isn't
+-- duplicated on disk - this is a candidate-filter index only, queries.ts
+-- still runs an exact LIKE after MATCH narrows candidates.
+CREATE VIRTUAL TABLE IF NOT EXISTS logs_fts USING fts5(
+  message,
+  content='logs',
+  content_rowid='id',
+  tokenize='trigram'
+);
+
+CREATE TRIGGER IF NOT EXISTS logs_ai AFTER INSERT ON logs BEGIN
+  INSERT INTO logs_fts(rowid, message) VALUES (new.id, new.message);
+END;
+
+CREATE TRIGGER IF NOT EXISTS logs_ad AFTER DELETE ON logs BEGIN
+  INSERT INTO logs_fts(logs_fts, rowid, message) VALUES ('delete', old.id, old.message);
+END;
 
 CREATE TABLE IF NOT EXISTS process_metadata (
   pid INTEGER NOT NULL,

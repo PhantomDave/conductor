@@ -22,7 +22,31 @@ export function openDatabase(filePath: string): Database {
   const db = new Database(filePath, { create: true });
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
+
+  // schema.sql only uses idempotent `CREATE TABLE IF NOT EXISTS` - there's no
+  // migration framework, so an already-installed DB never picks up a column
+  // added to an existing table. Patch it in manually before applying schema.sql.
+  const logsColumns = db.query("PRAGMA table_info(logs)").all() as Array<{ name: string }>;
+  if (logsColumns.length > 0 && !logsColumns.some((c) => c.name === "session_id")) {
+    db.exec("ALTER TABLE logs ADD COLUMN session_id INTEGER;");
+  }
+
+  const ftsExisted =
+    (
+      db
+        .query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'logs_fts'")
+        .get() as { 1: number } | null
+    ) !== null;
+
   db.exec(schemaSql);
+
+  // logs_fts is external-content: it only gains rows via the AFTER INSERT
+  // trigger, so a table created just now for a DB with pre-existing logs
+  // starts empty. Rebuild once so old rows are searchable too; this is O(all
+  // logs), so it must only run the one time the table is first created.
+  if (!ftsExisted) {
+    db.exec("INSERT INTO logs_fts(logs_fts) VALUES ('rebuild');");
+  }
 
   return db;
 }

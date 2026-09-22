@@ -97,6 +97,22 @@ async function main() {
   // Start the metrics collector now that the API is running
   collector.start();
 
+  // Time-window log retention sweep. Session-scoped retention doesn't need
+  // its own timer - it runs inline on every /api/profiles/:profile/run.
+  const logRetentionInterval = setInterval(
+    () => {
+      const days = store.getConfig().log_retention_days;
+      if (days <= 0) return;
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      try {
+        queries.deleteLogsBefore(cutoff);
+      } catch (err) {
+        logger.error({ err }, "Log retention sweep failed");
+      }
+    },
+    60 * 60 * 1000,
+  );
+
   // Stop every managed process cleanly (respecting each command's
   // stop_signal/stop_timeout_ms) before exiting, so killing the server -
   // whether via Ctrl+C, `systemctl stop`, or an Electron shell quitting
@@ -108,6 +124,7 @@ async function main() {
     logger.info(`Received ${signal}, stopping all managed processes...`);
     await Promise.all([...store.getQueues().values()].map((queue) => queue.stopAll()));
     collector.stop();
+    clearInterval(logRetentionInterval);
     await app.close();
     db.close();
     process.exit(0);

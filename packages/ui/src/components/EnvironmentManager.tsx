@@ -18,6 +18,7 @@ import {
   Select,
   List,
   Alert,
+  NumberInput,
 } from "@mantine/core";
 import {
   IconPlus,
@@ -30,6 +31,7 @@ import {
   IconAlertTriangle,
   IconFileImport,
   IconTerminal2,
+  IconDatabase,
 } from "@tabler/icons-react";
 import { useDisclosure } from "@mantine/hooks";
 import { useProfiles } from "../hooks/useProfiles";
@@ -43,6 +45,9 @@ import {
   useUpdateBasePath,
   useShells,
   useUpdateDefaultShell,
+  useLogRetention,
+  useUpdateLogRetention,
+  usePruneLogsNow,
   useCompileConfigExamples,
   useImportConfig,
 } from "../hooks/useEnvVars";
@@ -284,6 +289,78 @@ function ShellCard() {
               </Button>
             </Group>
           </Stack>
+        )}
+      </Stack>
+    </Card>
+  );
+}
+
+function LogRetentionCard() {
+  const { data, isLoading } = useLogRetention();
+  const update = useUpdateLogRetention();
+  const prune = usePruneLogsNow();
+  // null = no local edits, so the inputs follow the saved values until the
+  // user types, matching BasePathCard's draft pattern.
+  const [daysDraft, setDaysDraft] = useState<number | null>(null);
+  const [sessionsDraft, setSessionsDraft] = useState<number | null>(null);
+  const days = daysDraft ?? data?.log_retention_days ?? 0;
+  const sessions = sessionsDraft ?? data?.log_retention_sessions ?? 0;
+
+  const dirty = data && (days !== data.log_retention_days || sessions !== data.log_retention_sessions);
+
+  return (
+    <Card withBorder padding="md">
+      <Stack gap="xs">
+        <Group gap={6}>
+          <IconDatabase size={18} />
+          <Title order={4}>Log retention</Title>
+        </Group>
+        <Text size="sm" c="dimmed">
+          Two independent limits on stored logs, both swept automatically - <Code>0</Code> disables
+          either one. Days is a global time window checked hourly. Sessions keeps only the last N{" "}
+          <Code>run</Code>s per profile, checked every run.
+        </Text>
+        {isLoading ? (
+          <Text c="dimmed" size="sm">
+            Loading...
+          </Text>
+        ) : (
+          <Group align="flex-end">
+            <NumberInput
+              label="Days"
+              min={0}
+              style={{ flex: 1 }}
+              value={days}
+              onChange={(v) => setDaysDraft(Number(v) || 0)}
+            />
+            <NumberInput
+              label="Sessions per profile"
+              min={0}
+              style={{ flex: 1 }}
+              value={sessions}
+              onChange={(v) => setSessionsDraft(Number(v) || 0)}
+            />
+            <Button
+              disabled={!dirty}
+              loading={update.isPending}
+              onClick={() =>
+                update.mutate(
+                  { log_retention_days: days, log_retention_sessions: sessions },
+                  {
+                    onSuccess: () => {
+                      setDaysDraft(null);
+                      setSessionsDraft(null);
+                    },
+                  },
+                )
+              }
+            >
+              Save
+            </Button>
+            <Button variant="light" loading={prune.isPending} onClick={() => prune.mutate()}>
+              Prune now
+            </Button>
+          </Group>
         )}
       </Stack>
     </Card>
@@ -619,6 +696,7 @@ export function EnvironmentManager() {
       <ImportConfigCard />
       <BasePathCard />
       <ShellCard />
+      <LogRetentionCard />
       <ConfigCompilerCard profileNames={profileNames} />
 
       <Tabs defaultValue="global">

@@ -7,6 +7,7 @@ import { registerConfigCommand } from "../src/commands/config";
 import { registerEnvCommand } from "../src/commands/env";
 import { registerPsCommand, registerStopCommand } from "../src/commands/ps";
 import { registerLogsCommand } from "../src/commands/logs";
+import { registerLogRetentionCommand } from "../src/commands/log-retention";
 
 const program = new Command();
 
@@ -20,5 +21,6 @@ registerEnvCommand(program);
 registerPsCommand(program);
 registerStopCommand(program);
 registerLogsCommand(program);
+registerLogRetentionCommand(program);
 
 program.parse(process.argv);
