@@ -306,7 +306,8 @@ function LogRetentionCard() {
   const days = daysDraft ?? data?.log_retention_days ?? 0;
   const sessions = sessionsDraft ?? data?.log_retention_sessions ?? 0;
 
-  const dirty = data && (days !== data.log_retention_days || sessions !== data.log_retention_sessions);
+  const dirty =
+    data && (days !== data.log_retention_days || sessions !== data.log_retention_sessions);
 
   return (
     <Card withBorder padding="md">

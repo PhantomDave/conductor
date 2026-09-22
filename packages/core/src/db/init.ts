@@ -32,11 +32,9 @@ export function openDatabase(filePath: string): Database {
   }
 
   const ftsExisted =
-    (
-      db
-        .query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'logs_fts'")
-        .get() as { 1: number } | null
-    ) !== null;
+    (db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'logs_fts'").get() as {
+      1: number;
+    } | null) !== null;
 
   db.exec(schemaSql);
 

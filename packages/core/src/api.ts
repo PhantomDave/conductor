@@ -964,8 +964,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   // instead of waiting for the hourly timer or the next profile run.
   app.post("/api/logs/prune", async () => {
     const config = deps.store.getConfig();
-    const cutoff = new Date(Date.now() - config.log_retention_days * 24 * 60 * 60 * 1000).toISOString();
-    const logsDeletedByAge = config.log_retention_days > 0 ? deps.queries.deleteLogsBefore(cutoff) : 0;
+    const cutoff = new Date(
+      Date.now() - config.log_retention_days * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const logsDeletedByAge =
+      config.log_retention_days > 0 ? deps.queries.deleteLogsBefore(cutoff) : 0;
 
     let sessionsPruned = 0;
     for (const profile of Object.keys(config.profiles)) {

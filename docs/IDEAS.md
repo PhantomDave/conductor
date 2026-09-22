@@ -191,7 +191,7 @@ Shape:
   hosts both.
 - **Sweep**: on each new session insert, delete `logs` rows for that profile whose `session_id`
   is older than the Nth most recent session (`... WHERE session_id IN (SELECT id FROM sessions
-  WHERE profile = ? ORDER BY started_at DESC LIMIT -1 OFFSET ?)`). Same trigger point as the
+WHERE profile = ? ORDER BY started_at DESC LIMIT -1 OFFSET ?)`). Same trigger point as the
   time-window sweep — one cleanup pass, not two.
 
 This is additive to, not instead of, the FTS5 + time-window piece above: if the FTS5 index lands

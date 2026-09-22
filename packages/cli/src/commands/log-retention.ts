@@ -12,7 +12,9 @@ async function apiCall<T>(path: string, init?: RequestInit): Promise<T> {
     return (await res.json()) as T;
   } catch (err) {
     console.error(
-      pc.red(`✗ Could not reach Conductor core at ${CORE_URL}. Is core running? (${(err as Error).message})`),
+      pc.red(
+        `✗ Could not reach Conductor core at ${CORE_URL}. Is core running? (${(err as Error).message})`,
+      ),
     );
     process.exit(1);
   }
@@ -28,7 +30,9 @@ export function registerLogRetentionCommand(program: import("commander").Command
       const config = await apiCall<{ log_retention_days: number; log_retention_sessions: number }>(
         "/api/log-retention",
       );
-      console.log(`Days:    ${config.log_retention_days} ${config.log_retention_days === 0 ? pc.dim("(disabled)") : ""}`);
+      console.log(
+        `Days:    ${config.log_retention_days} ${config.log_retention_days === 0 ? pc.dim("(disabled)") : ""}`,
+      );
       console.log(
         `Sessions: ${config.log_retention_sessions} ${config.log_retention_sessions === 0 ? pc.dim("(disabled)") : ""}`,
       );
@@ -56,9 +60,12 @@ export function registerLogRetentionCommand(program: import("commander").Command
     .command("prune")
     .description("Run log retention sweeps immediately")
     .action(async () => {
-      const result = await apiCall<{ logs_deleted: number; sessions_pruned_logs: number }>("/api/logs/prune", {
-        method: "POST",
-      });
+      const result = await apiCall<{ logs_deleted: number; sessions_pruned_logs: number }>(
+        "/api/logs/prune",
+        {
+          method: "POST",
+        },
+      );
       console.log(
         pc.green(
           `✓ Pruned ${result.logs_deleted} log(s) by age, ${result.sessions_pruned_logs} log(s) by session limit`,
