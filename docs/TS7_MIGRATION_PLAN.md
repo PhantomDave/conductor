@@ -2,6 +2,8 @@
 
 **Status:** done (all four phases complete, decisions settled 2026-09-11, see [Decisions](#decisions)) · **Baseline:** `main` after #57 and #58 (TypeScript 6.0.3, ESLint + typescript-eslint, strict lint in CI; Dependabot proposes TS 7 bumps, which fail Lint until Phase 1 lands)
 
+This is a historical record of a completed migration; phase content below describes the Electron-based (`packages/desktop`) tree as it existed at the time. Electron is gone (see [docs/TODO.md](./TODO.md)) — for the current pre-commit desktop smoke test, see [`.claude/skills/run-desktop/SKILL.md`](../.claude/skills/run-desktop/SKILL.md), not the "Electron smoke test" steps referenced below.
+
 ## Goal
 
 Make TypeScript 7 (the native Go compiler) the only TypeScript in the repo, for typechecking and the editor, and lint with [oxlint](https://oxc.rs/docs/guide/usage/linter) instead of ESLint + typescript-eslint.

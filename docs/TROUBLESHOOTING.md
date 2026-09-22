@@ -30,10 +30,10 @@ kill <PID>                   # macOS / Linux
 taskkill /pid <PID> /f      # Windows
 ```
 
-To run on a different port, set the `PORT` environment variable before starting:
+To run on a different port, set the `CONDUCTOR_PORT` environment variable before starting:
 
 ```bash
-PORT=4001 bun run bin/server.ts   # from packages/core
+CONDUCTOR_PORT=4001 bun run bin/server.ts   # from packages/core
 ```
 
 ### Config file not found or YAML parse error
@@ -165,26 +165,26 @@ For live tails, `conductor logs --follow` uses SSE at `/api/logs/stream`.
 
 ## Desktop App Issues
 
-### Electron desktop won't launch after build
+### Tauri desktop won't launch after build
 
-Ensure all dependencies compiled correctly:
+`packages/desktop` (Electron) is retired; the shell is now `packages/desktop-tauri`. Ensure all dependencies compiled correctly:
 
 ```bash
-bun run build  # core, cli, ui
-bun run build:desktop  # sidecar + electron builder
+bun run build               # core, cli, ui
+bun run build:desktop-tauri # stage sidecar + `tauri build`
 ```
 
-The sidecar must be in `packages/core/dist-bin/conductor-server` before the desktop app can find it. Check for errors during the sidecar compilation step (`bunx bun build --compile > ...`).
+The sidecar must be in `packages/core/dist-bin/conductor-server` before `stage-sidecar.mjs` can copy it into `packages/desktop-tauri/src-tauri/binaries/` — check for errors during the sidecar compilation step (`bun run --cwd packages/core build:sidecar`) first. `stage-sidecar.mjs` also needs `rustc` on PATH (it shells out to `rustc --print host-tuple` to pick the binary's target-triple suffix).
 
 ## Development Tooling Issues
 
 ### TypeScript 7: tooling or editor errors
 
-The repo is on TypeScript 7 (`"typescript": "^7.0.2"` in the root and `packages/desktop` manifests), the native compiler. Its npm package has no JavaScript compiler API: `require("typescript")` only gets a version shim. Tools that load the compiler as a library therefore don't work with it, which is why lint moved from ESLint + typescript-eslint to oxlint ([migration plan](./TS7_MIGRATION_PLAN.md)).
+The repo is on TypeScript 7 (`"typescript": "^7.0.2"` in the root manifest — `packages/core`, `cli` and `ui` all typecheck through it; `packages/desktop-tauri` is Rust/Tauri and has no TypeScript of its own), the native compiler. Its npm package has no JavaScript compiler API: `require("typescript")` only gets a version shim. Tools that load the compiler as a library therefore don't work with it, which is why lint moved from ESLint + typescript-eslint to oxlint ([migration plan](./TS7_MIGRATION_PLAN.md)).
 
 - **"typescript-eslint does not support TS 7.0"**: something reintroduced ESLint + typescript-eslint ([typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)). Lint with `bun run lint` (oxlint) instead.
 - **VS Code disagrees with `bun run typecheck`, or lint errors don't show inline**: install the recommended extensions in `.vscode/extensions.json`: **TypeScript 7** (`TypeScriptTeam.native-preview`, the native language service) and **Oxc** (`oxc.oxc-vscode`, inline oxlint diagnostics). The ESLint extension has nothing to run here.
-- **`tsc --version` prints 6.x**: a stale install. Run `bun install`; `bun run --cwd packages/<core|cli|ui|desktop> tsc --version` should print 7.x. (A `typescript@5` entry in `bun.lock` is expected: electron-builder's `config-file-ts` depends on it for TypeScript builder configs, and ours is `electron-builder.yml`.)
+- **`tsc --version` prints 6.x**: a stale install. Run `bun install`; `bun run --cwd packages/<core|cli|ui> tsc --version` should print 7.x.
 
 ### `bun run lint` fails on a warning
 

@@ -1,6 +1,6 @@
 # HTTP API Reference
 
-The Conductor HTTP API runs on port **4000** (configurable via `PORT` env var when started with `bun run server`). It provides endpoints for configuration management, process control, env var maintenance, and log streaming. All mutating operations write to SQLite and record an audit log entry. CORS is scoped to localhost any port by default.
+The Conductor HTTP API runs on port **4000** (configurable via `CONDUCTOR_PORT` env var when started with `bun run server`). It provides endpoints for configuration management, process control, env var maintenance, and log streaming. All mutating operations write to SQLite and record an audit log entry. CORS is scoped to localhost any port by default.
 
 ## Base URL / Port
 
@@ -63,7 +63,7 @@ The process manager (SpawnQueue) tracks active processes and their snapshots. Al
 | ------ | ----------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET    | `/api/processes`              | —                                  | `queue.listSnapshots()` — returns status of all commands in profile (`status`: `starting\|running\|stopping\|stopped\|failed`; `health`: `unknown\|healthy\|unhealthy`) |
 | DELETE | `/api/processes/:pid`         | —                                  | `queue.stopByPid(pid)` — force-stop a specific process; returns `{ stopped: true, pid }` or 404                                                                         |
-| GET    | `/api/processes/:pid/metrics` | `?from&to` ISO strings or epoch ms | Time-series metrics (CPU %, memory in bytes). **Currently stubbed** — monitor directory is empty. Returns `{ cpu: [], memory: [] }`                                     |
+| GET    | `/api/processes/:pid/metrics` | `?from&to` ISO strings or epoch ms | Time-series metrics (CPU %, memory in bytes). Sampled every 5s by `MetricCollector`; returns real `{ cpu: [...], memory: [...] }` history. No UI chart consumes it yet. |
 | POST   | `/api/profiles/:profile/run`  | —                                  | Start a profile's commands via HTTP API (same as `conductor run`)                                                                                                       |
 | POST   | `/api/profiles/:profile/stop` | —                                  | Stop all commands in a profile                                                                                                                                          |
 
@@ -124,7 +124,7 @@ Conductor's documentation mentions a WebSocket feature for real-time updates. Th
 
 ## SPA / Static Assets Serving
 
-In Electron's desktop shell mode, if `CONDUCTOR_UI_DIST` env variable is set, Conductor serves static assets from that directory with a fallback-to-index.html strategy (SPA routing). This achieves same-origin API/HTML serving for distributable builds. The UI is built by running the Vite build step (`bun run --cwd packages/ui build`) and then setting the environment variable to point at the output directory.
+In the desktop shell (Tauri; the Rust host sets `CONDUCTOR_UI_DIST` on the sidecar it spawns), Conductor serves static assets from that directory with a fallback-to-index.html strategy (SPA routing). This achieves same-origin API/HTML serving for distributable builds. The UI is built by running the Vite build step (`bun run --cwd packages/ui build`) and then setting the environment variable to point at the output directory.
 
 ### Example SPA Flow:
 
@@ -134,7 +134,7 @@ In Electron's desktop shell mode, if `CONDUCTOR_UI_DIST` env variable is set, Co
 ## CORS Behaviour
 
 - Enabled for localhost on any port via `cors({ origin: /localhost/ })`: so the dev-mode React dashboard at `http://localhost:3000` can make cross-origin AJAX/fetch requests against the API server running on `4000`.
-- No authentication or token mechanisms are implemented; trust model is that Conductor only binds to localhost by default. When used in Electron, the port and CORS restrictions are irrelevant as everything runs on the same origin.
+- No authentication or token mechanisms are implemented; trust model is that Conductor only binds to localhost by default. When used inside the Tauri desktop shell, the port and CORS restrictions are irrelevant as everything runs on the same origin.
 
 ## Audit Log
 
