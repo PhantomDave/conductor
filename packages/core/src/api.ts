@@ -711,21 +711,23 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     async (request, reply) => {
       const { id } = request.params;
 
-      // Commands are root-level — use them directly. Profile is display-only.
+      // Commands are root-level — use them directly. `profile` tags the process.
       const config = deps.store.getConfig();
       const cmd = config.commands.find((c) => c.id === id);
       if (!cmd) {
         return reply.status(404).send({ error: `Unknown command "${id}"` });
       }
 
+      // Tag the process with the profile that launched it so its logs,
+      // snapshot and notifications carry it (not the shared queue's name).
+      const profile = request.body?.profile ?? null;
       const queue = deps.store.getQueue();
       try {
-        await queue.startOne(id, deps.onLog);
+        await queue.startOne(id, deps.onLog, profile ?? "__global__");
       } catch (err) {
         return reply.status(400).send({ error: (err as Error).message });
       }
 
-      const profile = request.body.profile ?? null;
       deps.queries.insertAuditEntry("execute", `${profile ?? "__global__"}/${id}`);
       return { started: true, commandId: id, profile };
     },
@@ -750,7 +752,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
         return reply.status(400).send({ error: (err as Error).message });
       }
 
-      const profile = request.body.profile ?? "global";
+      const profile = request.body?.profile ?? "global";
       deps.queries.insertAuditEntry("restart", `${profile}/${id}`);
       const restarted = queue.getWrapper(id)?.getSnapshot();
       return { restarted: true, commandId: id, profile, process: restarted };
@@ -786,7 +788,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
         // no longer aborts the rest of the profile: it's recorded as a
         // notification and blocks just its own dependents. Check
         // /api/notifications or process snapshots afterward for the outcome.
-        await queue.startMany(profileConfig.command_ids, deps.onLog);
+        await queue.startMany(profileConfig.command_ids, deps.onLog, profile);
       } catch (err) {
         return reply.status(400).send({ error: (err as Error).message });
       }

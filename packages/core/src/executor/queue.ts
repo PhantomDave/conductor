@@ -69,6 +69,12 @@ export class SpawnQueue {
   private restartAttempts = new Map<string, number>();
   /** Last log handler a caller supplied, so auto-restarts keep streaming logs. */
   private lastLogHandler?: LogHandler;
+  /**
+   * Profile that last launched each command. The store's single queue is
+   * shared by every profile, so the queue's own name can't say which one a
+   * process belongs to; restarts (manual, auto, watch) keep the tag.
+   */
+  private launchProfile = new Map<string, string>();
 
   constructor(
     private readonly profile: string,
@@ -357,7 +363,8 @@ export class SpawnQueue {
     env: Record<string, string>,
     onLog?: LogHandler,
   ): Promise<boolean> {
-    const wrapper = new ProcessWrapper(cmd, this.profile, env);
+    const profile = this.profileOf(cmd.id);
+    const wrapper = new ProcessWrapper(cmd, profile, env);
     if (onLog) this.lastLogHandler = onLog;
     const logHandler = onLog ?? this.lastLogHandler;
     if (logHandler) wrapper.onLog(logHandler);
@@ -395,7 +402,7 @@ export class SpawnQueue {
       });
 
       // Await healthcheck with per-attempt logging
-      await waitForHealthy(`${this.profile}/${cmd.id}`, cmd.healthcheck, env, {
+      await waitForHealthy(`${profile}/${cmd.id}`, cmd.healthcheck, env, {
         onAttempt: (attempt, result) =>
           this.recordHealthProbeAttempt(wrapper, cmd, attempt, result),
         logLineState: wrapper,
@@ -571,10 +578,11 @@ export class SpawnQueue {
    * Starts every command in this queue concurrently. See `startMany` for
    * the concurrency/failure-handling contract.
    */
-  async startAll(onLog?: LogHandler): Promise<void> {
+  async startAll(onLog?: LogHandler, profile?: string): Promise<void> {
     await this.startMany(
       this.commands.map((cmd) => cmd.id),
       onLog,
+      profile,
     );
   }
 
@@ -593,9 +601,11 @@ export class SpawnQueue {
    * `startMany` lets a caller scope the batch to `profile.command_ids`
    * while still getting the same concurrent, dependency-aware startup.
    */
-  async startMany(commandIds: string[], onLog?: LogHandler): Promise<void> {
+  async startMany(commandIds: string[], onLog?: LogHandler, profile?: string): Promise<void> {
     this.checkForCycles(commandIds); // fail fast on a real cycle instead of a 60s timeout per node
-    await Promise.all(commandIds.map((id) => this.ensureStarted(id, onLog).catch(() => {})));
+    await Promise.all(
+      commandIds.map((id) => this.ensureStarted(id, onLog, profile).catch(() => {})),
+    );
   }
 
   /**
@@ -604,18 +614,21 @@ export class SpawnQueue {
    * that fails still blocks this command instead of being silently ignored.
    * Rejects if a dependency never becomes ready; always (re)spawns the
    * target itself even if it's already running.
+   *
+   * `profile` tags the process (and any deps it starts) with the profile
+   * that launched it; omitted, a command keeps its previous tag.
    */
-  async startOne(commandId: string, onLog?: LogHandler): Promise<void> {
+  async startOne(commandId: string, onLog?: LogHandler, profile?: string): Promise<void> {
     this.checkForCycles([commandId]); // fail fast on a real cycle instead of a 60s timeout per node
     // Starting by hand is the same fresh intent as restarting by hand: don't
     // let attempts spent before an operator stopped the command count here.
     this.restartAttempts.delete(commandId);
-    await this.ensureStarted(commandId, onLog);
+    await this.ensureStarted(commandId, onLog, profile);
   }
 
   /** Alias for startOne. */
-  async run(commandId: string, onLog?: LogHandler): Promise<void> {
-    return this.startOne(commandId, onLog);
+  async run(commandId: string, onLog?: LogHandler, profile?: string): Promise<void> {
+    return this.startOne(commandId, onLog, profile);
   }
 
   /**
@@ -624,11 +637,11 @@ export class SpawnQueue {
    * command id — closes a real bug where two overlapping calls for the same
    * command used to create two competing ProcessWrapper instances).
    */
-  private ensureStarted(commandId: string, onLog?: LogHandler): Promise<void> {
+  private ensureStarted(commandId: string, onLog?: LogHandler, profile?: string): Promise<void> {
     const existing = this.startPromises.get(commandId);
     if (existing) return existing;
 
-    const promise = this.ensureStartedInner(commandId, onLog);
+    const promise = this.ensureStartedInner(commandId, onLog, profile);
     this.startPromises.set(commandId, promise);
     // `.finally()` returns a *new* derived promise that rejects whenever
     // `promise` does; the real `promise` returned below is what callers
@@ -642,11 +655,18 @@ export class SpawnQueue {
     return promise;
   }
 
-  private async ensureStartedInner(commandId: string, onLog?: LogHandler): Promise<void> {
+  private async ensureStartedInner(
+    commandId: string,
+    onLog?: LogHandler,
+    profile?: string,
+  ): Promise<void> {
     const cmd = this.commands.find((c) => c.id === commandId);
     if (!cmd) {
-      throw new Error(`Unknown command "${commandId}" in profile "${this.profile}"`);
+      throw new Error(`Unknown command "${commandId}" in profile "${profile ?? this.profile}"`);
     }
+    // Set here, not in ensureStarted: a caller joining an in-flight start
+    // must not re-tag the spawn it didn't own.
+    if (profile) this.launchProfile.set(commandId, profile);
 
     const depIds = cmd.deps.filter((d): d is string => Boolean(d));
     if (depIds.length > 0) {
@@ -657,7 +677,7 @@ export class SpawnQueue {
         await Promise.all(
           depIds.map(async (depId) => {
             if (!this.isDependencyReady(depId)) {
-              await this.ensureStarted(depId).catch(() => {}); // failure surfaces via waitForDependency below
+              await this.ensureStarted(depId, undefined, profile).catch(() => {}); // failure surfaces via waitForDependency below
             }
             await this.waitForDependency(commandId, depId);
           }),
@@ -820,7 +840,7 @@ export class SpawnQueue {
       id: randomUUID(),
       timestamp: Date.now(),
       type,
-      profile: this.profile,
+      profile: this.profileOf(commandId),
       commandId,
       commandName: cmd?.name,
       reason,
@@ -832,6 +852,10 @@ export class SpawnQueue {
       this.notifications.shift();
     }
     this.notifications.push(notification);
+  }
+
+  private profileOf(commandId: string): string {
+    return this.launchProfile.get(commandId) ?? this.profile;
   }
 
   /**
