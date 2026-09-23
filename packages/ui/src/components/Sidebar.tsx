@@ -2,6 +2,7 @@ import { NavLink, ScrollArea, Text, Badge, Stack, Divider, Group, ActionIcon } f
 import {
   IconBolt,
   IconCircleFilled,
+  IconHistory,
   IconLayoutDashboard,
   IconPlayerPlay,
   IconPlayerStop,
@@ -52,6 +53,12 @@ export function Sidebar() {
           leftSection={<IconLayoutDashboard size={16} />}
           active={view === "processes" && !selectedProcessKey}
           onClick={() => setView("processes")}
+        />
+        <NavLink
+          label="History"
+          leftSection={<IconHistory size={16} />}
+          active={view === "history" && !selectedProcessKey}
+          onClick={() => setView("history")}
         />
         <NavLink
           label="Flow"

@@ -26,15 +26,23 @@ function renderLog(entry: LogEntry) {
   console.log(`${prefix} ${stream} ${level} ${entry.message}`);
 }
 
-async function fetchLogs(params: URLSearchParams): Promise<LogEntry[]> {
+type LogRun = {
+  profile: string;
+  command_id: string;
+  process_id: string;
+  started_at: string;
+  lines: number;
+  stderr_lines: number;
+};
+
+async function fetchJson<T>(path: string): Promise<T> {
   try {
-    const res = await fetch(`${CORE_URL}/api/logs?${params.toString()}`);
+    const res = await fetch(`${CORE_URL}${path}`);
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
       throw new Error(body?.error ?? `HTTP ${res.status}`);
     }
-    const data = (await res.json()) as { logs?: LogEntry[] };
-    return data.logs ?? [];
+    return (await res.json()) as T;
   } catch (err) {
     console.error(
       pc.red(
@@ -56,6 +64,7 @@ export function registerLogsCommand(program: import("commander").Command) {
     .option("--command <commandId>", "Filter by command id")
     .option("--profile <profile>", "Filter by profile name")
     .option("--limit <n>", "Max log lines to fetch (default: 200)")
+    .option("--runs", "List past runs (one per pid) instead of log lines")
     .action(
       async (opts: {
         follow?: boolean;
@@ -65,6 +74,7 @@ export function registerLogsCommand(program: import("commander").Command) {
         command?: string;
         profile?: string;
         limit?: string;
+        runs?: boolean;
       }) => {
         const params = new URLSearchParams();
         if (opts.grep) params.set("grep", opts.grep);
@@ -74,7 +84,24 @@ export function registerLogsCommand(program: import("commander").Command) {
         if (opts.profile) params.set("profile", opts.profile);
         if (opts.limit) params.set("limit", opts.limit);
 
-        const rows = await fetchLogs(params);
+        if (opts.runs) {
+          if (opts.follow || opts.grep || opts.level || opts.pid) {
+            console.error(pc.red("✗ --runs only combines with --command, --profile and --limit"));
+            process.exit(1);
+          }
+          const runs = await fetchJson<{ runs: LogRun[] }>(`/api/logs/runs?${params.toString()}`);
+          if (runs.runs.length === 0) console.log(pc.dim("No runs found."));
+          for (const r of runs.runs) {
+            const stderr = r.stderr_lines > 0 ? pc.red(` (${r.stderr_lines} stderr)`) : "";
+            console.log(
+              `${pc.dim(r.started_at)} ${pc.cyan(r.profile)}:${pc.bold(r.command_id)} ${pc.dim(`#${r.process_id}`)} ${r.lines} lines${stderr}`,
+            );
+          }
+          return;
+        }
+
+        const rows =
+          (await fetchJson<{ logs?: LogEntry[] }>(`/api/logs?${params.toString()}`)).logs ?? [];
         for (const row of rows) renderLog(row);
 
         if (!opts.follow) return;

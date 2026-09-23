@@ -354,6 +354,28 @@ export async function fetchLogs(params: {
   return data.logs ?? [];
 }
 
+export interface LogRun {
+  profile: string;
+  command_id: string;
+  process_id: string;
+  started_at: string;
+  last_at: string;
+  lines: number;
+  stderr_lines: number;
+}
+
+export async function fetchLogRuns(
+  params: { commandId?: string; profile?: string; limit?: number } = {},
+): Promise<LogRun[]> {
+  const query = new URLSearchParams();
+  if (params.commandId) query.set("commandId", params.commandId);
+  if (params.profile) query.set("profile", params.profile);
+  if (params.limit) query.set("limit", String(params.limit));
+  const res = await fetch(`${API_BASE}/logs/runs?${query.toString()}`);
+  const data = await parseJsonOrThrow(res, "Failed to fetch log runs");
+  return data.runs ?? [];
+}
+
 export function streamLogs(pid: number, onEntry: (entry: LogRow) => void): () => void {
   const source = new EventSource(`${API_BASE}/logs/stream?pid=${pid}`);
   source.addEventListener("log", (event) => {

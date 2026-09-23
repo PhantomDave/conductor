@@ -84,6 +84,12 @@ const LogsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(2000).optional(),
 });
 
+const LogRunsQuerySchema = z.object({
+  commandId: z.string().min(1).optional(),
+  profile: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(2000).optional(),
+});
+
 const LogStreamQuerySchema = LogsQuerySchema.omit({ limit: true }).extend({
   limit: z.coerce.number().int().min(1).max(500).optional().default(500),
 });
@@ -960,6 +966,20 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     });
     return { logs: logs.reverse() };
   });
+
+  // Past runs (one per pid) still held in the log table, newest first.
+  app.get<{ Querystring: { commandId?: string; profile?: string; limit?: string } }>(
+    "/api/logs/runs",
+    async (request, reply) => {
+      const parsed = LogRunsQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: parsed.error.issues[0]?.message ?? "Invalid query params" });
+      }
+      return { runs: deps.queries.listLogRuns(parsed.data) };
+    },
+  );
 
   // Runs both retention sweeps immediately, using the currently configured
   // thresholds — makes the periodic cleanup observable/testable on demand
