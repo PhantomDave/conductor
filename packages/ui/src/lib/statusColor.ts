@@ -5,5 +5,6 @@ export const STATUS_COLOR: Record<string, string> = {
   starting: "yellow",
   stopping: "orange",
   stopped: "gray",
+  completed: "teal",
   failed: "red",
 };

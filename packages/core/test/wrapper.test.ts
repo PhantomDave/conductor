@@ -82,7 +82,7 @@ describe("ProcessWrapper.start", () => {
     expect(wrapper.status).toBe("starting");
   });
 
-  test("transitions to stopped with exit code 0 on a clean exit", async () => {
+  test("transitions to completed with exit code 0 on a clean exit", async () => {
     const cmd = makeCommand({
       id: "clean-exit",
       name: "Clean Exit",
@@ -91,7 +91,7 @@ describe("ProcessWrapper.start", () => {
     const wrapper = new ProcessWrapper(cmd, "test", testEnv());
     const exitCode = await runToExit(wrapper);
     expect(exitCode).toBe(0);
-    expect(wrapper.status).toBe("stopped");
+    expect(wrapper.status).toBe("completed");
     expect(wrapper.getSnapshot()?.exitCode).toBe(0);
   });
 
@@ -237,6 +237,16 @@ describe("ProcessWrapper.stop", () => {
 
     await wrapper.stop();
     expect(wrapper.status).toBe("stopped");
+  });
+
+  test("keeps completed when stopping a process that already exited on its own", async () => {
+    const cmd = makeCommand({ id: "done", name: "Done", run: `bun -e "process.exit(0)"` });
+    const wrapper = new ProcessWrapper(cmd, "test", testEnv());
+    await runToExit(wrapper);
+
+    await wrapper.stop();
+
+    expect(wrapper.status).toBe("completed");
   });
 
   test("is a no-op when the process was never started", async () => {

@@ -3,7 +3,7 @@ export interface ProcessInfo {
   commandName: string;
   profile: string;
   pid: number;
-  status: "starting" | "running" | "stopping" | "stopped" | "failed";
+  status: "starting" | "running" | "stopping" | "stopped" | "completed" | "failed";
   health: "unknown" | "healthy" | "unhealthy";
   cpuPercent?: number;
   memoryBytes?: number;

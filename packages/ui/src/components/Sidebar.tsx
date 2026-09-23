@@ -39,7 +39,10 @@ export function Sidebar() {
   const stopAll = useStopAllProcesses();
 
   const active = processes?.filter((p) => p.status === "running" || p.status === "starting") ?? [];
-  const finished = processes?.filter((p) => p.status === "stopped" || p.status === "failed") ?? [];
+  const finished =
+    processes?.filter(
+      (p) => p.status === "stopped" || p.status === "completed" || p.status === "failed",
+    ) ?? [];
   const profileNames = profiles ? Object.keys(profiles).sort((a, b) => a.localeCompare(b)) : [];
 
   const isSelected = (p: ProcessInfo) =>
