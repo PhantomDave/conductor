@@ -239,6 +239,16 @@ describe("ProcessWrapper.stop", () => {
     expect(wrapper.status).toBe("stopped");
   });
 
+  test("keeps completed when stopping a process that already exited on its own", async () => {
+    const cmd = makeCommand({ id: "done", name: "Done", run: `bun -e "process.exit(0)"` });
+    const wrapper = new ProcessWrapper(cmd, "test", testEnv());
+    await runToExit(wrapper);
+
+    await wrapper.stop();
+
+    expect(wrapper.status).toBe("completed");
+  });
+
   test("is a no-op when the process was never started", async () => {
     const cmd = makeCommand({ id: "never-started", name: "Never Started", run: `bun -e "1"` });
     const wrapper = new ProcessWrapper(cmd, "test", testEnv());

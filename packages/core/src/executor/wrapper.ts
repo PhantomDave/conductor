@@ -545,6 +545,14 @@ export class ProcessWrapper {
     this.intentionalStop = true;
     if (!this.process || this.process.subprocess == null) return;
 
+    // Already exited on its own (e.g. a finished one-shot hit by "stop all"):
+    // reap any leftover children but keep the real outcome, as
+    // forceKillAndWait does.
+    if (this.process.status === "completed" || this.process.status === "failed") {
+      await killTreeAndWait(this.process.subprocess);
+      return;
+    }
+
     // Always attempt to kill the subprocess regardless of current status.
     // During healthcheck the status may still be "starting"; during restart
     // it may be "stopping" mid-flight. We must always terminate the process,
