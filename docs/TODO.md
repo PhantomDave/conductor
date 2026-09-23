@@ -39,18 +39,25 @@ in passing next time that line is touched.
    profile filter, and likely session-scoped retention never match. Fix at the source (tag with the
    launching profile), then switch `cli.test.ts`'s logs test back to `--profile`.
 
-2. **Backlog #7 — `/api/command` → `/api/commands`.** Still only the singular routes exist
+2. **Managed-process output lost** (found by the CLI tests on macOS/Windows CI). (a) `conductor run`
+   ([run.ts](../packages/cli/src/commands/run.ts)) returns once `startAll` resolves, so a short-lived
+   command's stdout can be dropped when the CLI exits before its pump drains (seen on macOS) — it should
+   wait for its commands to exit and their streams to drain. (b) On Windows, stdout from a
+   `bun -e "..."` command isn't captured at all, in core too — only `[startup]` lines reach the log.
+   Once fixed, make `cli.test.ts`'s run/logs tests assert on the fixture's stdout again.
+
+3. **Backlog #7 — `/api/command` → `/api/commands`.** Still only the singular routes exist
    (`api.ts:634,639,655,674`). Add plural aliases, mark canonical in `API.md`, deprecate the singular
    ones on a timeline.
 
-3. **IDEAS #4 — resource alerts that never kill.** `MetricCollector` is already wired (`bin/server.ts`,
+4. **IDEAS #4 — resource alerts that never kill.** `MetricCollector` is already wired (`bin/server.ts`,
    since #36) — sampling, retention, and `GET /api/processes/:pid/metrics` all work. What's actually open:
    add `max_cpu_pct` / `max_mem_mb` to the schema and hang notify logic off the existing `onSample` hook
    (notify-only, never kill; per-(service, resource) cooldown, 5 min default, so a threshold-boundary
    service doesn't spam), and wire a UI chart against the already-existing `fetchProcessMetrics` helper,
    which nothing currently calls.
 
-4. **IDEAS #5 — failure diagnosis panel.** Pure assembly over state Conductor already stores (failure
+5. **IDEAS #5 — failure diagnosis panel.** Pure assembly over state Conductor already stores (failure
    reason, output tail, last probe cycle, unhealthy deps) — no new subsystem. Last in the suggested order
    because nothing else depends on it.
 
