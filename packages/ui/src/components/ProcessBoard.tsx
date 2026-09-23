@@ -154,7 +154,9 @@ export function ProcessBoard() {
     (p) => p.status === "starting" || p.status === "stopping",
   );
   const failedProcesses = processes.filter((p) => p.status === "failed");
-  const stoppedProcesses = processes.filter((p) => p.status === "stopped");
+  const stoppedProcesses = processes.filter(
+    (p) => p.status === "stopped" || p.status === "completed",
+  );
 
   return (
     <Tabs value={activeTab} onChange={setActiveTab}>

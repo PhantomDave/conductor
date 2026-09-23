@@ -5,7 +5,9 @@ import { interpolateString } from "../env/masker";
 import { resolveShell } from "./shell";
 import { splitShellWords } from "./shell-words";
 
-export type ProcessStatus = "starting" | "running" | "stopping" | "stopped" | "failed";
+/** "completed" = exited 0 on its own (e.g. a one-shot task); "stopped" = we stopped it. */
+export type ProcessStatus =
+  "starting" | "running" | "stopping" | "stopped" | "completed" | "failed";
 export type HealthStatus = "unknown" | "healthy" | "unhealthy";
 
 export interface ManagedProcess {
@@ -459,7 +461,8 @@ export class ProcessWrapper {
     subprocess.exited
       .then((exitCode) => {
         if (this.process) {
-          this.process.status = exitCode === 0 ? "stopped" : "failed";
+          if (exitCode !== 0) this.process.status = "failed";
+          else this.process.status = this.intentionalStop ? "stopped" : "completed";
           this.process.exitCode = exitCode;
           this.process.endedAt = new Date();
           this.markUnhealthy();
@@ -530,7 +533,10 @@ export class ProcessWrapper {
    */
   async forceKillAndWait(): Promise<void> {
     if (!this.process || this.process.subprocess == null) return;
-    const alreadyTerminal = this.process.status === "failed" || this.process.status === "stopped";
+    const alreadyTerminal =
+      this.process.status === "failed" ||
+      this.process.status === "stopped" ||
+      this.process.status === "completed";
     await killTreeAndWait(this.process.subprocess);
     if (this.process && !alreadyTerminal) this.process.status = "stopped";
   }

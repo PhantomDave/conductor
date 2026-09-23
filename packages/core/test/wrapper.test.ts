@@ -82,7 +82,7 @@ describe("ProcessWrapper.start", () => {
     expect(wrapper.status).toBe("starting");
   });
 
-  test("transitions to stopped with exit code 0 on a clean exit", async () => {
+  test("transitions to completed with exit code 0 on a clean exit", async () => {
     const cmd = makeCommand({
       id: "clean-exit",
       name: "Clean Exit",
@@ -91,7 +91,7 @@ describe("ProcessWrapper.start", () => {
     const wrapper = new ProcessWrapper(cmd, "test", testEnv());
     const exitCode = await runToExit(wrapper);
     expect(exitCode).toBe(0);
-    expect(wrapper.status).toBe("stopped");
+    expect(wrapper.status).toBe("completed");
     expect(wrapper.getSnapshot()?.exitCode).toBe(0);
   });
 
