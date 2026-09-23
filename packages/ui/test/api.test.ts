@@ -93,6 +93,23 @@ describe("log retention", () => {
   test("fetchLogs returns an array", async () => {
     expect(Array.isArray(await api.fetchLogs({ profile: "dev", limit: 5 }))).toBe(true);
   });
+
+  test("fetchLogRuns lists a run whose lines fetchLogs can load", async () => {
+    await api.runProfile("dev");
+    let runs = await api.fetchLogRuns({ commandId: "hello" });
+    for (let i = 0; i < 50 && runs.length === 0; i++) {
+      await Bun.sleep(100);
+      runs = await api.fetchLogRuns({ commandId: "hello" });
+    }
+    const run = runs[0]!;
+    expect(run.lines).toBeGreaterThan(0);
+    const lines = await api.fetchLogs({
+      pid: Number(run.process_id),
+      commandId: run.command_id,
+      profile: run.profile,
+    });
+    expect(lines.length).toBe(run.lines);
+  }, 30_000);
 });
 
 describe("config import/export", () => {

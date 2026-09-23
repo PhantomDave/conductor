@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { notifications as toasts } from "@mantine/notifications";
 import { AppShell, Badge, Box, Button, Group, Stack, Text, Title } from "@mantine/core";
 import { LogViewer } from "./components/LogViewer";
+import { LogHistory } from "./components/LogHistory";
 import { EnvironmentManager } from "./components/EnvironmentManager";
 import { ProcessBoard } from "./components/ProcessBoard";
 import { NotificationsTab } from "./components/NotificationsTab";
@@ -85,6 +86,7 @@ export default function App() {
       );
     }
 
+    if (view === "history") return <LogHistory />;
     if (view === "flow") return <DependencyFlow />;
     if (view === "profiles") return <ProfileGridView />;
     if (view === "commands") return <CommandLibrary />;

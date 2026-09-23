@@ -24,7 +24,7 @@ import {
 import { fetchLogs, streamLogs, type LogRow, type ProcessInfo } from "../lib/api";
 import { useUiStore } from "../store/ui";
 import { useStopProcess, useRestartCommand } from "../hooks/useProcessActions";
-import { renderAnsiLine } from "../lib/ansi";
+import { LogLines } from "./LogLines";
 import { STATUS_COLOR } from "../lib/statusColor";
 
 type StreamFilter = "all" | "stdout" | "stderr";
@@ -198,29 +198,7 @@ export function LogViewer({ process }: { process: ProcessInfo }) {
               {logs.length === 0 ? "No log output yet." : "No lines match the current filter."}
             </Text>
           ) : (
-            <div style={{ fontFamily: "monospace", fontSize: 13, lineHeight: 1.5 }}>
-              {filteredLogs.map((log) => (
-                <div
-                  key={log.id}
-                  style={{
-                    color: "#d4d4d4",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-all",
-                    borderLeft:
-                      log.stream === "stderr"
-                        ? "2px solid var(--mantine-color-red-6)"
-                        : "2px solid transparent",
-                    paddingLeft: 6,
-                  }}
-                >
-                  <span style={{ color: "#6a6a6a" }}>
-                    {new Date(log.timestamp).toLocaleTimeString()}
-                    {"  "}
-                  </span>
-                  {renderAnsiLine(log.message, String(log.id))}
-                </div>
-              ))}
-            </div>
+            <LogLines logs={filteredLogs} />
           )}
         </ScrollArea>
       </Paper>

@@ -89,6 +89,7 @@ usage: conductor logs [--follow] [--grep <pattern>] [--level <debug|info|warn|er
 ```
 
 - `--follow` — tail continuously via SSE (`/api/logs/stream`)
+- `--runs` — list past runs (one per pid) instead of log lines; combine with `--command`/`--profile`, then view one with `--pid`
 - `--grep` — substring filter against log message text
 - `--level` — exact log level filter (`debug`, `info`, `warn`, `error`)
 - `--pid` — filter by process id

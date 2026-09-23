@@ -117,6 +117,10 @@ describe("core-backed commands", () => {
 
     const limited = await cli(["logs", "--command", "hello", "--limit", "1"]);
     expect(limited.stdout.trim().split("\n")).toHaveLength(1);
+
+    const runs = await cli(["logs", "--runs", "--command", "hello"]);
+    expect(runs.code).toBe(0);
+    expect(runs.stdout).toMatch(/:hello #\d+ \d+ lines/);
   }, 30_000);
 
   test("stop reports success", async () => {

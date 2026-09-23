@@ -21,6 +21,16 @@ function escapeFtsMatch(term: string): string {
   return `"${term.replace(/"/g, '""')}"`;
 }
 
+export interface LogRunRow {
+  profile: string;
+  command_id: string;
+  process_id: string;
+  started_at: string;
+  last_at: string;
+  lines: number;
+  stderr_lines: number;
+}
+
 export interface ExecutionHistoryRow {
   command_id: string;
   profile: string;
@@ -128,6 +138,38 @@ export class ConductorQueries {
     return this.db
       .prepare(`SELECT * FROM logs ${where} ORDER BY timestamp DESC LIMIT $limit`)
       .all({ ...params, $limit: limit }) as LogRow[];
+  }
+
+  /**
+   * One row per past run, newest first. A run is a distinct
+   * (profile, command_id, process_id) - every start/restart gets a new pid.
+   */
+  // ponytail: an OS-reused pid for the same command merges two runs; add a
+  // run id column if that ever bites. Unfiltered it scans all of `logs`,
+  // fine at retention-bounded sizes - add a rollup table if it gets slow.
+  listLogRuns(filters: { profile?: string; commandId?: string; limit?: number }): LogRunRow[] {
+    const clauses: string[] = [];
+    const params: Record<string, unknown> = {};
+    if (filters.profile) {
+      clauses.push("profile = $profile");
+      params.$profile = filters.profile;
+    }
+    if (filters.commandId) {
+      clauses.push("command_id = $commandId");
+      params.$commandId = filters.commandId;
+    }
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+
+    return this.db
+      .prepare(
+        `SELECT profile, command_id, process_id,
+                MIN(timestamp) AS started_at, MAX(timestamp) AS last_at,
+                COUNT(*) AS lines, SUM(stream = 'stderr') AS stderr_lines
+         FROM logs ${where}
+         GROUP BY profile, command_id, process_id
+         ORDER BY MIN(id) DESC LIMIT $limit`,
+      )
+      .all({ ...params, $limit: filters.limit ?? 200 }) as LogRunRow[];
   }
 
   insertExecutionHistory(row: ExecutionHistoryRow): void {
