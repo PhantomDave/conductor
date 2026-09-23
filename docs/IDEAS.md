@@ -235,7 +235,7 @@ Retention + FTS folds into backlog item 6 whenever that comes up.
 
 ## Progress
 
-Build order follows the section above. Checked items are in the working tree, not committed.
+Build order follows the section above. Checked items are shipped (#65, #66, #71).
 
 - [x] **1. Restart policies** — `restart: manual | on_failure | always` on `CommandSchema`, keyed on process exit
   - [x] `restart` field in `packages/core/src/config/schema.ts`

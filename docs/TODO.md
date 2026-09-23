@@ -24,6 +24,7 @@ Confirmed done by reading the code, not by trusting the doc. Safe to delete thes
 | TS7 Phase 1 — oxlint replaces ESLint      | `.oxlintrc.json` present, no `eslint.config.js`, `"lint": "oxlint --deny-warnings"`                                                                  |
 | TS7 Phase 2 — React hooks lint rules      | Merged in #62                                                                                                                                        |
 | TS7 Phase 3 — TypeScript 7 bump           | Merged in #63                                                                                                                                        |
+| Backlog #6 + IDEAS "Sharpens" — log retention with FTS5 | Shipped in #72; `logs_fts` FTS5 table ([schema.sql:47](../packages/core/src/db/schema.sql)), `deleteLogsBefore`/`pruneOldSessions` ([queries.ts](../packages/core/src/db/queries.ts)), `log_retention_days`/`log_retention_sessions` on `ConductorConfigSchema` ([schema.ts:85-86](../packages/core/src/config/schema.ts)), GET/PUT `/api/log-retention` ([api.ts](../packages/core/src/api.ts)), `EnvironmentManager.tsx` control, [CONFIG.md](./CONFIG.md), `log-retention.test.ts` |
 
 One loose end from #3, not worth its own item: the audit label at
 [api.ts:297](../packages/core/src/api.ts) is still `"parse-docker compose"` (with the old space). Fix it
@@ -39,24 +40,14 @@ in passing next time that line is touched.
    (`api.ts:592,597,613,632`). Add plural aliases, mark canonical in `API.md`, deprecate the singular
    ones on a timeline.
 
-3. **Backlog #6 + IDEAS "Sharpens" — log retention with FTS5, on two axes.** Metrics already purge
-   via `deleteMetricBefore`; logs don't. IDEAS.md attaches real numbers to this: 3.1× storage
-   amplification without a trigram-tokenized FTS5 index, 7-day default window is the reference
-   implementation's choice. A second, configurable axis is also wanted: retention **by session**
-   (one session = one full `POST /api/profiles/:profile/run`, not a single command restart) —
-   keep the last N sessions per profile, N configurable next to `base_path`/`default_shell`. See
-   IDEAS.md's "Session-scoped retention" section for the `sessions` table / `logs.session_id`
-   shape. Build retention (both axes) and the FTS5 index together — the doc explains why they're
-   one change, not two.
-
-4. **IDEAS #4 — resource alerts that never kill.** `MetricCollector` is already wired (`bin/server.ts`,
+3. **IDEAS #4 — resource alerts that never kill.** `MetricCollector` is already wired (`bin/server.ts`,
    since #36) — sampling, retention, and `GET /api/processes/:pid/metrics` all work. What's actually open:
    add `max_cpu_pct` / `max_mem_mb` to the schema and hang notify logic off the existing `onSample` hook
    (notify-only, never kill; per-(service, resource) cooldown, 5 min default, so a threshold-boundary
    service doesn't spam), and wire a UI chart against the already-existing `fetchProcessMetrics` helper,
    which nothing currently calls.
 
-5. **IDEAS #5 — failure diagnosis panel.** Pure assembly over state Conductor already stores (failure
+4. **IDEAS #5 — failure diagnosis panel.** Pure assembly over state Conductor already stores (failure
    reason, output tail, last probe cycle, unhealthy deps) — no new subsystem. Last in the suggested order
    because nothing else depends on it.
 

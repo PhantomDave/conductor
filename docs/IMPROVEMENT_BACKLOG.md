@@ -3,7 +3,7 @@
 This file contains issue-ready improvements found during a full repository analysis.
 I could not create GitHub issues directly from this environment, so these are documented here for triage and copy/paste into Issues.
 
-Items 1, 2, 3, 5, and 8 shipped and were removed from this file — see
+Items 1, 2, 3, 5, 6, and 8 shipped and were removed from this file — see
 [docs/TODO.md](./TODO.md)'s "Already shipped" table for the evidence. Numbering below is kept
 as-is (not renumbered) since `TODO.md` cross-references these entries by number.
 
@@ -21,21 +21,6 @@ as-is (not renumbered) since `TODO.md` cross-references these entries by number.
 - **Acceptance criteria:**
   - CI runs CLI/UI tests
   - Failing behavior in command parsing/API contract is caught by tests
-
-## 6) Add retention controls for logs table growth
-
-- **Priority:** Medium
-- **Problem:** Metrics have cleanup support, but log retention policy is not implemented.
-- **Evidence:**
-  - Logs table schema: `/home/runner/work/conductor/conductor/packages/core/src/db/schema.sql`
-  - Metrics cleanup exists: `/home/runner/work/conductor/conductor/packages/core/src/db/queries.ts` (`deleteMetricBefore`)
-- **Impact:** Long-running usage may produce unbounded database growth.
-- **Scope:**
-  - Add configurable log retention (time-based and/or max rows and/or last-N-sessions per profile)
-  - Periodic cleanup task + manual cleanup command/API
-- **Acceptance criteria:**
-  - Log DB growth is bounded by configured policy
-  - Cleanup behavior is documented and observable
 
 ## 7) Add API endpoint consistency pass (`/api/command` vs `/api/commands`)
 
