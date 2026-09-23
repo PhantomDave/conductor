@@ -108,7 +108,8 @@ describe("log retention", () => {
       commandId: run.command_id,
       profile: run.profile,
     });
-    expect(lines.length).toBe(run.lines);
+    // >= : the process may still be writing between the two calls.
+    expect(lines.length).toBeGreaterThanOrEqual(run.lines);
   }, 30_000);
 });
 

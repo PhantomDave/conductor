@@ -98,7 +98,10 @@ export function LogHistory() {
             variant="default"
             aria-label="Refresh runs"
             loading={runsQuery.isFetching}
-            onClick={() => runsQuery.refetch()}
+            onClick={() => {
+              void runsQuery.refetch();
+              if (run) void logsQuery.refetch();
+            }}
           >
             <IconRefresh size={16} />
           </ActionIcon>

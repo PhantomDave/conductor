@@ -85,6 +85,10 @@ export function registerLogsCommand(program: import("commander").Command) {
         if (opts.limit) params.set("limit", opts.limit);
 
         if (opts.runs) {
+          if (opts.follow || opts.grep || opts.level || opts.pid) {
+            console.error(pc.red("✗ --runs only combines with --command, --profile and --limit"));
+            process.exit(1);
+          }
           const runs = await fetchJson<{ runs: LogRun[] }>(`/api/logs/runs?${params.toString()}`);
           if (runs.runs.length === 0) console.log(pc.dim("No runs found."));
           for (const r of runs.runs) {
