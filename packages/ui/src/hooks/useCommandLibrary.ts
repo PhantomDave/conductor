@@ -52,7 +52,7 @@ export function useCommandLibrary() {
   });
 
   return {
-    commands: commandsQuery.data ?? {},
+    commands: commandsQuery.data ?? [],
     isLoading: commandsQuery.isLoading,
     error: commandsQuery.error,
     addItem: addMutation.mutate,

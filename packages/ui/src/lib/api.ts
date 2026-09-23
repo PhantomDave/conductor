@@ -192,10 +192,10 @@ export async function createCommand(profile: string, input: CommandInput): Promi
   return data.command;
 }
 
-export async function fetchAllCommands(): Promise<Record<string, CommandInfo>> {
+export async function fetchAllCommands(): Promise<CommandInfo[]> {
   const res = await fetch(`${API_BASE}/command`);
   const data = await parseJsonOrThrow(res, "Failed to fetch commands");
-  return data.commands ?? {};
+  return data.commands ?? [];
 }
 
 /** Add an existing root-level command ID to a profile's command_ids. */
