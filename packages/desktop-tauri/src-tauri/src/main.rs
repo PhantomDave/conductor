@@ -211,9 +211,31 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+const ICON_BYTES: &[u8] = include_bytes!("../icons/icon-source.png");
+
+/// GNOME only shows an app icon for windows matched to an installed .desktop
+/// file (WM_CLASS / app_id `conductor`), and a bare AppImage installs none -
+/// so write one pointing at this AppImage. No-op outside an AppImage.
+fn integrate_appimage(app: &AppHandle) -> std::io::Result<()> {
+    let Some(appimage) = std::env::var_os("APPIMAGE") else {
+        return Ok(());
+    };
+    let data = app.path().data_dir().map_err(std::io::Error::other)?;
+    let icon = data.join("icons/conductor/conductor.png");
+    std::fs::create_dir_all(icon.parent().unwrap())?;
+    std::fs::write(&icon, ICON_BYTES)?;
+    let entry = format!(
+        "[Desktop Entry]\nType=Application\nName=Conductor\nComment=Universal task runner & dashboard for developers\nExec=\"{}\"\nIcon={}\nStartupWMClass=conductor\nTerminal=false\n",
+        appimage.to_string_lossy(),
+        icon.display()
+    );
+    let apps = data.join("applications");
+    std::fs::create_dir_all(&apps)?;
+    std::fs::write(apps.join("conductor.desktop"), entry)
+}
+
 async fn create_window(app: &AppHandle, port: u16) -> Result<(), String> {
-    let icon_bytes = include_bytes!("../icons/icon-source.png");
-    let icon = Image::from_bytes(icon_bytes).map_err(|e| e.to_string())?;
+    let icon = Image::from_bytes(ICON_BYTES).map_err(|e| e.to_string())?;
 
     let origin = format!("http://127.0.0.1:{port}");
     let url: tauri::Url = format!("{origin}/")
@@ -277,6 +299,13 @@ fn main() {
                     });
                 }
             });
+
+            // Before the window exists, so GNOME can match it on creation.
+            if cfg!(target_os = "linux") {
+                if let Err(err) = integrate_appimage(app.handle()) {
+                    eprintln!("[main] AppImage desktop integration failed: {err}");
+                }
+            }
 
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
