@@ -17,6 +17,13 @@ import { which } from "bun";
 export interface ShellCommand {
   bin: string;
   flag: string;
+  /**
+   * Pass as `windowsVerbatimArguments`. cmd.exe doesn't parse MSVCRT-style
+   * `\"` escaping, so the default quoting mangles any command containing
+   * double quotes (`bun -e "..."` got a truncated script). Node's own
+   * `shell: true` sets this for cmd too. Ignored off Windows.
+   */
+  verbatim: boolean;
 }
 
 /** Well-known shell binaries whose CLI flag for "run this string" isn't `-c`. */
@@ -33,13 +40,17 @@ function flagFor(bin: string): string {
   return FLAG_OVERRIDES[basename(bin).toLowerCase()] ?? "-c";
 }
 
+function isCmd(bin: string): boolean {
+  return /^cmd(\.exe)?$/.test(basename(bin).toLowerCase());
+}
+
 export function resolveShell(configuredShell?: string): ShellCommand {
   const bin =
     configuredShell?.trim() ||
     (process.platform === "win32" ? process.env.COMSPEC : process.env.SHELL) ||
     (process.platform === "win32" ? "cmd.exe" : "/bin/sh");
 
-  return { bin, flag: flagFor(bin) };
+  return { bin, flag: flagFor(bin), verbatim: isCmd(bin) };
 }
 
 export interface ShellOption {

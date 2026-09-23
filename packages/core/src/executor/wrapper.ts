@@ -65,11 +65,11 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 /**
  * Sends a signal to the entire process group (POSIX) or terminates the
- * whole process tree (Windows). Commands often run through a shell
+ * whole process tree (Windows, via taskkill /T). Commands often run through a shell
  * (`bash -c "dotnet watch ..."`), and killing only the shell leader would
  * orphan the real service — which keeps running and holds its port after
  * a restart. Because every managed process is spawned with
- * `detached: true` (setsid), the leader is its own process-group leader,
+ * `detached: true` (setsid) on POSIX, the leader is its own process-group leader,
  * so a negative-pid kill reaches every member.
  */
 function killTree(pid: number, signal: NodeJS.Signals): void {
@@ -154,6 +154,13 @@ export class ProcessWrapper {
   private logLineMatched = false;
   /** Interpolated `log_line` pattern, precomputed once so pumpStream doesn't re-derive it per line. */
   private readonly logLinePattern: string | undefined;
+  /**
+   * Settles once the current subprocess has exited *and* both output pumps
+   * have emitted their last line. `exited` alone can resolve while buffered
+   * output is still unread, which is how `conductor run` used to drop a
+   * short-lived command's stdout. Never rejects.
+   */
+  drained: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly commandConfig: CommandConfig,
@@ -383,13 +390,15 @@ export class ProcessWrapper {
     const cwd = this.resolvedCwd();
 
     let cmd: string[];
+    let verbatim = false;
     // A command containing newlines is always multi-statement and must run
     // through a shell regardless of the explicit `shell` setting, because
     // there is no way to exec multiple commands in a single process otherwise.
     const useShell = this.commandConfig.shell || this.commandConfig.run.includes("\n");
     if (useShell) {
-      const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
-      cmd = [bin, flag, this.commandConfig.run];
+      const shell = resolveShell(this.env.CONDUCTOR_SHELL);
+      cmd = [shell.bin, shell.flag, this.commandConfig.run];
+      verbatim = shell.verbatim;
     } else {
       // No shell in the middle to do word-splitting for us, so do it
       // ourselves — quote-aware, so e.g. `node "my script.js"` or
@@ -403,10 +412,14 @@ export class ProcessWrapper {
       env: this.env,
       stdout: "pipe",
       stderr: "pipe",
+      windowsVerbatimArguments: verbatim,
       // Run in its own process group/session (setsid on POSIX) so we can
       // later kill the whole tree — the shell leader alone is not the
       // real service and can exit while its children keep running.
-      detached: true,
+      // Not on Windows: there it means DETACHED_PROCESS, so cmd.exe has no
+      // console and its console children (e.g. `bun`) get a fresh hidden
+      // one and write there instead of our pipes. taskkill /T needs no group.
+      detached: process.platform !== "win32",
     });
 
     this.process = {
@@ -425,20 +438,23 @@ export class ProcessWrapper {
     this.logLineMatched = false;
 
     const owner = this.process;
-    this.pumpStream(subprocess.stdout, "stdout", owner).catch((err) => {
+    const stdoutPump = this.pumpStream(subprocess.stdout, "stdout", owner).catch((err) => {
       this.emitLogFor(
         owner,
         `stdout pump failed: ${err instanceof Error ? err.message : String(err)}`,
         "stderr",
       );
     });
-    this.pumpStream(subprocess.stderr, "stderr", owner).catch((err) => {
+    const stderrPump = this.pumpStream(subprocess.stderr, "stderr", owner).catch((err) => {
       this.emitLogFor(
         owner,
         `stderr pump failed: ${err instanceof Error ? err.message : String(err)}`,
         "stderr",
       );
     });
+    this.drained = Promise.all([subprocess.exited.catch(() => {}), stdoutPump, stderrPump]).then(
+      () => {},
+    );
 
     subprocess.exited
       .then((exitCode) => {
@@ -535,7 +551,7 @@ export class ProcessWrapper {
 
     if (this.commandConfig.stop_command) {
       try {
-        const { bin, flag } = resolveShell(this.env.CONDUCTOR_SHELL);
+        const { bin, flag, verbatim } = resolveShell(this.env.CONDUCTOR_SHELL);
         // Resolve cwd the same way the main process does so that relative
         // stop commands (e.g. `docker compose stop`) run from the correct dir.
         const cwd = this.resolvedCwd();
@@ -545,7 +561,8 @@ export class ProcessWrapper {
           env: this.env,
           stdout: "inherit",
           stderr: "inherit",
-          detached: true,
+          windowsVerbatimArguments: verbatim,
+          detached: process.platform !== "win32",
         });
         // Give the stop command the same deadline as the overall stop timeout.
         // If it hangs, kill it (and its group) and fall through to the

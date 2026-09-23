@@ -763,6 +763,22 @@ export class SpawnQueue {
     await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
   }
 
+  /**
+   * Resolves once every started command has exited and its output drained.
+   * Re-checks after each round so a lifecycle started meanwhile (restart,
+   * watch — new wrapper or a re-`start()`ed one) is waited on too.
+   * ponytail: a restart still in its backoff delay isn't a wrapper yet, so
+   * this can return during that gap; track pending restart timers if a
+   * foreground `run` with `restart:` policies needs to outlive it.
+   */
+  async waitForExit(): Promise<void> {
+    let waited: Promise<void>[];
+    do {
+      waited = [...this.wrappers.values()].map((w) => w.drained);
+      await Promise.all(waited);
+    } while ([...this.wrappers.values()].some((w) => !waited.includes(w.drained)));
+  }
+
   async stopAll(): Promise<void> {
     for (const watcher of this.watchers.values()) watcher.stop();
     this.watchers.clear();
