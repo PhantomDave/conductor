@@ -40,22 +40,22 @@ profiles:
 
 ## Top-Level Fields
 
-| Field           | Type                            | Default                                 | Description                                                   |
-| --------------- | ------------------------------- | --------------------------------------- | ------------------------------------------------------------- |
-| `version`       | string                          | `"1"`                                   | Config schema version                                         |
-| `name`          | string                          | —                                       | Display name in UI/logs                                       |
-| `description`   | string                          | —                                       | Profile-group-level description                               |
-| `author`        | string                          | —                                       | Template author (display only)                                |
-| `keywords`      | string[]                        | —                                       | Tags for discoverability                                      |
-| `tags`          | string[]                        | —                                       | Human-readable tags                                           |
-| `env_secrets`   | string[]                        | `[]`                                    | Variable names masked everywhere (`[FILTERED]`)               |
-| `base_path`     | string                          | `"."`                                   | Directory resolution; also overridden by `$BASE_PATH` env var |
-| `default_shell` | string                          | system default (`$SHELL` / `%COMSPEC%`) | Default shell for non-shell commands                          |
-| `global_env`    | Record\<string, string\>        | `{}`                                    | Merged into every command's environment                       |
-| `log_retention_days` | number                     | `7`                                     | Time-window log retention (hourly sweep); `0` disables. Edited via GET/PUT `/api/log-retention` or the Environment tab, not the YAML directly. |
-| `log_retention_sessions` | number                 | `10`                                    | Keeps only the last N sessions' logs per profile (a session = one `POST /profiles/:profile/run`); `0` disables. Same edit path as above. |
-| `commands`      | CommandSchema[]                 | —                                       | **Root-level commands** (single source of truth)              |
-| `profiles`      | Record\<string, ProfileSchema\> | _(required)_                            | Named sets that reference commands by ID                      |
+| Field                    | Type                            | Default                                 | Description                                                                                                                                    |
+| ------------------------ | ------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`                | string                          | `"1"`                                   | Config schema version                                                                                                                          |
+| `name`                   | string                          | —                                       | Display name in UI/logs                                                                                                                        |
+| `description`            | string                          | —                                       | Profile-group-level description                                                                                                                |
+| `author`                 | string                          | —                                       | Template author (display only)                                                                                                                 |
+| `keywords`               | string[]                        | —                                       | Tags for discoverability                                                                                                                       |
+| `tags`                   | string[]                        | —                                       | Human-readable tags                                                                                                                            |
+| `env_secrets`            | string[]                        | `[]`                                    | Variable names masked everywhere (`[FILTERED]`)                                                                                                |
+| `base_path`              | string                          | `"."`                                   | Directory resolution; also overridden by `$BASE_PATH` env var                                                                                  |
+| `default_shell`          | string                          | system default (`$SHELL` / `%COMSPEC%`) | Default shell for non-shell commands                                                                                                           |
+| `global_env`             | Record\<string, string\>        | `{}`                                    | Merged into every command's environment                                                                                                        |
+| `log_retention_days`     | number                          | `7`                                     | Time-window log retention (hourly sweep); `0` disables. Edited via GET/PUT `/api/log-retention` or the Environment tab, not the YAML directly. |
+| `log_retention_sessions` | number                          | `10`                                    | Keeps only the last N sessions' logs per profile (a session = one `POST /profiles/:profile/run`); `0` disables. Same edit path as above.       |
+| `commands`               | CommandSchema[]                 | —                                       | **Root-level commands** (single source of truth)                                                                                               |
+| `profiles`               | Record\<string, ProfileSchema\> | _(required)_                            | Named sets that reference commands by ID                                                                                                       |
 
 ## CommandSchema (root level)
 
