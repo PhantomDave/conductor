@@ -1,0 +1,15 @@
+# TEMPORARY — delete before merge.
+name: debug-win
+on:
+  push:
+    branches: [fix/managed-output-drain]
+jobs:
+  diag:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun --version
+      - run: bun .github/debug/win-spawn.ts
