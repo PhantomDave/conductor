@@ -65,10 +65,20 @@ export function registerRunCommand(program: import("commander").Command) {
       process.on("SIGINT", shutdown);
       process.on("SIGTERM", shutdown);
 
-      if (commandId) {
-        await queue.startOne(commandId, onLog);
-      } else {
-        await queue.startAll(onLog);
+      // A pending promise doesn't hold Bun's event loop open, and once a
+      // child exits its pipe reads don't either (seen on macOS) - keep a
+      // ref'd timer alive until every command has exited and drained.
+      const keepAlive = setInterval(() => {}, 1 << 30);
+      try {
+        if (commandId) {
+          await queue.startOne(commandId, onLog);
+        } else {
+          await queue.startAll(onLog);
+        }
+        // Long-running services keep us here until SIGINT/SIGTERM.
+        await queue.waitForExit();
+      } finally {
+        clearInterval(keepAlive);
       }
     });
 }

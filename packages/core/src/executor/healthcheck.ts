@@ -61,10 +61,11 @@ async function checkCommand(
   env: Record<string, string>,
 ): Promise<boolean> {
   try {
-    const { bin, flag } = resolveShell(configuredShell);
+    const { bin, flag, verbatim } = resolveShell(configuredShell);
     const proc = Bun.spawn({
       cmd: [bin, flag, command],
       cwd,
+      windowsVerbatimArguments: verbatim,
       // Match the env the actual command runs with, so a probe like
       // `psql $DATABASE_URL` (shell-expanded, not `${VAR}`-interpolated by
       // Conductor itself) sees the same variables the process it's

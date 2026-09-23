@@ -32,9 +32,17 @@ describe("resolveShell", () => {
     // running on win32 (node:path picks its flavor from the real host OS,
     // not from a mocked process.platform), so a full "C:\..." path can't be
     // parsed correctly from a non-Windows CI runner.
-    expect(resolveShell("cmd.exe")).toEqual({ bin: "cmd.exe", flag: "/c" });
-    expect(resolveShell("powershell.exe")).toEqual({ bin: "powershell.exe", flag: "-Command" });
-    expect(resolveShell("pwsh.exe")).toEqual({ bin: "pwsh.exe", flag: "-Command" });
+    expect(resolveShell("cmd.exe")).toEqual({ bin: "cmd.exe", flag: "/c", verbatim: true });
+    expect(resolveShell("powershell.exe")).toEqual({
+      bin: "powershell.exe",
+      flag: "-Command",
+      verbatim: false,
+    });
+    expect(resolveShell("pwsh.exe")).toEqual({
+      bin: "pwsh.exe",
+      flag: "-Command",
+      verbatim: false,
+    });
   });
 
   test("falls back to $SHELL on POSIX when nothing is configured", () => {

@@ -29,7 +29,7 @@ commands:
 
   - id: world
     name: "World"
-    description: "Runs after `hello` completes."
+    description: "Starts once `hello` is ready (spawned - it has no healthcheck)."
     run: bun -e "console.log('world')"
     shell: true
     deps: [hello]
