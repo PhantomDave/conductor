@@ -82,6 +82,42 @@ describe("SpawnQueue.startOne - dependency ordering", () => {
   });
 });
 
+describe("SpawnQueue - launching profile", () => {
+  // The store runs every profile on one queue named "__global__"; logs,
+  // snapshots and notifications must carry the profile that launched the
+  // process, or `conductor logs --profile dev` and session retention miss them.
+  test("tags a profile run (deps included) and keeps the tag across restarts", async () => {
+    const run = `bun -e "console.log('up'); setInterval(() => {}, 1000)"`;
+    const dep = makeCommand({ id: "dep", name: "Dep", run });
+    const child = makeCommand({ id: "child", name: "Child", run, deps: ["dep"] });
+    const queue = new SpawnQueue("__global__", [dep, child], () => testEnv());
+    const logged: string[] = [];
+    const onLog = (e: { profile: string }) => logged.push(e.profile);
+
+    await queue.startMany(["child"], onLog, "dev");
+    expect(queue.getWrapper("dep")?.getSnapshot().profile).toBe("dev");
+    expect(queue.getWrapper("child")?.getSnapshot().profile).toBe("dev");
+    expect(logged.length).toBeGreaterThan(0);
+    expect(new Set(logged)).toEqual(new Set(["dev"]));
+
+    await queue.restartOne("child");
+    expect(queue.getWrapper("child")?.getSnapshot().profile).toBe("dev");
+
+    await queue.startOne("child", onLog, "__global__");
+    expect(queue.getWrapper("child")?.getSnapshot().profile).toBe("__global__");
+
+    await queue.stopAll();
+  });
+
+  test("falls back to the queue name when no profile is given", async () => {
+    const cmd = makeCommand({ id: "solo", name: "Solo", run: `bun -e "console.log('x')"` });
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    await queue.startOne("solo");
+    expect(queue.getWrapper("solo")?.getSnapshot().profile).toBe("test");
+    await queue.stopAll();
+  });
+});
+
 describe("SpawnQueue - log_line healthcheck", () => {
   test("becomes healthy once the pattern appears in the process's own output", async () => {
     // Exercises the actual wiring in startSingleProcess: waitForHealthy only
