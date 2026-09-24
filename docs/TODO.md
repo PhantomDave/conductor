@@ -54,6 +54,10 @@ in passing next time that line is touched.
    reason, output tail, last probe cycle, unhealthy deps) — no new subsystem. Last in the suggested order
    because nothing else depends on it.
 
+5. **Backlog #9 — theming option (light / dark / auto).** Mantine supports it natively. The real work is
+   un-hard-coding the dark literals in `global.css` and the log components, and persisting the choice
+   server-side: the Tauri shell's random per-launch port makes `localStorage` reset on every desktop start.
+
 ## Standing rules for every item above
 
 - A feature isn't done until schema/API, CLI, and UI all cover it — a backend-only field is not a
