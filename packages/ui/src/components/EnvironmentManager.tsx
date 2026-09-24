@@ -36,6 +36,7 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { useProfiles } from "../hooks/useProfiles";
 import { SectionHeading } from "./SectionHeading";
+import { AboutCard } from "./AboutCard";
 import {
   useEnvVars,
   useUpsertEnvVar,
@@ -698,6 +699,7 @@ export function EnvironmentManager() {
       <BasePathCard />
       <ShellCard />
       <LogRetentionCard />
+      <AboutCard />
       <ConfigCompilerCard profileNames={profileNames} />
 
       <Tabs defaultValue="global">

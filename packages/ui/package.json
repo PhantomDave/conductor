@@ -2,6 +2,7 @@
   "name": "@conductor/ui",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Conductor web dashboard",
   "type": "module",
   "scripts": {
