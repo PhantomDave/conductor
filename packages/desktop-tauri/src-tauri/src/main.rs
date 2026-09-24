@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use tauri::menu::{MenuBuilder, SubmenuBuilder};
+use tauri::menu::{AboutMetadataBuilder, MenuBuilder, SubmenuBuilder};
 use tauri::path::BaseDirectory;
 use tauri::{image::Image, AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_opener::OpenerExt;
@@ -158,43 +158,57 @@ async fn stop_sidecar(state: &SidecarState) {
     }
 }
 
-/// Checks for an update and installs it if one is available. tauri-plugin-updater
-/// installs immediately on download rather than deferring to next quit, so we
-/// explicitly restart once the install finishes. `log_if_current` distinguishes
-/// the menu-triggered check (should say something either way) from the silent
-/// startup check (which only logs, never prompts).
-async fn check_for_updates(app: AppHandle, log_if_current: bool) {
-    let updater = match app.updater() {
-        Ok(updater) => updater,
-        Err(err) => {
-            eprintln!("[updater] unavailable: {err}");
-            return;
-        }
-    };
-    match updater.check().await {
-        Ok(Some(update)) => {
-            println!("[updater] update {} available, downloading", update.version);
-            if let Err(err) = update.download_and_install(|_, _| {}, || {}).await {
-                eprintln!("[updater] download/install failed: {err}");
-                return;
-            }
-            println!("[updater] installed, restarting");
-            app.request_restart();
-        }
-        Ok(None) => {
-            if log_if_current {
-                println!("[updater] already up to date");
-            }
-        }
-        Err(err) => eprintln!("[updater] check failed: {err}"),
-    }
+/// Settings page "Check for updates": reports the version the updater compares
+/// against (tauri.conf.json's, 0.0.0 in dev builds) and the newer one, if any.
+#[tauri::command]
+async fn check_update(app: AppHandle) -> Result<serde_json::Value, String> {
+    let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "current": app.package_info().version.to_string(),
+        "available": update.map(|u| u.version),
+    }))
+}
+
+const UP_TO_DATE: &str = "Already up to date";
+
+/// Downloads and installs the latest update, then restarts. tauri-plugin-updater
+/// installs immediately on download rather than deferring to next quit, hence
+/// the explicit restart. On Linux this only works when running as an AppImage.
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or(UP_TO_DATE)?;
+    println!("[updater] update {} available, downloading", update.version);
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| e.to_string())?;
+    println!("[updater] installed, restarting");
+    app.request_restart();
+    Ok(())
 }
 
 fn build_menu(app: &AppHandle) -> tauri::Result<()> {
+    let icon = Image::from_bytes(ICON_BYTES)?;
+    let about = AboutMetadataBuilder::new()
+        .name(Some("Conductor"))
+        .version(Some(app.package_info().version.to_string()))
+        .authors(Some(vec!["PhantomDave".into()]))
+        .comments(Some("Universal task runner & dashboard for developers"))
+        .copyright(Some("© 2026 PhantomDave"))
+        .license(Some("MIT"))
+        .website(Some("https://github.com/PhantomDave/conductor"))
+        .website_label(Some("GitHub"))
+        .icon(Some(icon))
+        .build();
     let app_menu = SubmenuBuilder::new(app, "Conductor")
-        .about(None)
+        .about(Some(about))
         .separator()
-        .text("check_for_updates", "Check for Updates...")
         .quit()
         .build()?;
     let edit_menu = SubmenuBuilder::new(app, "Edit")
@@ -242,6 +256,7 @@ async fn create_window(app: &AppHandle, port: u16) -> Result<(), String> {
         .parse()
         .expect("loopback url is always well-formed");
     let opener = app.clone();
+    let new_window_opener = app.clone();
     let nav_origin = origin.clone();
 
     let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
@@ -259,6 +274,11 @@ async fn create_window(app: &AppHandle, port: u16) -> Result<(), String> {
             }
             let _ = opener.opener().open_url(url.to_string(), None::<&str>);
             false
+        })
+        // target="_blank" links (About card) request a new window instead.
+        .on_new_window(move |url, _| {
+            let _ = new_window_opener.opener().open_url(url.to_string(), None::<&str>);
+            tauri::webview::NewWindowResponse::Deny
         })
         .build()
         .map_err(|e| e.to_string())?;
@@ -290,16 +310,8 @@ fn main() {
             child: Mutex::new(None),
             exited: Arc::new(AtomicBool::new(false)),
         })
+        .invoke_handler(tauri::generate_handler![check_update, install_update])
         .setup(|app| {
-            app.on_menu_event(|app, event| {
-                if event.id() == "check_for_updates" {
-                    let handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        check_for_updates(handle, true).await;
-                    });
-                }
-            });
-
             // Before the window exists, so GNOME can match it on creation.
             if cfg!(target_os = "linux") {
                 if let Err(err) = integrate_appimage(app.handle()) {
@@ -316,11 +328,14 @@ fn main() {
                 }
             });
 
-            // Silent startup check, packaged builds only.
+            // Silent startup check-and-install, packaged builds only.
             if !cfg!(debug_assertions) {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    check_for_updates(handle, false).await;
+                    match install_update(handle).await {
+                        Err(err) if err != UP_TO_DATE => eprintln!("[updater] {err}"),
+                        _ => {}
+                    }
                 });
             }
 

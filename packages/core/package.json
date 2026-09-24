@@ -2,6 +2,7 @@
   "name": "@conductor/core",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Conductor core engine: config, executor, logger, database, API",
   "type": "module",
   "main": "./src/index.ts",

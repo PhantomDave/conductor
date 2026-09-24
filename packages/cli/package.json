@@ -2,6 +2,7 @@
   "name": "@conductor/cli",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Conductor CLI — run and manage your dev workflows",
   "type": "module",
   "bin": {

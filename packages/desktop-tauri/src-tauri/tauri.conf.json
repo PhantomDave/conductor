@@ -9,7 +9,7 @@
   },
   "app": {
     "windows": [],
-    "withGlobalTauri": false
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
@@ -25,7 +25,13 @@
     "resources": {
       "../../ui/dist/": "ui-dist"
     },
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "publisher": "PhantomDave",
+    "copyright": "© 2026 PhantomDave",
+    "license": "MIT",
+    "licenseFile": "../../../LICENSE",
+    "category": "DeveloperTool",
+    "shortDescription": "Universal task runner & dashboard for developers"
   },
   "plugins": {
     "updater": {

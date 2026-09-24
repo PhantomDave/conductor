@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sidecar-ui",
+  "description": "The UI is served by the sidecar (a remote origin to Tauri): only the updater commands, never shell access",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*"]
+  },
+  "permissions": ["allow-check-update", "allow-install-update"]
+}
