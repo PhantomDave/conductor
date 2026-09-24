@@ -127,7 +127,7 @@ function parseDotenv(text: string): Array<{ key: string; value: string }> {
 }
 
 /** Heuristic used when importing vars without an explicit secret flag. */
-function looksSecret(key: string): boolean {
+export function looksSecret(key: string): boolean {
   return /secret|token|password|key|credential|api_key/i.test(key);
 }
 

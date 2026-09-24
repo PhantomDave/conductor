@@ -1,29 +1,15 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import pc from "picocolors";
-import { requireConfig } from "../config-context";
+import { buildProfileEnv, dbEnvLookup, looksSecret } from "@conductor/core";
+import { openQueries, requireConfig } from "../config-context";
 
-function envFilePath(profile: string): string {
-  return `.env.${profile}.local`;
-}
-
-function readLocalEnv(profile: string): Record<string, string> {
-  const path = envFilePath(profile);
-  if (!existsSync(path)) return {};
-
-  const content = readFileSync(path, "utf-8");
-  const env: Record<string, string> = {};
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const [key, ...rest] = trimmed.split("=");
-    if (key) env[key] = rest.join("=");
+function requireProfile(profile: string) {
+  const ctx = requireConfig();
+  const selected = ctx.config.profiles[profile];
+  if (!selected) {
+    console.error(pc.red(`✗ Unknown profile "${profile}"`));
+    process.exit(1);
   }
-  return env;
-}
-
-function writeLocalEnv(profile: string, env: Record<string, string>): void {
-  const lines = Object.entries(env).map(([k, v]) => `${k}=${v}`);
-  writeFileSync(envFilePath(profile), lines.join("\n") + "\n");
+  return { ...ctx, selected };
 }
 
 export function registerEnvCommand(program: import("commander").Command) {
@@ -31,28 +17,32 @@ export function registerEnvCommand(program: import("commander").Command) {
 
   env
     .command("get <profile> <key>")
-    .description("Read an env var for a profile")
+    .description("Read the value a profile's commands will see for an env var")
     .action((profile: string, key: string) => {
-      const { config } = requireConfig();
-      const selected = config.profiles[profile];
-      if (!selected) {
-        console.error(pc.red(`✗ Unknown profile "${profile}"`));
-        process.exit(1);
-      }
-
-      const local = readLocalEnv(profile);
-      const value = local[key] ?? selected.env[key];
-      console.log(value ?? pc.dim("(not set)"));
+      const { config, configPath, selected } = requireProfile(profile);
+      const dbEnv = dbEnvLookup(openQueries(configPath));
+      const resolved = buildProfileEnv({
+        configFilePath: configPath,
+        config,
+        profile: selected,
+        dbGlobalEnv: dbEnv("__global__"),
+        dbProfileEnv: dbEnv(profile),
+      });
+      console.log(resolved[key] ?? pc.dim("(not set)"));
     });
 
   env
     .command("set <profile> <key> <value>")
-    .description("Set a local env var override for a profile")
+    .description("Set an env var for a profile (same store as the UI's Environment tab)")
     .action((profile: string, key: string, value: string) => {
-      requireConfig();
-      const local = readLocalEnv(profile);
-      local[key] = value;
-      writeLocalEnv(profile, local);
-      console.log(pc.green(`✓ Set ${key} in ${envFilePath(profile)}`));
+      const { configPath } = requireProfile(profile);
+      openQueries(configPath).upsertEnvVar({
+        scope: "profile",
+        profile,
+        key,
+        value,
+        isSecret: looksSecret(key),
+      });
+      console.log(pc.green(`✓ Set ${key} for profile "${profile}"`));
     });
 }

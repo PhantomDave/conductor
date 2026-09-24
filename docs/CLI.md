@@ -42,18 +42,17 @@ Hits `/api/processes` and prints the raw JSON array of process snapshots. If the
 
 ### conductor env
 
-Manage environment variables persisted in `.env.<profile>.local`.
+Manage profile environment variables stored in the SQLite DB (`.conductor/data/conductor.sqlite` next to `.conductor.yml`) — the same store as the UI's Environment tab, so `run`, `configure` and the server all see them.
 
 ```
 usage: conductor env get <profile> <key>
-usage: conductor env set <profile> <key> <value> [--secret]
+usage: conductor env set <profile> <key> <value>
 ```
 
-- `get` — reads an env var from the profile's local file
-- `set` — writes a var (creates the file if it doesn't exist)
-- `--secret` — marks the variable as secret (stored with masked value in logs)
+- `get` — prints the fully resolved value the profile's commands will see (all layers, `${VAR}` interpolated)
+- `set` — stores a profile-scoped var; keys that look secret (`*TOKEN*`, `*PASSWORD*`, ...) are flagged as secret
 
-These vars are merged during execution: **global_env** → **profile.env** → **command env_overrides**. The CLI files follow `.env.local` semantics: they take precedence over system variables but below explicit overrides.
+Merge order (later wins): system env → `global_env` → DB global vars → profile `env` → DB profile vars → command `env_overrides`.
 
 ### conductor config validate
 

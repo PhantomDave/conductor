@@ -112,13 +112,15 @@ Check the environment resolution order:
 
 1. System environment variables ($PATH, node, etc.) are always injected from host OS.
 2. `global_env` in config merges next.
-3. Profile-level `env`.
-4. Command-specific `env_overrides`.
+3. Global vars from the Environment tab (SQLite).
+4. Profile-level `env`.
+5. Profile vars from the Environment tab / `conductor env set` (SQLite).
+6. Command-specific `env_overrides`.
 
-If a var disappears between your editor and the running process: it was overridden by a higher-priority entry. Use `conductor env get <profile> <key>` to see what's actually stored in `.env.<profile>.local`:
+If a var disappears between your editor and the running process: it was overridden by a higher-priority entry. Use `conductor env get <profile> <key>` to see the resolved value:
 
 ```bash
-conductor env dev NODE_ENV   # shows current value for profile 'dev'
+conductor env get dev NODE_ENV   # shows the value profile 'dev' commands will see
 ```
 
 ### Secrets appear as [FILTERED] everywhere (including API responses)
