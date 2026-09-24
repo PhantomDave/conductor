@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SpawnQueue } from "../src/executor/queue";
@@ -254,11 +254,20 @@ describe("SpawnQueue.stopAll", () => {
 
 describe("SpawnQueue.startAll - concurrency", () => {
   test("starts independent commands concurrently instead of one at a time", async () => {
-    // Each command's healthcheck itself takes ~200ms to pass (a single
-    // successful attempt, so `retries` never matters). Two independent
-    // commands run serially would take ~400ms+; run concurrently, close to
-    // one 200ms healthcheck.
-    const sleepScript = writeScript("Bun.sleepSync(200)");
+    // Each healthcheck probe sleeps 500ms and records its own [start, end]
+    // wall-clock window (one file per probe process). Run serially, the second
+    // probe can only start after the first ends; run concurrently, the windows
+    // overlap. Asserting overlap proves concurrency without a total-elapsed
+    // bound, which flaked on slow CI runners.
+    const probeDir = mkdtempSync(join(tmpdir(), "conductor-queue-probes-"));
+    const sleepScript = writeScript(`
+      const start = Date.now();
+      Bun.sleepSync(500);
+      require("node:fs").writeFileSync(
+        require("node:path").join(${JSON.stringify(probeDir)}, process.pid + ".json"),
+        JSON.stringify({ start, end: Date.now() }),
+      );
+    `);
     try {
       const slowHealthcheck = {
         type: "command" as const,
@@ -281,16 +290,22 @@ describe("SpawnQueue.startAll - concurrency", () => {
       });
       const queue = new SpawnQueue("test", [a, b], () => testEnv());
 
-      const start = Date.now();
       await queue.startAll();
-      const elapsed = Date.now() - start;
 
       expect(queue.listSnapshots().every((s) => s.status === "running")).toBe(true);
-      expect(elapsed).toBeLessThan(350);
+      const probes = readdirSync(probeDir)
+        .map(
+          (f) =>
+            JSON.parse(readFileSync(join(probeDir, f), "utf8")) as { start: number; end: number },
+        )
+        .sort((x, y) => x.start - y.start);
+      expect(probes.length).toBeGreaterThanOrEqual(2);
+      expect(probes[1]!.start).toBeLessThan(probes[0]!.end);
 
       await queue.stopAll();
     } finally {
       sleepScript.cleanup();
+      rmSync(probeDir, { recursive: true, force: true });
     }
   });
 
