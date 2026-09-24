@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { discoverConfigPath, loadConfig, createDefaultConfig } from "../src";
 import { saveConfig } from "../src";
 import { ConfigStore } from "../src";
 import { createLogger } from "../src";
 import { openDatabase, DEFAULT_DB_PATH } from "../src";
-import { ConductorQueries } from "../src";
+import { ConductorQueries, dbEnvLookup } from "../src";
 import { LogBroadcaster } from "../src";
 import type { LogEntry } from "../src";
 import { buildApi } from "../src";
@@ -27,19 +27,12 @@ async function main() {
 
   const config = loadConfig(configPath);
   const logger = createLogger({ secretKeys: config.env_secrets });
-  const db = openDatabase(DEFAULT_DB_PATH);
+  // Next to the config (not cwd), so the CLI's `openQueries` finds the same DB.
+  const db = openDatabase(join(dirname(configPath), DEFAULT_DB_PATH));
   const queries = new ConductorQueries(db);
   const broadcaster = new LogBroadcaster();
 
-  const resolveDbEnv = (scope: string): Record<string, string> => {
-    const rows =
-      scope === "__global__"
-        ? queries.listEnvVars("global")
-        : queries.listEnvVars("profile", scope);
-    return Object.fromEntries(rows.map((row) => [row.key, row.value]));
-  };
-
-  const store = new ConfigStore(configPath, config, resolveDbEnv);
+  const store = new ConfigStore(configPath, config, dbEnvLookup(queries));
 
   // CPU/memory metrics collector — samples process-group totals every 5s
   // and persists them to SQLite for historical query by the UI.

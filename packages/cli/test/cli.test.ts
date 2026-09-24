@@ -2,7 +2,8 @@
 // read CONDUCTOR_API_URL at import, so in-process testing isn't an option)
 // against a real core instance and a temp .conductor.yml.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startCore } from "../../core/test/fixtures/api-harness";
 
@@ -75,13 +76,30 @@ describe("env", () => {
     expect(r.stdout.trim()).toBe("dev-value");
   });
 
-  test("set writes .env.<profile>.local and get reads it back", async () => {
+  test("set stores the var in the DB and get reads it back", async () => {
     expect((await cli(["env", "set", "dev", "FIXTURE_PROFILE", "a=b"])).code).toBe(0);
-    expect(readFileSync(join(core.dir, ".env.dev.local"), "utf-8")).toContain(
-      "FIXTURE_PROFILE=a=b",
-    );
     expect((await cli(["env", "get", "dev", "FIXTURE_PROFILE"])).stdout.trim()).toBe("a=b");
   });
+
+  test("run passes DB-stored vars to the spawned process", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "conductor-cli-env-"));
+    writeFileSync(
+      join(dir, ".conductor.yml"),
+      `version: "1"
+commands:
+  - id: show
+    name: Show
+    run: bun -e "console.log('FOO=' + process.env.FOO)"
+    shell: true
+profiles:
+  dev:
+    name: Dev
+    command_ids: [show]
+`,
+    );
+    expect((await cli(["env", "set", "dev", "FOO", "from-db"], { cwd: dir })).code).toBe(0);
+    expect((await cli(["run", "dev"], { cwd: dir })).stdout).toContain("FOO=from-db");
+  }, 30_000);
 });
 
 // No order check: deps are readiness-based, and `hello` (no healthcheck) is

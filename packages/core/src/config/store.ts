@@ -5,9 +5,21 @@ import type { ConductorConfig, CommandConfig, ProfileConfig } from "./schema";
 import { SpawnQueue } from "../executor/queue";
 import { buildCommandEnv, buildProfileEnv, resolveBasePath } from "./env-resolution";
 import { compileConfigExamples, type CompileReport } from "./example-compiler";
+import type { ConductorQueries } from "../db/queries";
 
 export interface EnvVarLookup {
   (profile: string): Record<string, string>;
+}
+
+/** Reads DB-stored env vars: "__global__" for the global scope, else a profile name. */
+export function dbEnvLookup(queries: ConductorQueries): EnvVarLookup {
+  return (scope) =>
+    Object.fromEntries(
+      (scope === "__global__"
+        ? queries.listEnvVars("global")
+        : queries.listEnvVars("profile", scope)
+      ).map((row) => [row.key, row.value]),
+    );
 }
 
 /**

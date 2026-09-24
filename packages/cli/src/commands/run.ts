@@ -4,10 +4,11 @@ import {
   buildCommandEnv,
   buildProfileEnv,
   compileConfigExamples,
+  dbEnvLookup,
   type LogEntry,
   type CommandConfig,
 } from "@conductor/core";
-import { requireConfig } from "../config-context";
+import { openQueries, requireConfig } from "../config-context";
 
 export function registerRunCommand(program: import("commander").Command) {
   program
@@ -26,7 +27,15 @@ export function registerRunCommand(program: import("commander").Command) {
       // .example counterparts before starting anything - mirrors the
       // server's /api/profiles/:profile/run behavior so `conductor run`
       // works the same on a fresh checkout with no manual config step.
-      const env = buildProfileEnv({ configFilePath: configPath, config, profile: selected });
+      const dbEnv = dbEnvLookup(openQueries(configPath));
+      const envParams = {
+        configFilePath: configPath,
+        config,
+        profile: selected,
+        dbGlobalEnv: dbEnv("__global__"),
+        dbProfileEnv: dbEnv(profile),
+      };
+      const env = buildProfileEnv(envParams);
       const report = compileConfigExamples(env.BASE_PATH ?? process.cwd(), env);
       if (report.created > 0) {
         console.log(
@@ -47,7 +56,7 @@ export function registerRunCommand(program: import("commander").Command) {
         selected.command_ids
           .map((id) => config.commands.find((c) => c.id === id))
           .filter((c): c is CommandConfig => c !== undefined),
-        (cmd) => buildCommandEnv({ configFilePath: configPath, config, profile: selected, cmd }),
+        (cmd) => buildCommandEnv({ ...envParams, cmd }),
       );
 
       const onLog = (entry: LogEntry) => {

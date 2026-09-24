@@ -10,6 +10,7 @@ import {
   ConductorQueries,
   ConfigStore,
   createLogger,
+  dbEnvLookup,
   loadConfig,
   LogBroadcaster,
   openDatabase,
@@ -23,14 +24,7 @@ export async function startCore() {
 
   const queries = new ConductorQueries(openDatabase(":memory:"));
   const broadcaster = new LogBroadcaster();
-  const store = new ConfigStore(configPath, loadConfig(configPath), (scope) =>
-    Object.fromEntries(
-      (scope === "__global__"
-        ? queries.listEnvVars("global")
-        : queries.listEnvVars("profile", scope)
-      ).map((row) => [row.key, row.value]),
-    ),
-  );
+  const store = new ConfigStore(configPath, loadConfig(configPath), dbEnvLookup(queries));
 
   const app = await buildApi({
     logger: createLogger({ level: "silent" }),

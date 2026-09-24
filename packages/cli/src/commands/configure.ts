@@ -1,6 +1,6 @@
 import pc from "picocolors";
-import { buildProfileEnv, compileConfigExamples } from "@conductor/core";
-import { requireConfig } from "../config-context";
+import { buildProfileEnv, compileConfigExamples, dbEnvLookup } from "@conductor/core";
+import { openQueries, requireConfig } from "../config-context";
 
 export function registerConfigureCommand(program: import("commander").Command) {
   program
@@ -18,7 +18,14 @@ export function registerConfigureCommand(program: import("commander").Command) {
         process.exit(1);
       }
 
-      const env = buildProfileEnv({ configFilePath: configPath, config, profile: selected });
+      const dbEnv = dbEnvLookup(openQueries(configPath));
+      const env = buildProfileEnv({
+        configFilePath: configPath,
+        config,
+        profile: selected,
+        dbGlobalEnv: dbEnv("__global__"),
+        dbProfileEnv: profile ? dbEnv(profile) : undefined,
+      });
       const report = compileConfigExamples(env.BASE_PATH ?? process.cwd(), env, {
         force: opts.force,
       });
