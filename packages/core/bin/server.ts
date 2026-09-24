@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { discoverConfigPath, loadConfig, createDefaultConfig } from "../src";
 import { saveConfig } from "../src";
 import { ConfigStore } from "../src";
@@ -27,7 +27,8 @@ async function main() {
 
   const config = loadConfig(configPath);
   const logger = createLogger({ secretKeys: config.env_secrets });
-  const db = openDatabase(DEFAULT_DB_PATH);
+  // Next to the config (not cwd), so the CLI's `openQueries` finds the same DB.
+  const db = openDatabase(join(dirname(configPath), DEFAULT_DB_PATH));
   const queries = new ConductorQueries(db);
   const broadcaster = new LogBroadcaster();
 
