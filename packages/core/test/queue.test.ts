@@ -431,6 +431,68 @@ describe("SpawnQueue.restartOne - recovery notification", () => {
 
     await queue.stopAll();
   });
+
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  // Poll rather than a fixed sleep: cold `bun` startup on Windows CI is slow.
+  const waitForFailed = async (queue: SpawnQueue, id: string) => {
+    for (const deadline = Date.now() + 3000; Date.now() < deadline; await wait(50)) {
+      if (queue.getWrapper(id)?.status === "failed") return;
+    }
+    throw new Error(`"${id}" never exited as failed`);
+  };
+
+  test("does not claim recovery for a command that exits again immediately", async () => {
+    // No healthcheck: spawn succeeding used to count as "up", so the second
+    // start of an always-failing command reported crashed, recovered, crashed.
+    const cmd = makeCommand({ id: "boom", name: "boom", run: `bun -e "process.exit(3)"` });
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    try {
+      await queue.startOne("boom").catch(() => {});
+      await waitForFailed(queue, "boom");
+      await queue.startOne("boom").catch(() => {});
+      await wait(2500);
+      const types = queue.listNotifications().map((n) => n.type);
+      expect(types).not.toContain("recovered");
+      expect(types.filter((t) => t === "crashed")).toHaveLength(2);
+    } finally {
+      await queue.stopAll();
+    }
+  }, 10_000);
+
+  // A long-running service must stay up; a one-shot task that now exits 0 has recovered too.
+  test.each([
+    ["stays up", "setInterval(() => {}, 1000);"],
+    ["now exits 0", "process.exit(0);"],
+  ])(
+    "claims recovery when a failed command without a healthcheck %s",
+    async (_, after) => {
+      const dir = mkdtempSync(join(tmpdir(), "conductor-queue-recover-"));
+      const marker = join(dir, "crashed-once").replaceAll("\\", "/");
+      const script = writeScript(
+        `const fs = require("fs");
+       if (!fs.existsSync("${marker}")) { fs.writeFileSync("${marker}", ""); process.exit(3); }
+       ${after}`,
+      );
+      // `run` goes through the shell:false tokenizer, where an unquoted `\` is
+      // an escape — forward slashes keep a Windows script path intact.
+      const run = script.command.replaceAll("\\", "/");
+      const cmd = makeCommand({ id: "flaky", name: "Flaky", run });
+      const queue = new SpawnQueue("test", [cmd], () => testEnv());
+      try {
+        await queue.startOne("flaky").catch(() => {});
+        await waitForFailed(queue, "flaky");
+        await queue.startOne("flaky");
+        await wait(2500);
+        const types = queue.listNotifications().map((n) => n.type);
+        expect(types.filter((t) => t === "recovered")).toHaveLength(1);
+      } finally {
+        await queue.stopAll();
+        script.cleanup();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    10_000,
+  );
 });
 
 describe("SpawnQueue - single-flight starts", () => {

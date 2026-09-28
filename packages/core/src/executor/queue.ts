@@ -10,6 +10,8 @@ const MAX_RESTART_ATTEMPTS = 5;
 const MAX_RESTART_DELAY_MS = 30_000;
 /** Uptime after which a process counts as stable and its attempt budget resets. */
 const STABLE_UPTIME_MS = 60_000;
+/** Uptime a restarted command without a healthcheck needs before it counts as recovered. */
+const RECOVERY_GRACE_MS = 1000;
 
 /**
  * Represents a failure event in the queue: process start failure,
@@ -426,14 +428,25 @@ export class SpawnQueue {
       // startup (crash, port loss, OOM) is detected and health flips.
       this.startHealthMonitor(cmd, wrapper, env);
 
-      // Successful start — if previous version failed → recovered notification
+      // Successful start — if previous version failed → recovered notification.
+      // The id stays pending until this fires, so a crash in the meantime
+      // keeps it pending for the next attempt.
       if (this.pendingRecovery.has(cmd.id)) {
-        wrapper.log("[healthcheck] service recovered after restart", "stdout");
-        this.recordNotification("recovered", cmd.id, `${cmd.name} is back up after restart`);
+        const confirmRecovery = () => {
+          if (this.wrappers.get(cmd.id) !== wrapper) return;
+          // "completed" = a one-shot task that exited 0 this time: it recovered too.
+          if (wrapper.status !== "running" && wrapper.status !== "completed") return;
+          this.pendingRecovery.delete(cmd.id);
+          wrapper.log("[healthcheck] service recovered after restart", "stdout");
+          this.recordNotification("recovered", cmd.id, `${cmd.name} is back up after restart`);
+        };
+        // A passed probe is real evidence it's up. Without one, "started" only
+        // means "spawned" — a process that exits a moment later isn't back up.
+        // ponytail: fixed grace window; a service dying after it still
+        // alternates recovered/crashed. Configure a healthcheck to avoid that.
+        if (cmd.healthcheck && cmd.healthcheck.type !== "none") confirmRecovery();
+        else setTimeout(confirmRecovery, RECOVERY_GRACE_MS);
       }
-
-      // Remove from recovery-pending set on successful start
-      this.pendingRecovery.delete(cmd.id);
       return true;
     } catch (err) {
       wrapper.markFailed();
