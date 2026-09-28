@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { relative } from "node:path";
 import type { CommandConfig } from "../config/schema";
 import { ProcessWrapper, type LogHandler, type HealthChangeHandler } from "./wrapper";
 import { waitForHealthy, type ProbeResult } from "./healthcheck";
 import { FileWatcher, HealthMonitor } from "../monitor";
+import { applyConfigFiles } from "../config/config-files";
 
 /** Consecutive auto-restarts allowed before the queue stops respawning a command. */
 const MAX_RESTART_ATTEMPTS = 5;
@@ -82,6 +84,15 @@ export class SpawnQueue {
     private readonly profile: string,
     private commands: CommandConfig[],
     private readonly resolveEnv: (cmd: CommandConfig) => Record<string, string>,
+    /**
+     * Which env keys were declared in Conductor for `cmd`, and which are
+     * secret - drives `config_files` auto mode. Without it only `set:` keys
+     * are written.
+     */
+    private readonly configFileScope?: (cmd: CommandConfig) => {
+      declaredKeys: Set<string>;
+      secretKeys?: string[];
+    },
   ) {}
 
   /**
@@ -361,6 +372,42 @@ export class SpawnQueue {
     }
   }
 
+  /**
+   * Brings `cmd.config_files` in line with its env and returns the log
+   * lines describing what happened - emitted once the process exists, since
+   * the wrapper drops logs before that. Never blocks the start.
+   */
+  private convergeConfigFiles(
+    cmd: CommandConfig,
+    env: Record<string, string>,
+    wrapper: ProcessWrapper,
+  ): Array<[string, "stdout" | "stderr"]> {
+    const lines: Array<[string, "stdout" | "stderr"]> = [];
+    if (cmd.config_files.length === 0) return lines;
+    const scope = this.configFileScope?.(cmd) ?? { declaredKeys: new Set<string>() };
+    const cwd = wrapper.resolvedCwd();
+    for (const plan of applyConfigFiles(cmd, { env, cwd, ...scope })) {
+      const file = relative(cwd, plan.path) || plan.path;
+      if (plan.error) {
+        lines.push([`[config] ${file}: ${plan.error}`, "stderr"]);
+        continue;
+      }
+      if (plan.changes.length > 0) {
+        const summary = plan.changes
+          .map((c) => `${c.key} ${c.action === "add" ? "added" : "changed"}`)
+          .join(", ");
+        lines.push([`[config] ${file}: ${summary}`, "stdout"]);
+      }
+      if (plan.missingVars.length > 0) {
+        lines.push([
+          `[config] ${file}: no value for ${plan.missingVars.join(", ")}, keys using them left unchanged`,
+          "stderr",
+        ]);
+      }
+    }
+    return lines;
+  }
+
   /** Internal: spawn one process and await its healthcheck. Returns whether it became healthy. */
   private async startSingleProcess(
     cmd: CommandConfig,
@@ -373,6 +420,11 @@ export class SpawnQueue {
     const logHandler = onLog ?? this.lastLogHandler;
     if (logHandler) wrapper.onLog(logHandler);
 
+    // Before the watcher is armed, so the first converge of a watched file
+    // can't trigger a restart. On later restarts it's already armed, but a
+    // converged file isn't written again, so that costs at most one restart.
+    const configLines = this.convergeConfigFiles(cmd, env, wrapper);
+
     // Track health transitions for recovery detection during restart
     this.setupHealthObserver(wrapper, cmd);
 
@@ -383,6 +435,7 @@ export class SpawnQueue {
     try {
       await wrapper.start();
       wrapper.log(`[startup] command started (pid ${wrapper.pid})`, "stdout");
+      for (const [message, stream] of configLines) wrapper.log(message, stream);
 
       // Auto-restart keys on process exit, not on the health flip: a service
       // that crashes outright never flips (HealthMonitor only reports state

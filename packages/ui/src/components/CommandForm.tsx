@@ -14,6 +14,8 @@ import {
   Divider,
   Text,
   ActionIcon,
+  Checkbox,
+  Code,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useCreateCommand, useUpdateCommand } from "../hooks/useConfig";
@@ -87,6 +89,18 @@ function CommandFormFields({
   const [envOverrides, setEnvOverrides] = useState<Array<{ key: string; value: string }>>(() =>
     Object.entries(editing?.env_overrides ?? {}).map(([key, value]) => ({ key, value })),
   );
+  // `set` is edited as dotenv-style `KEY=value` lines.
+  const [configFiles, setConfigFiles] = useState<
+    Array<{ path: string; auto: boolean; set: string }>
+  >(() =>
+    (editing?.config_files ?? []).map((f) => ({
+      path: f.path,
+      auto: f.auto,
+      set: Object.entries(f.set)
+        .map(([k, v]) => `${k}=${v}`)
+        .join("\n"),
+    })),
+  );
   const [healthcheck, setHealthcheck] = useState<HealthcheckInfo>(
     editing?.healthcheck ?? DEFAULT_HEALTHCHECK,
   );
@@ -110,6 +124,19 @@ function CommandFormFields({
     const env_overrides = Object.fromEntries(
       envOverrides.filter((e) => e.key.trim()).map((e) => [e.key.trim(), e.value]),
     );
+    const config_files = configFiles
+      .filter((f) => f.path.trim())
+      .map((f) => ({
+        path: f.path.trim(),
+        auto: f.auto,
+        set: Object.fromEntries(
+          f.set
+            .split("\n")
+            .map((line) => line.match(/^\s*([^=\s]+)\s*=(.*)$/))
+            .filter((m): m is RegExpMatchArray => m !== null)
+            .map((m) => [m[1], m[2]]),
+        ),
+      }));
     const watchList = watch
       .split(",")
       .map((w) => w.trim())
@@ -124,6 +151,7 @@ function CommandFormFields({
       deps,
       env_overrides,
       watch: watchList,
+      config_files,
       readonly,
       stop_signal: stopSignal,
       stop_timeout_ms: stopTimeoutMs,
@@ -323,6 +351,60 @@ function CommandFormFields({
           onClick={() => setEnvOverrides((prev) => [...prev, { key: "", value: "" }])}
         >
           Add variable
+        </Button>
+      </Stack>
+
+      <Divider label="Config files" labelPosition="left" />
+      <Text size="xs" c="dimmed">
+        <Code>.env</Code> files (relative to the working directory) kept in sync before every start.
+        "Auto" updates keys the file already has from the env var of the same name; the lines below
+        pin extra keys (values may use <Code>{"${VAR}"}</Code>).
+      </Text>
+      <Stack gap="xs">
+        {configFiles.map((file, idx) => {
+          const patch = (next: Partial<(typeof configFiles)[number]>) =>
+            setConfigFiles((prev) => prev.map((p, i) => (i === idx ? { ...p, ...next } : p)));
+          return (
+            <Stack key={idx} gap={4}>
+              <Group gap="xs">
+                <TextInput
+                  placeholder=".env"
+                  value={file.path}
+                  onChange={(e) => patch({ path: e.currentTarget.value })}
+                  flex={1}
+                />
+                <Checkbox
+                  label="Auto"
+                  checked={file.auto}
+                  onChange={(e) => patch({ auto: e.currentTarget.checked })}
+                />
+                <ActionIcon
+                  color="red"
+                  variant="subtle"
+                  aria-label="Remove config file"
+                  onClick={() => setConfigFiles((prev) => prev.filter((_, i) => i !== idx))}
+                >
+                  <IconTrash size={14} />
+                </ActionIcon>
+              </Group>
+              <Textarea
+                placeholder={"API_URL=http://localhost:${API_PORT}"}
+                autosize
+                minRows={1}
+                styles={{ input: { fontFamily: "monospace" } }}
+                value={file.set}
+                onChange={(e) => patch({ set: e.currentTarget.value })}
+              />
+            </Stack>
+          );
+        })}
+        <Button
+          size="xs"
+          variant="light"
+          leftSection={<IconPlus size={14} />}
+          onClick={() => setConfigFiles((prev) => [...prev, { path: ".env", auto: true, set: "" }])}
+        >
+          Add config file
         </Button>
       </Stack>
 

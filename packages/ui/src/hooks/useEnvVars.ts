@@ -14,8 +14,16 @@ import {
   updateLogRetention,
   pruneLogsNow,
   compileConfigExamples,
+  planConfigFiles,
   importConfig,
 } from "../lib/api";
+
+export function usePlanConfigFiles() {
+  return useMutation({
+    mutationFn: planConfigFiles,
+    onError: notifyError("Failed to preview config files"),
+  });
+}
 
 export function useCompileConfigExamples() {
   return useMutation({

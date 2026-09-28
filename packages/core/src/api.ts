@@ -9,7 +9,8 @@ import type { ConductorQueries } from "./db/queries";
 import type { ConfigStore } from "./config/store";
 import type { LogBroadcaster } from "./logs/broadcaster";
 import type { LogHandler } from "./executor/wrapper";
-import { HealthcheckSchema } from "./config/schema";
+import { ConfigFileSchema, HealthcheckSchema } from "./config/schema";
+import { looksSecret } from "./env/masker";
 import type { ConductorConfig } from "./config/schema";
 import { ConfigError } from "./config/loader";
 import { listAvailableShells } from "./executor/shell";
@@ -38,6 +39,7 @@ const CommandInputSchema = z.object({
   deps: z.array(z.string()).optional(),
   env_overrides: z.record(z.string(), z.string()).optional(),
   watch: z.array(z.string()).optional(),
+  config_files: z.array(ConfigFileSchema).optional(),
   readonly: z.boolean().optional(),
   stop_signal: z.string().optional(),
   stop_timeout_ms: z.number().optional(),
@@ -124,11 +126,6 @@ function parseDotenv(text: string): Array<{ key: string; value: string }> {
     if (key) entries.push({ key, value });
   }
   return entries;
-}
-
-/** Heuristic used when importing vars without an explicit secret flag. */
-export function looksSecret(key: string): boolean {
-  return /secret|token|password|key|credential|api_key/i.test(key);
 }
 
 function handleConfigError(err: unknown, reply: FastifyReply) {
@@ -261,6 +258,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   const ConfigureInputSchema = z.object({
     profile: z.string().optional(),
     force: z.boolean().optional(),
+    plan: z.boolean().optional(),
   });
 
   app.post<{ Body: unknown }>("/api/configure", async (request, reply) => {
@@ -270,13 +268,17 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
         .status(400)
         .send({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
     }
-    const { profile, force } = parsed.data;
+    const { profile, force, plan } = parsed.data;
+    // A plan writes nothing, so it skips the example compile too.
+    if (plan) return deps.store.configureConfigFiles(profile, { apply: false });
     const report = deps.store.compileConfigExamples(profile, { force });
+    const files = deps.store.configureConfigFiles(profile, { apply: true });
+    const changed = files.configFiles.reduce((n, f) => n + f.changes.length, 0);
     deps.queries.insertAuditEntry(
       "compile-config",
-      `${profile ?? "__global__"} (created ${report.created}, skipped ${report.skipped}, errors ${report.errors})`,
+      `${profile ?? "__global__"} (created ${report.created}, skipped ${report.skipped}, errors ${report.errors}, ${changed} config file change(s))`,
     );
-    return report;
+    return { ...report, ...files };
   });
 
   // --- Config import (whole .conductor.yml, e.g. a shared template) -----

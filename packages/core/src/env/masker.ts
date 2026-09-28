@@ -1,4 +1,9 @@
-const MASK = "********";
+export const MASK = "********";
+
+/** Heuristic used when importing vars without an explicit secret flag. */
+export function looksSecret(key: string): boolean {
+  return /secret|token|password|key|credential|api_key/i.test(key);
+}
 
 /**
  * Returns a copy of `env` with values for any key in `secretKeys` replaced

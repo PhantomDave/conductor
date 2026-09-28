@@ -5,6 +5,7 @@ import {
   buildProfileEnv,
   compileConfigExamples,
   dbEnvLookup,
+  declaredEnvKeys,
   type LogEntry,
   type CommandConfig,
 } from "@conductor/core";
@@ -57,6 +58,10 @@ export function registerRunCommand(program: import("commander").Command) {
           .map((id) => config.commands.find((c) => c.id === id))
           .filter((c): c is CommandConfig => c !== undefined),
         (cmd) => buildCommandEnv({ ...envParams, cmd }),
+        (cmd) => ({
+          declaredKeys: declaredEnvKeys({ ...envParams, cmd }),
+          secretKeys: config.env_secrets,
+        }),
       );
 
       const onLog = (entry: LogEntry) => {

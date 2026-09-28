@@ -23,6 +23,13 @@ export interface HealthcheckInfo {
   retries: number;
 }
 
+/** A `.env` file Conductor keeps in sync with its env before the command starts. */
+export interface ConfigFileInfo {
+  path: string;
+  auto: boolean;
+  set: Record<string, string>;
+}
+
 export interface CommandInfo {
   id: string;
   name: string;
@@ -34,6 +41,7 @@ export interface CommandInfo {
   deps: string[];
   env_overrides: Record<string, string>;
   watch: string[];
+  config_files: ConfigFileInfo[];
   readonly: boolean;
   stop_signal: string;
   stop_timeout_ms: number;
@@ -498,10 +506,40 @@ export interface CompileReport {
   missingVars: string[];
 }
 
+export interface ConfigFilePlan {
+  commandId: string;
+  path: string;
+  exists: boolean;
+  changes: Array<{ key: string; action: "add" | "change"; from?: string; to: string }>;
+  missingVars: string[];
+  skipped: string[];
+  unmatchedKeys: string[];
+  error?: string;
+}
+
+export interface ConfigFilesReport {
+  basePath: string;
+  configFiles: ConfigFilePlan[];
+  lint: {
+    unusedEnv: Array<{ key: string; suggestion?: string }>;
+    unmatchedFileKeys: Array<{ path: string; key: string; suggestion?: string }>;
+  };
+}
+
+/** Dry run of every command's `config_files`, plus the unused-config lint. Writes nothing. */
+export async function planConfigFiles(input: { profile?: string }): Promise<ConfigFilesReport> {
+  const res = await fetch(`${API_BASE}/configure`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...input, plan: true }),
+  });
+  return parseJsonOrThrow(res, "Failed to preview config files");
+}
+
 export async function compileConfigExamples(input: {
   profile?: string;
   force?: boolean;
-}): Promise<CompileReport> {
+}): Promise<CompileReport & ConfigFilesReport> {
   const res = await fetch(`${API_BASE}/configure`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

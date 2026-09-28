@@ -19,6 +19,27 @@ export const HealthcheckSchema = z.object({
 export type HealthcheckConfig = z.infer<typeof HealthcheckSchema>;
 
 /**
+ * A `.env` file Conductor keeps converged before the command starts. A bare
+ * string is shorthand for `{ path, auto: true }`. `auto` rewrites keys the
+ * file already has with Conductor's value for the same name; `set` pins
+ * explicit keys (values may use `${VAR}`) and adds them if missing.
+ */
+export const ConfigFileSchema = z.preprocess(
+  (value) => (typeof value === "string" ? { path: value } : value),
+  z.object({
+    path: z.string().min(1),
+    auto: z.boolean().default(true),
+    // Keys a `.env` line can hold - anything else could never be found on
+    // re-read, and would be appended again on every start.
+    set: z
+      .record(z.string().regex(/^[A-Za-z_][\w.-]*$/, "Invalid .env key"), z.string())
+      .default({}),
+  }),
+);
+
+export type ConfigFileConfig = z.infer<typeof ConfigFileSchema>;
+
+/**
  * Schema for a single command within a profile.
  */
 export const CommandSchema = z.object({
@@ -32,6 +53,7 @@ export const CommandSchema = z.object({
   deps: z.array(z.string()).default([]),
   env_overrides: z.record(z.string(), z.string()).default({}),
   watch: z.array(z.string()).default([]),
+  config_files: z.array(ConfigFileSchema).default([]),
   readonly: z.boolean().default(false),
   stop_signal: z.string().default("SIGTERM"),
   stop_timeout_ms: z.number().int().positive().default(5_000),

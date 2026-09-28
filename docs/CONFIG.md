@@ -71,6 +71,7 @@ Every field except `id`, `name`, and `run` has a default. **Commands live at the
 | `deps`                     | string[]                             | `[]`               | IDs of root commands that must be **healthy** before this starts. Transitive chains supported.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `env_overrides`            | Record\<string, string\>             | `{}`               | Per-command env var overrides (merged on top of global_env + profile.env).                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `watch`                    | string[]                             | `[]`               | Globs relative to `cwd` (e.g. `src/**`, `*.csproj`). A matching change restarts the command after 500ms of quiet, then restarts every **running** command that transitively depends on it. Changes during a restart collapse into one follow-up restart. Build/tool dirs (`node_modules`, `.git`, `dist`, `obj`, `target`, `.next`, `.turbo`, `coverage`, `__pycache__`, `.venv`) and lockfiles (`package-lock.json`, `bun.lock`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, …) are always ignored. A command you stopped stays stopped. |
+| `config_files`             | (string \| ConfigFile)[]             | `[]`               | `.env` files kept in sync with the env before every start. See [Declared config files](#declared-config-files).                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `readonly`                 | boolean                              | `false`            | Informational flag; not enforced by the engine.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `stop_signal`              | string                               | `"SIGTERM"`        | Signal sent during graceful shutdown. Also accepts `SIGINT`, `SIGHUP`, etc.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `stop_timeout_ms`          | number                               | `5000`             | Time before force-kill (SIGKILL or Windows taskkill).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -142,13 +143,60 @@ All `cwd` fields on commands are resolved relative to the computed base_path. Re
 
 ## Example Templates Compilation (configure)
 
-When you run `conductor configure <profile>` (CLI) or call the API, Conductor looks for files named `*.example` beneath base_path and auto-generates corresponding live config files:
+When you run `conductor configure [profile]` (CLI), click **Compile** in the Environment tab, or start a profile, Conductor looks for files following the `<name>.example<.ext>` convention beneath base_path and creates the real file next to each one:
 
-- `.env.example` → `.env.<profile>`
-- `.appsettings.json.example` → `appsettings.json`
-- Any other `*.json.example` or `*.yaml.example` → un-suffixed target file (minus the `.example` part)
+- `.env.example` → `.env`
+- `appsettings.example.json` → `appsettings.json`
+- `appsettings.Development.example.json` → `appsettings.Development.json`
 
-Variables in templates are interpolated using `$VAR_NAME` syntax. Missing variables produce warnings but not errors. The command returns a structured report with details on what was created, skipped, and which vars were missing.
+`${VAR}` tokens in templates are filled in from the resolved env. Missing variables are left blank and reported, not treated as errors. Existing files are never overwritten unless you pass `--force`, so this only helps on a fresh checkout. To keep an existing `.env` up to date, use `config_files` (below).
+
+## Declared config files
+
+`config_files` lists `.env` files that Conductor converges to the current env **before every start** (including restarts), the way Terraform applies a plan. Only keys whose value differs are rewritten. Comments, ordering, `export` prefixes, quoting and line endings are left alone, and a file that's already up to date isn't touched.
+
+```yaml
+commands:
+  - id: web
+    cwd: ./web
+    config_files:
+      - .env # shorthand for { path: .env, auto: true }
+      - path: ../api/.env
+        auto: false
+        set:
+          API_URL: "http://localhost:${API_PORT}"
+```
+
+| Field  | Default | Description                                                                                                                                                                                        |
+| ------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path` | —       | Relative to the command's resolved `cwd`. Supports `${VAR}`.                                                                                                                                       |
+| `auto` | `true`  | Rewrites keys the file **already has** with Conductor's value of the same name. It never adds keys, and never blanks a non-empty value.                                                            |
+| `set`  | `{}`    | Pinned keys, which win over `auto`. Values may use `${VAR}`. Missing keys are appended, and the file is created if it doesn't exist. A key whose `${VAR}` has no value is left as is and reported. |
+
+**Only keys declared in Conductor count for `auto`**: `global_env`, `profile.env`, DB env vars (global and profile), `env_overrides` and `BASE_PATH`. Variables inherited from the shell that launched Conductor (`PORT`, `NODE_ENV`, …) never overwrite a file.
+
+Each start logs what changed, e.g. `[config] .env: API_URL changed, DB_HOST added`. Values of secret-looking keys and `env_secrets` are masked in plans and logs.
+
+### Plan and apply
+
+- `conductor configure [profile] --plan`, or **Preview changes** in the Environment tab, shows the diff without writing anything, including the example compile:
+
+  ```
+  ~ web/.env [web]
+      ~ API_URL: "http://old" → "http://localhost:4000"
+      + DB_HOST = "localhost"
+  ```
+
+- `conductor configure [profile]` or **Compile** applies it. `POST /api/configure` accepts `{ profile?, force?, plan? }` and returns `configFiles` and `lint` alongside the compile report.
+
+### Unused config lint
+
+Plan and apply also cross-check the **shared env** (`global_env`, `profile.env` and DB env vars) against what the config files and `.example` templates actually use. This helps catch typos:
+
+- **Unused**: a shared key that no `auto` file, `set:` value or template references.
+- **Not provided**: a key in an `auto` file that Conductor has no value for, so it keeps its local value.
+
+Each entry suggests the closest name from the other list when there's a likely typo, e.g. `API_ULR` → did you mean `API_URL`? These are hints, not errors: a process may still read a variable straight from its env.
 
 ## Full Example Configuration
 

@@ -50,9 +50,10 @@ import {
   useUpdateLogRetention,
   usePruneLogsNow,
   useCompileConfigExamples,
+  usePlanConfigFiles,
   useImportConfig,
 } from "../hooks/useEnvVars";
-import type { EnvVarRow, CompileReport, ShellsInfo } from "../lib/api";
+import type { EnvVarRow, CompileReport, ConfigFilesReport, ShellsInfo } from "../lib/api";
 
 function ImportConfigCard() {
   const importConfig = useImportConfig();
@@ -371,12 +372,33 @@ function LogRetentionCard() {
 
 function ConfigCompilerCard({ profileNames }: { profileNames: string[] }) {
   const compile = useCompileConfigExamples();
+  const preview = usePlanConfigFiles();
   const [profile, setProfile] = useState<string | null>(null);
   const [force, setForce] = useState(false);
   const [report, setReport] = useState<CompileReport | null>(null);
+  const [files, setFiles] = useState<{ report: ConfigFilesReport; plan: boolean } | null>(null);
 
   const run = () => {
-    compile.mutate({ profile: profile ?? undefined, force }, { onSuccess: setReport });
+    compile.mutate(
+      { profile: profile ?? undefined, force },
+      {
+        onSuccess: (r) => {
+          setReport(r);
+          setFiles({ report: r, plan: false });
+        },
+      },
+    );
+  };
+  const runPreview = () => {
+    preview.mutate(
+      { profile: profile ?? undefined },
+      {
+        onSuccess: (r) => {
+          setReport(null);
+          setFiles({ report: r, plan: true });
+        },
+      },
+    );
   };
 
   return (
@@ -396,7 +418,8 @@ function ConfigCompilerCard({ profileNames }: { profileNames: string[] }) {
           overwritten unless "Overwrite existing" is checked, so it's always safe to re-run -
           including automatically, every time you run a profile. This also runs automatically before
           starting a profile, so a fresh checkout with new services just works with no extra setup
-          step.
+          step. Compile also syncs each command's declared <Code>config_files</Code>; "Preview
+          changes" shows what that would change without writing anything.
         </Text>
         <Group align="flex-end">
           <Select
@@ -412,6 +435,9 @@ function ConfigCompilerCard({ profileNames }: { profileNames: string[] }) {
             checked={force}
             onChange={(e) => setForce(e.currentTarget.checked)}
           />
+          <Button variant="light" loading={preview.isPending} onClick={runPreview}>
+            Preview changes
+          </Button>
           <Button loading={compile.isPending} onClick={run}>
             Compile
           </Button>
@@ -477,8 +503,107 @@ function ConfigCompilerCard({ profileNames }: { profileNames: string[] }) {
             )}
           </Stack>
         )}
+        {files && <ConfigFilesView report={files.report} plan={files.plan} />}
       </Stack>
     </Card>
+  );
+}
+
+/** The declared `config_files` diff (planned or applied) and the unused-config lint. */
+function ConfigFilesView({ report, plan }: { report: ConfigFilesReport; plan: boolean }) {
+  const { configFiles, lint } = report;
+  // Slice rather than replace "base/" so Windows' "\\" separator is stripped too.
+  const rel = (path: string) =>
+    path.startsWith(report.basePath) ? path.slice(report.basePath.length + 1) : path;
+  const total = configFiles.reduce((n, f) => n + f.changes.length, 0);
+  const hint = (suggestion?: string) =>
+    suggestion && (
+      <Text span size="xs" c="cyan">
+        {" "}
+        - did you mean <Code>{suggestion}</Code>?
+      </Text>
+    );
+  return (
+    <Stack gap={4}>
+      {configFiles.length > 0 && (
+        <>
+          <Text size="sm" fw={600}>
+            {total} config file change(s) {plan ? "to apply" : "applied"}
+          </Text>
+          <List size="xs" spacing={2}>
+            {configFiles.map((f) => (
+              <List.Item key={`${f.commandId}:${f.path}`}>
+                <Text span ff="monospace" size="xs">
+                  {rel(f.path)}
+                </Text>{" "}
+                <Text span size="xs" c="dimmed">
+                  [{f.commandId}]
+                </Text>{" "}
+                {f.error ? (
+                  <Text span size="xs" c="red">
+                    error: {f.error}
+                  </Text>
+                ) : f.changes.length === 0 ? (
+                  <Text span size="xs" c="dimmed">
+                    {f.exists ? "up to date" : "doesn't exist, nothing to set"}
+                  </Text>
+                ) : (
+                  <List size="xs" withPadding>
+                    {f.changes.map((c) => (
+                      <List.Item key={c.key}>
+                        <Text
+                          span
+                          ff="monospace"
+                          size="xs"
+                          c={c.action === "add" ? "green" : "yellow"}
+                        >
+                          {c.action === "add"
+                            ? `+ ${c.key} = "${c.to}"`
+                            : `~ ${c.key}: "${c.from}" → "${c.to}"`}
+                        </Text>
+                      </List.Item>
+                    ))}
+                  </List>
+                )}
+                {f.missingVars.length > 0 && (
+                  <Text size="xs" c="red">
+                    No value for {f.missingVars.join(", ")} - keys using them left as is
+                  </Text>
+                )}
+              </List.Item>
+            ))}
+          </List>
+        </>
+      )}
+      {(lint.unusedEnv.length > 0 || lint.unmatchedFileKeys.length > 0) && (
+        <Alert
+          color="yellow"
+          variant="light"
+          icon={<IconAlertTriangle size={16} />}
+          title="Unused / did you mean"
+        >
+          <List size="xs" spacing={2}>
+            {lint.unusedEnv.map(({ key, suggestion }) => (
+              <List.Item key={`env:${key}`}>
+                <Code>{key}</Code> is set but no config file uses it{hint(suggestion)}
+              </List.Item>
+            ))}
+            {lint.unmatchedFileKeys.map(({ path, key, suggestion }) => (
+              <List.Item key={`file:${path}:${key}`}>
+                <Code>{key}</Code> in{" "}
+                <Text span ff="monospace" size="xs">
+                  {rel(path)}
+                </Text>{" "}
+                isn't provided by Conductor{hint(suggestion)}
+              </List.Item>
+            ))}
+          </List>
+          <Text size="xs" c="dimmed" mt={4}>
+            A process may still read these straight from its env - these are hints, not errors.
+          </Text>
+        </Alert>
+      )}
+    </Stack>
   );
 }
 
