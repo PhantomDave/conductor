@@ -463,29 +463,36 @@ describe("SpawnQueue.restartOne - recovery notification", () => {
   test.each([
     ["stays up", "setInterval(() => {}, 1000);"],
     ["now exits 0", "process.exit(0);"],
-  ])("claims recovery when a failed command without a healthcheck %s", async (_, after) => {
-    const dir = mkdtempSync(join(tmpdir(), "conductor-queue-recover-"));
-    const marker = join(dir, "crashed-once").replaceAll("\\", "/");
-    const script = writeScript(
-      `const fs = require("fs");
+  ])(
+    "claims recovery when a failed command without a healthcheck %s",
+    async (_, after) => {
+      const dir = mkdtempSync(join(tmpdir(), "conductor-queue-recover-"));
+      const marker = join(dir, "crashed-once").replaceAll("\\", "/");
+      const script = writeScript(
+        `const fs = require("fs");
        if (!fs.existsSync("${marker}")) { fs.writeFileSync("${marker}", ""); process.exit(3); }
        ${after}`,
-    );
-    const cmd = makeCommand({ id: "flaky", name: "Flaky", run: script.command });
-    const queue = new SpawnQueue("test", [cmd], () => testEnv());
-    try {
-      await queue.startOne("flaky").catch(() => {});
-      await waitForFailed(queue, "flaky");
-      await queue.startOne("flaky");
-      await wait(2500);
-      const types = queue.listNotifications().map((n) => n.type);
-      expect(types.filter((t) => t === "recovered")).toHaveLength(1);
-    } finally {
-      await queue.stopAll();
-      script.cleanup();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }, 10_000);
+      );
+      // `run` goes through the shell:false tokenizer, where an unquoted `\` is
+      // an escape — forward slashes keep a Windows script path intact.
+      const run = script.command.replaceAll("\\", "/");
+      const cmd = makeCommand({ id: "flaky", name: "Flaky", run });
+      const queue = new SpawnQueue("test", [cmd], () => testEnv());
+      try {
+        await queue.startOne("flaky").catch(() => {});
+        await waitForFailed(queue, "flaky");
+        await queue.startOne("flaky");
+        await wait(2500);
+        const types = queue.listNotifications().map((n) => n.type);
+        expect(types.filter((t) => t === "recovered")).toHaveLength(1);
+      } finally {
+        await queue.stopAll();
+        script.cleanup();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    10_000,
+  );
 });
 
 describe("SpawnQueue - single-flight starts", () => {
