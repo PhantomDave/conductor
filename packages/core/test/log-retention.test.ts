@@ -90,3 +90,11 @@ describe("queryLogs grep", () => {
     expect(results).toHaveLength(0);
   });
 });
+
+describe("queryLogs ordering", () => {
+  test("rows sharing a millisecond come back newest-id first, not in arbitrary order", () => {
+    const timestamp = "2026-01-01T00:00:00.000Z";
+    const ids = [1, 2, 3, 4].map((n) => log({ timestamp, message: `line ${n}` }).id);
+    expect(queries.queryLogs({ commandId: "cmd" }).map((r) => r.id)).toEqual(ids.toReversed());
+  });
+});

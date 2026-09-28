@@ -136,7 +136,7 @@ export class ConductorQueries {
     const limit = filters.limit ?? 200;
 
     return this.db
-      .prepare(`SELECT * FROM logs ${where} ORDER BY timestamp DESC LIMIT $limit`)
+      .prepare(`SELECT * FROM logs ${where} ORDER BY timestamp DESC, id DESC LIMIT $limit`)
       .all({ ...params, $limit: limit }) as LogRow[];
   }
 
