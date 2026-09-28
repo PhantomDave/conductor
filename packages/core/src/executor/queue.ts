@@ -420,8 +420,9 @@ export class SpawnQueue {
     const logHandler = onLog ?? this.lastLogHandler;
     if (logHandler) wrapper.onLog(logHandler);
 
-    // Before the watcher is armed, so converging a watched file can't
-    // trigger a restart of its own.
+    // Before the watcher is armed, so the first converge of a watched file
+    // can't trigger a restart. On later restarts it's already armed, but a
+    // converged file isn't written again, so that costs at most one restart.
     const configLines = this.convergeConfigFiles(cmd, env, wrapper);
 
     // Track health transitions for recovery detection during restart

@@ -107,6 +107,22 @@ describe("applyConfigFiles", () => {
     expect(plan.changes.find((c) => c.key === "DB_PASSWORD")?.to).toBe("********");
   });
 
+  test("filling an empty value keeps its trailing comment a comment", () => {
+    writeFileSync(envPath(), "API_URL= # fill me\n");
+    const cmd = cmdWith([".env"]);
+    applyConfigFiles(cmd, ctx({ API_URL: "http://x" }));
+    expect(readFileSync(envPath(), "utf-8")).toBe("API_URL= http://x # fill me\n");
+    expect(applyConfigFiles(cmd, ctx({ API_URL: "http://x" }))[0].changes).toEqual([]);
+  });
+
+  test("masks a set: value that interpolates a secret", () => {
+    const [plan] = planConfigFiles(
+      cmdWith([{ path: ".env", set: { DSN: "pg://u:${DB_PASSWORD}@h" } }]),
+      ctx({ DB_PASSWORD: "hunter2" }),
+    );
+    expect(plan.changes).toEqual([{ key: "DSN", action: "add", to: "********" }]);
+  });
+
   test("appended set: keys are found again on the next run", () => {
     const cmd = cmdWith([{ path: ".env", set: { "My.Key-1": "a b" } }]);
     expect(applyConfigFiles(cmd, ctx({}))[0].changes).toHaveLength(1);

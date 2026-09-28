@@ -96,8 +96,15 @@ function evaluateFile(
   ctx: ConfigFileContext,
 ): { plan: ConfigFilePlan; next?: string } {
   const secretSet = new Set((ctx.secretKeys ?? []).map((k) => k.toLowerCase()));
+  const isSecret = (key: string) => looksSecret(key) || secretSet.has(key.toLowerCase());
+  // A `set:` key whose value interpolates a secret (`pg://u:${DB_PASSWORD}@h`) is masked too.
+  const secretSetKeys = new Set(
+    Object.entries(file.set)
+      .filter(([, raw]) => referencedVars(raw).some(isSecret))
+      .map(([key]) => key),
+  );
   const mask = (key: string, value: string) =>
-    looksSecret(key) || secretSet.has(key.toLowerCase()) ? MASK : value;
+    isSecret(key) || secretSetKeys.has(key) ? MASK : value;
 
   const path = resolve(ctx.cwd, interpolateString(file.path, ctx.env));
   const plan: ConfigFilePlan = {
@@ -173,7 +180,10 @@ function evaluateFile(
     }
     if (target === undefined || target === current.value) return;
 
-    lines[i] = prefix + formatValue(target) + current.suffix;
+    // `KEY= # note` has an empty value right before the `#`; without a space
+    // the comment would become part of the new value.
+    const suffix = current.suffix.startsWith("#") ? ` ${current.suffix}` : current.suffix;
+    lines[i] = prefix + formatValue(target) + suffix;
     if (!changes.has(key)) {
       changes.set(key, {
         key,
