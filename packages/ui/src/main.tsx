@@ -4,6 +4,7 @@ import { MantineProvider } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { conductorTheme } from "./theme";
 
 import "@mantine/core/styles.css";
@@ -17,9 +18,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <MantineProvider theme={conductorTheme} defaultColorScheme="dark">
       <Notifications position="top-right" />
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </ErrorBoundary>
     </MantineProvider>
   </React.StrictMode>,
 );
