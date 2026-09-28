@@ -292,9 +292,9 @@ function CommandFormFields({
             <TextInput
               placeholder="KEY"
               value={entry.key}
-              onChange={(e) =>
+              onChange={({ currentTarget: { value } }) =>
                 setEnvOverrides((prev) =>
-                  prev.map((p, i) => (i === idx ? { ...p, key: e.currentTarget.value } : p)),
+                  prev.map((p, i) => (i === idx ? { ...p, key: value } : p)),
                 )
               }
               flex={1}
@@ -302,10 +302,8 @@ function CommandFormFields({
             <TextInput
               placeholder="value"
               value={entry.value}
-              onChange={(e) =>
-                setEnvOverrides((prev) =>
-                  prev.map((p, i) => (i === idx ? { ...p, value: e.currentTarget.value } : p)),
-                )
+              onChange={({ currentTarget: { value } }) =>
+                setEnvOverrides((prev) => prev.map((p, i) => (i === idx ? { ...p, value } : p)))
               }
               flex={1}
             />
@@ -358,7 +356,9 @@ function CommandFormFields({
           label="URL"
           placeholder="http://localhost:3000/health"
           value={healthcheck.url ?? ""}
-          onChange={(e) => setHealthcheck((prev) => ({ ...prev, url: e.currentTarget.value }))}
+          onChange={({ currentTarget: { value } }) =>
+            setHealthcheck((prev) => ({ ...prev, url: value }))
+          }
         />
       )}
       {healthcheck.type === "command" && (
@@ -366,7 +366,9 @@ function CommandFormFields({
           label="Command"
           placeholder="curl -f http://localhost:3000/health"
           value={healthcheck.command ?? ""}
-          onChange={(e) => setHealthcheck((prev) => ({ ...prev, command: e.currentTarget.value }))}
+          onChange={({ currentTarget: { value } }) =>
+            setHealthcheck((prev) => ({ ...prev, command: value }))
+          }
         />
       )}
       {healthcheck.type === "log_line" && (
@@ -375,7 +377,9 @@ function CommandFormFields({
           placeholder="compiled successfully"
           description="Healthy once a stdout/stderr line contains this substring."
           value={healthcheck.pattern ?? ""}
-          onChange={(e) => setHealthcheck((prev) => ({ ...prev, pattern: e.currentTarget.value }))}
+          onChange={({ currentTarget: { value } }) =>
+            setHealthcheck((prev) => ({ ...prev, pattern: value }))
+          }
         />
       )}
       {healthcheck.type !== "none" && (
