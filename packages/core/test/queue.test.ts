@@ -859,13 +859,15 @@ describe("SpawnQueue - config_files", () => {
   test("converges declared config files before the process spawns", async () => {
     const dir = mkdtempSync(join(tmpdir(), "conductor-queue-config-"));
     writeFileSync(join(dir, ".env"), "API_URL=old\n");
-    const script = writeScript(
+    // Bare filename run from `dir`, for the same Windows reason as writeCountingScript.
+    writeFileSync(
+      join(dir, "script.js"),
       `console.log(require("fs").readFileSync(".env", "utf8").trim()); setInterval(() => {}, 1000);`,
     );
     const cmd = makeCommand({
       id: "web",
       name: "Web",
-      run: script.command,
+      run: "bun script.js",
       cwd: dir,
       config_files: [".env"],
       healthcheck: { type: "log_line", pattern: "API_URL=new", timeout_ms: 3000 },
@@ -883,7 +885,6 @@ describe("SpawnQueue - config_files", () => {
       expect(logged).toContain("[config] .env: API_URL changed");
     } finally {
       await queue.stopAll();
-      script.cleanup();
       rmSync(dir, { recursive: true, force: true });
     }
   }, 10_000);
