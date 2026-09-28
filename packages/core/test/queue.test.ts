@@ -438,6 +438,7 @@ describe("SpawnQueue.restartOne - recovery notification", () => {
     for (const deadline = Date.now() + 3000; Date.now() < deadline; await wait(50)) {
       if (queue.getWrapper(id)?.status === "failed") return;
     }
+    throw new Error(`"${id}" never exited as failed`);
   };
 
   test("does not claim recovery for a command that exits again immediately", async () => {
@@ -458,13 +459,17 @@ describe("SpawnQueue.restartOne - recovery notification", () => {
     }
   }, 10_000);
 
-  test("claims recovery once a restarted command without a healthcheck stays up", async () => {
+  // A long-running service must stay up; a one-shot task that now exits 0 has recovered too.
+  test.each([
+    ["stays up", "setInterval(() => {}, 1000);"],
+    ["now exits 0", "process.exit(0);"],
+  ])("claims recovery when a failed command without a healthcheck %s", async (_, after) => {
     const dir = mkdtempSync(join(tmpdir(), "conductor-queue-recover-"));
     const marker = join(dir, "crashed-once").replaceAll("\\", "/");
     const script = writeScript(
       `const fs = require("fs");
        if (!fs.existsSync("${marker}")) { fs.writeFileSync("${marker}", ""); process.exit(3); }
-       setInterval(() => {}, 1000);`,
+       ${after}`,
     );
     const cmd = makeCommand({ id: "flaky", name: "Flaky", run: script.command });
     const queue = new SpawnQueue("test", [cmd], () => testEnv());

@@ -433,7 +433,9 @@ export class SpawnQueue {
       // keeps it pending for the next attempt.
       if (this.pendingRecovery.has(cmd.id)) {
         const confirmRecovery = () => {
-          if (this.wrappers.get(cmd.id) !== wrapper || wrapper.status !== "running") return;
+          if (this.wrappers.get(cmd.id) !== wrapper) return;
+          // "completed" = a one-shot task that exited 0 this time: it recovered too.
+          if (wrapper.status !== "running" && wrapper.status !== "completed") return;
           this.pendingRecovery.delete(cmd.id);
           wrapper.log("[healthcheck] service recovered after restart", "stdout");
           this.recordNotification("recovered", cmd.id, `${cmd.name} is back up after restart`);
