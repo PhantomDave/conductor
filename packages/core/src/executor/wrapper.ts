@@ -1,6 +1,6 @@
 import { spawn, type Subprocess } from "bun";
-import { resolve as resolvePath, isAbsolute } from "node:path";
 import type { CommandConfig } from "../config/schema";
+import { resolveCommandCwd } from "../config/env-resolution";
 import { interpolateString } from "../env/masker";
 import { resolveShell } from "./shell";
 import { splitShellWords } from "./shell-words";
@@ -213,10 +213,7 @@ export class ProcessWrapper {
    * own cwd — that's what made relative `cwd`s land inside the Conductor repo.
    */
   resolvedCwd(): string {
-    const interpolatedCwd = interpolateString(this.commandConfig.cwd, this.env);
-    return isAbsolute(interpolatedCwd)
-      ? interpolatedCwd
-      : resolvePath(this.env.BASE_PATH ?? process.cwd(), interpolatedCwd);
+    return resolveCommandCwd(this.commandConfig.cwd, this.env);
   }
 
   /**

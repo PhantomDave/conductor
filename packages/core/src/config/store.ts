@@ -3,7 +3,15 @@ import { saveConfig } from "./writer";
 import { validateConfig, ConfigError } from "./loader";
 import type { ConductorConfig, CommandConfig, ProfileConfig } from "./schema";
 import { SpawnQueue } from "../executor/queue";
-import { buildCommandEnv, buildProfileEnv, resolveBasePath } from "./env-resolution";
+import {
+  buildCommandEnv,
+  buildProfileEnv,
+  declaredEnvKeys,
+  resolveBasePath,
+  type BuildCommandEnvParams,
+  type BuildEnvParams,
+} from "./env-resolution";
+import { configureConfigFiles, type ConfigFilesReport } from "./config-files";
 import { compileConfigExamples, type CompileReport } from "./example-compiler";
 import type { ConductorQueries } from "../db/queries";
 
@@ -20,6 +28,13 @@ export function dbEnvLookup(queries: ConductorQueries): EnvVarLookup {
         : queries.listEnvVars("profile", scope)
       ).map((row) => [row.key, row.value]),
     );
+}
+
+/** The profile a command's env resolves through when it's started outside a profile run. */
+export function firstProfileOf(config: ConductorConfig, commandId: string): string | undefined {
+  return Object.keys(config.profiles).find((name) =>
+    config.profiles[name].command_ids.includes(commandId),
+  );
 }
 
 /**
@@ -45,57 +60,31 @@ export class ConfigStore {
 
   private buildGlobalQueue(): SpawnQueue {
     // Use root-level commands directly
-    return new SpawnQueue("__global__", this.config.commands, (cmd) =>
-      this.resolveEnvForCommand(cmd),
+    return new SpawnQueue(
+      "__global__",
+      this.config.commands,
+      (cmd) => buildCommandEnv(this.commandEnvParams(cmd)),
+      (cmd) => ({
+        declaredKeys: declaredEnvKeys(this.commandEnvParams(cmd)),
+        secretKeys: this.config.env_secrets,
+      }),
     );
   }
 
-  /**
-   * Resolves environment for a command.
-   * Finds which profiles reference this command to build correct env context.
-   */
-  private findProfilesForCommand(commandId: string): string[] {
-    const profiles: string[] = [];
-    for (const [profileName, profile] of Object.entries(this.config.profiles)) {
-      if (profile.command_ids.includes(commandId)) {
-        profiles.push(profileName);
-      }
-    }
-    return profiles;
-  }
-
-  /**
-   * Resolves environment for a command.
-   * Uses the first profile that references this command for context.
-   */
-  private resolveEnvForCommand(cmd: CommandConfig): Record<string, string> {
-    const profileNames = this.findProfilesForCommand(cmd.id);
-    const profileName = profileNames[0]; // Use first matching profile
-
-    if (!profileName) {
-      // Fallback: use global env only
-      return buildCommandEnv({
-        configFilePath: this.filePath,
-        config: this.config,
-        profile: undefined,
-        cmd,
-        dbGlobalEnv: this.resolveDbEnv("__global__"),
-        dbProfileEnv: {},
-      });
-    }
-    return this.resolveEnv(profileName, cmd);
-  }
-
-  private resolveEnv(profileName: string, cmd: CommandConfig): Record<string, string> {
-    const profile = this.config.profiles[profileName];
-    return buildCommandEnv({
+  /** Env layers for a profile's scope, or just the global scope without one. */
+  private envParams(profileName?: string): BuildEnvParams {
+    return {
       configFilePath: this.filePath,
       config: this.config,
-      profile,
-      cmd,
+      profile: profileName ? this.config.profiles[profileName] : undefined,
       dbGlobalEnv: this.resolveDbEnv("__global__"),
-      dbProfileEnv: this.resolveDbEnv(profileName),
-    });
+      dbProfileEnv: profileName ? this.resolveDbEnv(profileName) : {},
+    };
+  }
+
+  /** Env params for a command, in the context of the first profile that references it. */
+  private commandEnvParams(cmd: CommandConfig): BuildCommandEnvParams {
+    return { ...this.envParams(firstProfileOf(this.config, cmd.id)), cmd };
   }
 
   /** Absolute directory that relative `cwd`s resolve against (see `base_path`). */
@@ -200,15 +189,31 @@ export class ConfigStore {
    * Existing target files are left untouched unless `opts.force` is set.
    */
   compileConfigExamples(profileName?: string, opts: { force?: boolean } = {}): CompileReport {
-    const profile = profileName ? this.config.profiles[profileName] : undefined;
-    const env = buildProfileEnv({
-      configFilePath: this.filePath,
-      config: this.config,
-      profile,
-      dbGlobalEnv: this.resolveDbEnv("__global__"),
-      dbProfileEnv: profileName ? this.resolveDbEnv(profileName) : undefined,
-    });
+    const env = buildProfileEnv(this.envParams(profileName));
     return compileConfigExamples(this.getResolvedBasePath(), env, opts);
+  }
+
+  /**
+   * Plans (or, with `apply`, converges) the declared `config_files` of the
+   * profile's commands and lints the shared env against what those files
+   * and the example templates use. Without a profile it covers every
+   * command, each resolved the way a start resolves it (its first profile).
+   */
+  configureConfigFiles(
+    profileName: string | undefined,
+    opts: { apply: boolean },
+  ): ConfigFilesReport {
+    const ids = profileName ? this.config.profiles[profileName]?.command_ids : undefined;
+    const commands = ids
+      ? this.config.commands.filter((c) => ids.includes(c.id))
+      : this.config.commands;
+    return configureConfigFiles(this.envParams(profileName), commands, {
+      apply: opts.apply,
+      basePath: this.getResolvedBasePath(),
+      envFor: profileName
+        ? undefined
+        : (cmd) => this.envParams(firstProfileOf(this.config, cmd.id)),
+    });
   }
 
   /**

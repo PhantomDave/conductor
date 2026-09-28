@@ -88,14 +88,25 @@ export function findExampleFiles(basePath: string, maxDepth = 12): ExampleFileMa
   return matches;
 }
 
+/** Distinct `${VAR}` names referenced in `content`. */
+export function referencedVars(content: string): string[] {
+  return [...new Set(Array.from(content.matchAll(/\$\{([A-Z0-9_]+)\}/gi), (m) => m[1]))];
+}
+
 /** `${VAR}` references present in `content` that `env` has no value for. */
-function findMissingVars(content: string, env: Record<string, string>): string[] {
-  const missing = new Set<string>();
-  for (const match of content.matchAll(/\$\{([A-Z0-9_]+)\}/gi)) {
-    const name = match[1];
-    if (env[name] === undefined) missing.add(name);
-  }
-  return [...missing];
+export function findMissingVars(content: string, env: Record<string, string>): string[] {
+  return referencedVars(content).filter((name) => env[name] === undefined);
+}
+
+/** Every `${VAR}` referenced by any example template under `basePath`. */
+export function exampleTemplateVars(basePath: string): string[] {
+  return findExampleFiles(basePath).flatMap(({ examplePath }) => {
+    try {
+      return referencedVars(readFileSync(examplePath, "utf-8"));
+    } catch {
+      return [];
+    }
+  });
 }
 
 export interface CompileResult {

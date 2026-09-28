@@ -4,6 +4,7 @@ export * from "./config/writer";
 export * from "./config/store";
 export * from "./config/env-resolution";
 export * from "./config/example-compiler";
+export * from "./config/config-files";
 export * from "./env/masker";
 export * from "./executor/wrapper";
 export * from "./executor/queue";

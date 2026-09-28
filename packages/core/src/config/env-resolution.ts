@@ -1,6 +1,6 @@
 import { dirname, resolve, isAbsolute } from "node:path";
 import type { ConductorConfig, CommandConfig, ProfileConfig } from "./schema";
-import { mergeEnv, interpolateEnv } from "../env/masker";
+import { mergeEnv, interpolateEnv, interpolateString } from "../env/masker";
 
 /**
  * Resolves `config.base_path` to an absolute directory. A relative
@@ -66,4 +66,44 @@ export function buildProfileEnv(params: BuildEnvParams): Record<string, string> 
  */
 export function buildCommandEnv(params: BuildCommandEnvParams): Record<string, string> {
   return interpolateEnv(mergeEnv(...baseLayers(params), params.cmd.env_overrides));
+}
+
+/**
+ * Env keys the user shared through Conductor itself - global_env and the
+ * profile's env, from YAML and the DB. `process.env` is deliberately left
+ * out: a shell export like PORT isn't something Conductor was asked to
+ * manage.
+ */
+export function sharedEnvKeys(params: BuildEnvParams): Set<string> {
+  const { config, profile, dbGlobalEnv, dbProfileEnv } = params;
+  return new Set(
+    [config.global_env, dbGlobalEnv, profile?.env, dbProfileEnv].flatMap((layer) =>
+      Object.keys(layer ?? {}),
+    ),
+  );
+}
+
+/**
+ * Every key a command's env was declared with in Conductor (shared keys,
+ * its `env_overrides`, and BASE_PATH) - what `config_files` auto mode is
+ * allowed to write into a file.
+ */
+export function declaredEnvKeys(params: BuildCommandEnvParams): Set<string> {
+  const keys = sharedEnvKeys(params);
+  for (const key of Object.keys(params.cmd.env_overrides)) keys.add(key);
+  keys.add("BASE_PATH");
+  return keys;
+}
+
+/**
+ * Working directory a command runs in. `cwd` may reference env vars
+ * (e.g. "${BASE_PATH}/backend/Api"); a still-relative result (including
+ * the default ".") resolves against BASE_PATH, not the Conductor server's
+ * own cwd.
+ */
+export function resolveCommandCwd(cwd: string, env: Record<string, string>): string {
+  const interpolated = interpolateString(cwd, env);
+  return isAbsolute(interpolated)
+    ? interpolated
+    : resolve(env.BASE_PATH ?? process.cwd(), interpolated);
 }

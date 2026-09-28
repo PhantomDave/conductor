@@ -854,3 +854,37 @@ describe("SpawnQueue - watch-and-restart", () => {
     }
   }, 10_000);
 });
+
+describe("SpawnQueue - config_files", () => {
+  test("converges declared config files before the process spawns", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "conductor-queue-config-"));
+    writeFileSync(join(dir, ".env"), "API_URL=old\n");
+    const script = writeScript(
+      `console.log(require("fs").readFileSync(".env", "utf8").trim()); setInterval(() => {}, 1000);`,
+    );
+    const cmd = makeCommand({
+      id: "web",
+      name: "Web",
+      run: script.command,
+      cwd: dir,
+      config_files: [".env"],
+      healthcheck: { type: "log_line", pattern: "API_URL=new", timeout_ms: 3000 },
+    } as Partial<CommandConfig> & { id: string; name: string; run: string });
+    const queue = new SpawnQueue(
+      "test",
+      [cmd],
+      () => testEnv({ API_URL: "new" }),
+      () => ({ declaredKeys: new Set(["API_URL"]) }),
+    );
+    const logged: string[] = [];
+    try {
+      await queue.startOne("web", (e) => logged.push(e.message));
+      expect(queue.getWrapper("web")?.getSnapshot().health).toBe("healthy");
+      expect(logged).toContain("[config] .env: API_URL changed");
+    } finally {
+      await queue.stopAll();
+      script.cleanup();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 10_000);
+});
