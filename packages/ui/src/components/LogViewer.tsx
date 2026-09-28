@@ -25,6 +25,7 @@ import { fetchLogs, streamLogs, type LogRow, type ProcessInfo } from "../lib/api
 import { useUiStore } from "../store/ui";
 import { useStopProcess, useRestartCommand } from "../hooks/useProcessActions";
 import { LogLines } from "./LogLines";
+import { mergeLogs } from "../lib/mergeLogs";
 import { STATUS_COLOR } from "../lib/statusColor";
 
 type StreamFilter = "all" | "stdout" | "stderr";
@@ -55,20 +56,24 @@ export function LogViewer({ process }: { process: ProcessInfo }) {
 
     fetchLogs({ pid, limit: 500 })
       .then((history) => {
-        if (!cancelled) setLogState({ pid, rows: history });
+        if (!cancelled)
+          setLogState((prev) => ({
+            pid,
+            rows: mergeLogs(prev.pid === pid ? prev.rows : [], history),
+          }));
       })
       // ponytail: history fetch failure is swallowed - the live SSE tail
       // below still streams new lines in, so a blank backlog degrades
       // gracefully instead of blocking the view.
       .catch(() => {});
 
-    // Live tail: SSE already replays recent history too, but we've just
-    // fetched it above for an instant first paint, so dedupe by id.
-    const seenIds = new Set<number>();
+    // Live tail: SSE replays recent history too, overlapping the fetch above
+    // (kept for an instant first paint) in either order, so both merge by id.
     const unsubscribe = streamLogs(pid, (entry) => {
-      if (seenIds.has(entry.id)) return;
-      seenIds.add(entry.id);
-      setLogState((prev) => ({ pid, rows: prev.pid === pid ? [...prev.rows, entry] : [entry] }));
+      setLogState((prev) => ({
+        pid,
+        rows: mergeLogs(prev.pid === pid ? prev.rows : [], [entry]),
+      }));
     });
 
     return () => {
