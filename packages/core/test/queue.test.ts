@@ -202,6 +202,9 @@ describe("SpawnQueue.startOne - dependency failure", () => {
       expect(
         notifications.some((n) => n.type === "healthcheck_failed" && n.commandId === "flaky"),
       ).toBe(true);
+
+      queue.clearNotifications();
+      expect(queue.listNotifications()).toEqual([]);
     } finally {
       await queue.getWrapper("flaky")?.forceKillAndWait();
     }

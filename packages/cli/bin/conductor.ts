@@ -5,7 +5,11 @@ import { registerConfigureCommand } from "../src/commands/configure";
 import { registerListCommand } from "../src/commands/list";
 import { registerConfigCommand } from "../src/commands/config";
 import { registerEnvCommand } from "../src/commands/env";
-import { registerPsCommand, registerStopCommand } from "../src/commands/ps";
+import {
+  registerNotificationsCommand,
+  registerPsCommand,
+  registerStopCommand,
+} from "../src/commands/ps";
 import { registerLogsCommand } from "../src/commands/logs";
 import { registerLogRetentionCommand } from "../src/commands/log-retention";
 
@@ -20,6 +24,7 @@ registerConfigCommand(program);
 registerEnvCommand(program);
 registerPsCommand(program);
 registerStopCommand(program);
+registerNotificationsCommand(program);
 registerLogsCommand(program);
 registerLogRetentionCommand(program);
 

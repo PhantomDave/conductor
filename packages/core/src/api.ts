@@ -712,6 +712,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     },
   );
 
+  app.delete("/api/notifications", async () => {
+    deps.store.getQueue().clearNotifications();
+    return { cleared: true };
+  });
+
   app.post<{ Params: { id: string }; Body: { profile?: string } }>(
     "/api/commands/:id/execute",
     async (request, reply) => {

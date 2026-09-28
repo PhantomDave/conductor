@@ -1,5 +1,5 @@
 import { Table, Badge, Text, Card, Button, Group, Stack, Tooltip } from "@mantine/core";
-import { useNotifications } from "../hooks/useNotifications";
+import { useClearNotifications, useNotifications } from "../hooks/useNotifications";
 import { useUiStore } from "../store/ui";
 
 const NOTIFICATION_TYPE_COLOR: Record<string, string> = {
@@ -23,6 +23,7 @@ const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
 export function NotificationsTab() {
   const { data, isLoading, error } = useNotifications();
   const { selectProcess } = useUiStore();
+  const clearAll = useClearNotifications();
 
   if (isLoading) return <Text c="dimmed">Loading notifications...</Text>;
   if (error) {
@@ -50,6 +51,15 @@ export function NotificationsTab() {
         <Text fw={500}>
           {notifications.length} failure{notifications.length === 1 ? "" : "s"}
         </Text>
+        <Button
+          size="xs"
+          variant="subtle"
+          color="gray"
+          loading={clearAll.isPending}
+          onClick={() => clearAll.mutate()}
+        >
+          Clear all
+        </Button>
       </Group>
 
       <Table highlightOnHover>

@@ -890,4 +890,9 @@ export class SpawnQueue {
     const reversed = this.listNotifications();
     return reversed.slice(offset, offset + limit);
   }
+
+  /** Drops the whole notification history. */
+  clearNotifications(): void {
+    this.notifications = [];
+  }
 }

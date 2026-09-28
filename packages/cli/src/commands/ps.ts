@@ -30,6 +30,23 @@ export function registerPsCommand(program: import("commander").Command) {
     });
 }
 
+export function registerNotificationsCommand(program: import("commander").Command) {
+  const notifications = program
+    .command("notifications")
+    .description("List recent notifications (requires conductor core running)")
+    .action(async () => {
+      const data = await fetchJson("/api/notifications");
+      console.log(JSON.stringify(data, null, 2));
+    });
+  notifications
+    .command("clear")
+    .description("Clear the notification history")
+    .action(async () => {
+      await fetchJson("/api/notifications", { method: "DELETE" });
+      console.log(pc.green("✓ Cleared notifications"));
+    });
+}
+
 export function registerStopCommand(program: import("commander").Command) {
   program
     .command("stop <profile>")
