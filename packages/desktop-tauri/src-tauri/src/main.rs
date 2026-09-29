@@ -319,6 +319,23 @@ fn main() {
                 }
             }
 
+            // SIGTERM (kill, systemd stopping the app scope on logout) and
+            // SIGINT never raise ExitRequested on their own, which would
+            // orphan the sidecar - route them through exit() so it does.
+            #[cfg(unix)]
+            {
+                use tokio::signal::unix::{signal, SignalKind};
+                for kind in [SignalKind::terminate(), SignalKind::interrupt()] {
+                    let handle = app.handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Ok(mut sig) = signal(kind) {
+                            sig.recv().await;
+                            handle.exit(0);
+                        }
+                    });
+                }
+            }
+
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let state = handle.state::<SidecarState>();
