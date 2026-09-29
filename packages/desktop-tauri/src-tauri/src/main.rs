@@ -302,6 +302,10 @@ async fn start(app: AppHandle, state: tauri::State<'_, SidecarState>) -> Result<
 }
 
 fn main() {
+    // tauri-plugin-updater's rustls-tls enables reqwest/rustls-no-provider, which
+    // feature-unifies into our reqwest: any Client built before the updater's own
+    // first check (e.g. wait_for_healthy) panics without a process-wide provider.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
