@@ -257,43 +257,45 @@ describe("SpawnQueue.stopAll", () => {
 
 describe("SpawnQueue.startAll - concurrency", () => {
   test("starts independent commands concurrently instead of one at a time", async () => {
-    // Each command's healthcheck itself takes ~200ms to pass (a single
-    // successful attempt, so `retries` never matters). Two independent
-    // commands run serially would take ~400ms+; run concurrently, close to
-    // one 200ms healthcheck.
-    const sleepScript = writeScript("Bun.sleepSync(200)");
+    // Each command's single startup healthcheck logs "start <id>", sleeps,
+    // then logs "end <id>". Run concurrently, both probes start before either
+    // ends; run serially, "end a" lands before "start b". Ordering, not a
+    // wall-clock bound, so a slow CI runner can't flake it. The post-start
+    // health monitor re-runs the probe too, but only after some probe ended.
+    const logDir = mkdtempSync(join(tmpdir(), "conductor-queue-concurrency-"));
+    const logPath = join(logDir, "probes.log");
+    const probe = writeScript(
+      `const fs = require("fs");
+       const log = ${JSON.stringify(logPath)};
+       fs.appendFileSync(log, "start " + process.argv[2] + "\\n");
+       Bun.sleepSync(500);
+       fs.appendFileSync(log, "end " + process.argv[2] + "\\n");`,
+    );
+    const healthcheckFor = (id: string) => ({
+      type: "command" as const,
+      command: `${probe.command} ${id}`,
+      interval_ms: 60_000, // keep the post-start monitor from re-probing during the test
+      timeout_ms: 5000,
+      retries: 1,
+    });
+    const run = `bun -e "setInterval(() => {}, 1000)"`;
+    const a = makeCommand({ id: "a", name: "A", run, healthcheck: healthcheckFor("a") });
+    const b = makeCommand({ id: "b", name: "B", run, healthcheck: healthcheckFor("b") });
+    const queue = new SpawnQueue("test", [a, b], () => testEnv());
     try {
-      const slowHealthcheck = {
-        type: "command" as const,
-        command: sleepScript.command,
-        interval_ms: 50,
-        timeout_ms: 5000,
-        retries: 1,
-      };
-      const a = makeCommand({
-        id: "a",
-        name: "A",
-        run: `bun -e "setInterval(() => {}, 1000)"`,
-        healthcheck: slowHealthcheck,
-      });
-      const b = makeCommand({
-        id: "b",
-        name: "B",
-        run: `bun -e "setInterval(() => {}, 1000)"`,
-        healthcheck: slowHealthcheck,
-      });
-      const queue = new SpawnQueue("test", [a, b], () => testEnv());
-
-      const start = Date.now();
       await queue.startAll();
-      const elapsed = Date.now() - start;
 
       expect(queue.listSnapshots().every((s) => s.status === "running")).toBe(true);
-      expect(elapsed).toBeLessThan(350);
-
-      await queue.stopAll();
+      const lines = readFileSync(logPath, "utf-8").trim().split("\n");
+      expect(lines.slice(0, 2).sort()).toEqual(["start a", "start b"]);
     } finally {
-      sleepScript.cleanup();
+      await queue.stopAll();
+      probe.cleanup();
+      try {
+        rmSync(logDir, { recursive: true, force: true });
+      } catch {
+        // Windows: a straggling monitor probe may still hold the log open.
+      }
     }
   });
 
