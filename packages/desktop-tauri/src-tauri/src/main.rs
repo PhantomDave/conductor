@@ -319,19 +319,29 @@ fn main() {
                 }
             }
 
-            // SIGTERM (kill, systemd stopping the app scope on logout) and
-            // SIGINT never raise ExitRequested on their own, which would
-            // orphan the sidecar - route them through exit() so it does.
+            // SIGTERM (kill, systemd stopping the app scope on logout), SIGINT
+            // and SIGHUP (closed terminal) never raise ExitRequested on their
+            // own, which would orphan the sidecar - route them through exit()
+            // so it does. Registered before the sidecar can be spawned.
             #[cfg(unix)]
             {
                 use tokio::signal::unix::{signal, SignalKind};
-                for kind in [SignalKind::terminate(), SignalKind::interrupt()] {
+                for kind in [SignalKind::terminate(), SignalKind::interrupt(), SignalKind::hangup()] {
+                    let mut sig = match tauri::async_runtime::block_on(async { signal(kind) }) {
+                        Ok(sig) => sig,
+                        Err(err) => {
+                            eprintln!("[main] failed to handle {kind:?}: {err}");
+                            continue;
+                        }
+                    };
                     let handle = app.handle().clone();
                     tauri::async_runtime::spawn(async move {
-                        if let Ok(mut sig) = signal(kind) {
-                            sig.recv().await;
-                            handle.exit(0);
-                        }
+                        sig.recv().await;
+                        handle.exit(0);
+                        // tokio never restores the default action, so without
+                        // this a second signal would be ignored: quit now.
+                        sig.recv().await;
+                        std::process::exit(1);
                     });
                 }
             }
