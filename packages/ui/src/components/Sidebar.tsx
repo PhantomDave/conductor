@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, ScrollArea, Text, Badge, Stack, Divider, Group, ActionIcon } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
@@ -41,14 +42,17 @@ export function Sidebar() {
   const { view, setView, selectedProcessKey, selectProcess, triggerAction } = useUiStore();
   const runProfile = useRunProfile();
   const stopAll = useStopAllProcesses();
+  const [switching, setSwitching] = useState(false);
 
   const active = processes?.filter((p) => p.status === "running" || p.status === "starting") ?? [];
 
   async function handleSwitchWorkspace() {
     if (active.length > 0) {
-      const ok = window.confirm(`This stops ${active.length} running processes. Continue?`);
+      const noun = active.length === 1 ? "process" : "processes";
+      const ok = window.confirm(`This stops ${active.length} running ${noun}. Continue?`);
       if (!ok) return;
     }
+    setSwitching(true);
     try {
       await closeWorkspace();
       window.location.reload();
@@ -58,6 +62,7 @@ export function Sidebar() {
         title: "Failed to switch workspace",
         message: err instanceof Error ? err.message : "Unknown error",
       });
+      setSwitching(false);
     }
   }
 
@@ -173,6 +178,7 @@ export function Sidebar() {
           label="Switch workspace"
           description="Close this workspace and open another"
           leftSection={<IconFolderOpen size={16} />}
+          disabled={switching}
           onClick={() => void handleSwitchWorkspace()}
         />
 

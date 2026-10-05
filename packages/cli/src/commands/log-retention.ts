@@ -3,13 +3,9 @@ import pc from "picocolors";
 const CORE_URL = process.env.CONDUCTOR_API_URL ?? "http://localhost:4000";
 
 async function apiCall<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response;
   try {
-    const res = await fetch(`${CORE_URL}${path}`, init);
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(body?.error ?? `HTTP ${res.status}`);
-    }
-    return (await res.json()) as T;
+    res = await fetch(`${CORE_URL}${path}`, init);
   } catch (err) {
     console.error(
       pc.red(
@@ -18,6 +14,14 @@ async function apiCall<T>(path: string, init?: RequestInit): Promise<T> {
     );
     process.exit(1);
   }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    console.error(
+      pc.red(`✗ Conductor core at ${CORE_URL}: ${body?.error ?? `HTTP ${res.status}`}`),
+    );
+    process.exit(1);
+  }
+  return (await res.json()) as T;
 }
 
 export function registerLogRetentionCommand(program: import("commander").Command) {

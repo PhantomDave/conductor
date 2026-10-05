@@ -62,7 +62,12 @@ export function prepareSession(dir: string): { configPath: string; config: Condu
     saveConfig(configPath, config);
     const conductorDir = join(dir, ".conductor");
     mkdirSync(conductorDir, { recursive: true });
-    writeFileSync(join(conductorDir, ".gitignore"), "*\n");
+    try {
+      writeFileSync(join(conductorDir, ".gitignore"), "*\n", { flag: "wx" });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      // .conductor/.gitignore already exists (e.g. hand-edited) - don't clobber it.
+    }
   }
   return { configPath, config: loadConfig(configPath) };
 }

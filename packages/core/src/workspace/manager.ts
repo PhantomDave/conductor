@@ -95,8 +95,7 @@ export class WorkspaceManager {
       current: current ? { path: current.dir, name: current.name } : null,
       recent: readRecent(this.opts.dataDir).map((entry) => ({
         ...entry,
-        // workspaces.json is hand-editable; a malformed entry reads as missing.
-        missing: typeof entry.path !== "string" || !existsSync(entry.path),
+        missing: !existsSync(entry.path),
       })),
     };
   }

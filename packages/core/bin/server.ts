@@ -17,15 +17,40 @@ import {
 const PORT = Number(process.env.CONDUCTOR_PORT ?? 4000);
 
 async function main() {
-  const dataDir = resolve(process.env.CONDUCTOR_DATA_DIR ?? process.cwd());
   const broadcaster = new LogBroadcaster();
   // ponytail: deps fields are unset until a workspace opens; the onRequest guard keeps handlers from running before that
   const deps = { broadcaster } as ApiDependencies;
-  const manager = new WorkspaceManager({ dataDir, deps, session: { broadcaster } });
-  deps.workspaces = manager;
   const logger = createLogger();
 
+  // Discovery mode resolves a config path before the data dir can default
+  // correctly (it lives next to the config, not wherever `conductor` was
+  // launched from); start-screen mode has no config yet, so cwd stands in.
+  let configPath: string | null = null;
+  let dataDir: string;
   if (process.env.CONDUCTOR_START_SCREEN === "1") {
+    dataDir = resolve(process.env.CONDUCTOR_DATA_DIR ?? process.cwd());
+  } else {
+    // Bootstrap: if no .conductor.yml exists anywhere up the tree, create
+    // one in the current directory so the UI/API have something to persist
+    // into immediately, instead of requiring a config file up front.
+    configPath = discoverConfigPath();
+    if (!configPath) {
+      configPath = join(process.cwd(), ".conductor.yml");
+      if (!existsSync(configPath)) {
+        saveConfig(configPath, createDefaultConfig());
+      }
+    }
+    dataDir = resolve(
+      process.env.CONDUCTOR_DATA_DIR ?? join(dirname(configPath), ".conductor", "data"),
+    );
+  }
+
+  const manager = new WorkspaceManager({ dataDir, deps, session: { broadcaster } });
+  deps.workspaces = manager;
+
+  if (configPath) {
+    await manager.open(dirname(configPath));
+  } else {
     // Start-screen mode (the desktop app): open nothing, let the UI pick.
     // Seed the recent list with the legacy single-config desktop setup.
     const legacy = join(dataDir, ".conductor.yml");
@@ -38,18 +63,6 @@ async function main() {
       }
       recordRecent(dataDir, { path: dataDir, name });
     }
-  } else {
-    // Bootstrap: if no .conductor.yml exists anywhere up the tree, create
-    // one in the current directory so the UI/API have something to persist
-    // into immediately, instead of requiring a config file up front.
-    let configPath = discoverConfigPath();
-    if (!configPath) {
-      configPath = join(process.cwd(), ".conductor.yml");
-      if (!existsSync(configPath)) {
-        saveConfig(configPath, createDefaultConfig());
-      }
-    }
-    await manager.open(dirname(configPath));
   }
 
   const app = await buildApi(deps);

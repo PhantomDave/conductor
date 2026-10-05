@@ -28,9 +28,31 @@ describe("readRecent", () => {
     writeFileSync(join(dir, "workspaces.json"), "{}");
     expect(readRecent(dir)).toEqual([]);
   });
+
+  test("drops malformed entries, keeping only valid ones", () => {
+    const valid = { path: "/proj/a", name: "Alpha", lastOpened: new Date().toISOString() };
+    writeFileSync(
+      join(dir, "workspaces.json"),
+      JSON.stringify([null, { foo: 1 }, { path: "/a", name: "a", lastOpened: "nope" }, valid]),
+    );
+    expect(readRecent(dir)).toEqual([valid]);
+  });
 });
 
 describe("recordRecent", () => {
+  test("on a file with malformed entries, succeeds and keeps the new + valid entries", () => {
+    const valid = { path: "/proj/a", name: "Alpha", lastOpened: new Date().toISOString() };
+    writeFileSync(
+      join(dir, "workspaces.json"),
+      JSON.stringify([null, { foo: 1 }, { path: "/a", name: "a", lastOpened: "nope" }, valid]),
+    );
+
+    expect(() => recordRecent(dir, { path: "/proj/b", name: "Beta" })).not.toThrow();
+
+    const entries = readRecent(dir);
+    expect(entries.map((e) => e.path)).toEqual(["/proj/b", "/proj/a"]);
+  });
+
   test("recording the same path twice keeps one entry with the newest name", () => {
     recordRecent(dir, { path: "/proj/a", name: "Alpha" });
     recordRecent(dir, { path: "/proj/a", name: "Alpha Renamed" });

@@ -13,11 +13,21 @@ function filePath(dataDir: string): string {
   return join(dataDir, "workspaces.json");
 }
 
-/** Reads the recent-workspaces list. Any missing file, parse error, or non-array value yields []. */
+/** Reads the recent-workspaces list. Any missing file, parse error, non-array value, or
+ *  malformed entry (wrong types, unparseable lastOpened) is dropped rather than surfaced. */
 export function readRecent(dataDir: string): RecentWorkspace[] {
   try {
     const parsed: unknown = JSON.parse(readFileSync(filePath(dataDir), "utf-8"));
-    return Array.isArray(parsed) ? (parsed as RecentWorkspace[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as unknown[]).filter((e): e is RecentWorkspace => {
+      const entry = e as Partial<RecentWorkspace> | null;
+      return (
+        typeof entry?.path === "string" &&
+        typeof entry?.name === "string" &&
+        typeof entry?.lastOpened === "string" &&
+        !Number.isNaN(Date.parse(entry.lastOpened))
+      );
+    });
   } catch {
     return [];
   }

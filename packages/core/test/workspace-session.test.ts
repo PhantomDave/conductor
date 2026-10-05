@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
@@ -68,6 +68,16 @@ describe("prepareSession", () => {
 
     expect(() => prepareSession(dir)).toThrow(ConfigError);
     expect(existsSync(join(dir, DEFAULT_DB_PATH))).toBe(false);
+  });
+
+  test("keeps a pre-existing .conductor/.gitignore's custom content", () => {
+    const conductorDir = join(dir, ".conductor");
+    mkdirSync(conductorDir, { recursive: true });
+    writeFileSync(join(conductorDir, ".gitignore"), "custom\n");
+
+    prepareSession(dir);
+
+    expect(readFileSync(join(conductorDir, ".gitignore"), "utf-8")).toBe("custom\n");
   });
 });
 

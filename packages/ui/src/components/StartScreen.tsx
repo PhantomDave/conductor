@@ -105,7 +105,16 @@ export function StartScreen() {
   async function handleOpenNew() {
     if (opening) return;
     if (isTauri) {
-      const picked = await window.__TAURI__!.core.invoke<string | null>("pick_folder");
+      let picked: string | null;
+      try {
+        picked = await window.__TAURI__!.core.invoke<string | null>("pick_folder");
+      } catch (err) {
+        setError({
+          title: "Couldn't open workspace",
+          message: err instanceof Error ? err.message : "Failed to open the folder picker",
+        });
+        return;
+      }
       if (!picked) return;
       await performOpen(picked);
     } else if (path) {

@@ -166,4 +166,12 @@ describe("core-backed commands", () => {
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("Could not reach Conductor core");
   });
+
+  test("an HTTP error from a reachable core prints the server's error, not 'Could not reach'", async () => {
+    await fetch(`${core.url}/api/workspaces/close`, { method: "POST" });
+    const r = await cli(["ps"]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain(`✗ Conductor core at ${core.url}: no workspace open`);
+    expect(r.stderr).not.toContain("Could not reach");
+  });
 });

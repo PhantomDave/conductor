@@ -264,12 +264,12 @@ describe("WorkspaceManager + API", () => {
     expect(manager.list().recent).toEqual([]);
   });
 
-  test("a recent entry with a non-string path is reported missing, not thrown", () => {
+  test("a malformed recent entry is dropped, not thrown", () => {
     const dataDir = join(root, "data");
     mkdirSync(dataDir, { recursive: true });
     writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify([{ foo: 1 }]));
 
-    expect(manager.list().recent).toEqual([expect.objectContaining({ missing: true })]);
+    expect(manager.list().recent).toEqual([]);
   });
 
   test("after switching to B, a log line lands in B's DB, not A's", async () => {
