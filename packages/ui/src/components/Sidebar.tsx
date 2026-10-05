@@ -1,4 +1,5 @@
 import { NavLink, ScrollArea, Text, Badge, Stack, Divider, Group, ActionIcon } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import {
   IconBolt,
   IconCircleFilled,
@@ -48,8 +49,16 @@ export function Sidebar() {
       const ok = window.confirm(`This stops ${active.length} running processes. Continue?`);
       if (!ok) return;
     }
-    await closeWorkspace();
-    window.location.reload();
+    try {
+      await closeWorkspace();
+      window.location.reload();
+    } catch (err) {
+      notifications.show({
+        color: "red",
+        title: "Failed to switch workspace",
+        message: err instanceof Error ? err.message : "Unknown error",
+      });
+    }
   }
 
   const finished =

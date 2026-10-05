@@ -55,7 +55,12 @@ function RecentRow({
           {entry.name}
         </Text>
         <Text size="xs" c="dimmed" truncate>
-          {entry.path} · {entry.missing ? "folder not found" : formatRelativeTime(entry.lastOpened)}
+          {entry.path}
+        </Text>
+        {/* Own line, not truncated - sharing a line with the path pushed this off
+            for any realistically long path (the whole line truncates as one unit). */}
+        <Text size="xs" c="dimmed">
+          {entry.missing ? "folder not found" : formatRelativeTime(entry.lastOpened)}
         </Text>
       </Box>
       <ActionIcon
@@ -78,7 +83,7 @@ export function StartScreen() {
   const { data } = useWorkspaces();
   const queryClient = useQueryClient();
   const [path, setPath] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ title: string; message: string } | null>(null);
   const [opening, setOpening] = useState(false);
   const isTauri = typeof window !== "undefined" && !!window.__TAURI__;
 
@@ -89,12 +94,16 @@ export function StartScreen() {
       await openWorkspace(target);
       window.location.reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to open workspace");
+      setError({
+        title: "Couldn't open workspace",
+        message: err instanceof Error ? err.message : "Failed to open workspace",
+      });
       setOpening(false);
     }
   }
 
   async function handleOpenNew() {
+    if (opening) return;
     if (isTauri) {
       const picked = await window.__TAURI__!.core.invoke<string | null>("pick_folder");
       if (!picked) return;
@@ -105,8 +114,15 @@ export function StartScreen() {
   }
 
   async function handleForget(forgetPath: string) {
-    await forgetWorkspace(forgetPath);
-    await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    try {
+      await forgetWorkspace(forgetPath);
+      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    } catch (err) {
+      setError({
+        title: "Couldn't remove workspace",
+        message: err instanceof Error ? err.message : "Failed to remove workspace",
+      });
+    }
   }
 
   const recent = data?.recent ?? [];
@@ -123,11 +139,11 @@ export function StartScreen() {
           <Alert
             color="red"
             variant="light"
-            title="Couldn't open workspace"
+            title={error.title}
             withCloseButton
             onClose={() => setError(null)}
           >
-            {error}
+            {error.message}
           </Alert>
         )}
 
@@ -142,8 +158,9 @@ export function StartScreen() {
                 flex={1}
                 placeholder="/path/to/project"
                 value={path}
+                disabled={opening}
                 onChange={(e) => setPath(e.currentTarget.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleOpenNew()}
+                onKeyDown={(e) => e.key === "Enter" && !opening && handleOpenNew()}
               />
               <Button onClick={handleOpenNew} loading={opening} disabled={!path}>
                 Open
