@@ -133,3 +133,17 @@ describe("config import/export", () => {
 test("fetchProcesses returns an array", async () => {
   expect(Array.isArray(await api.fetchProcesses())).toBe(true);
 });
+
+describe("workspaces", () => {
+  test("fetchWorkspaces reports the harness's open sample workspace", async () => {
+    const { current, recent } = await api.fetchWorkspaces();
+    expect(current?.name).toBe("Conductor Test Fixture");
+    expect(recent.map((r) => r.path)).toContain(current?.path);
+  });
+
+  test("openWorkspace on a nonexistent path rejects", async () => {
+    const err = await api.openWorkspace("/no/such/workspace-dir").catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Folder not found/);
+  });
+});
