@@ -1,15 +1,10 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { discoverConfigPath, loadConfig, createDefaultConfig } from "../src";
+import { discoverConfigPath, createDefaultConfig } from "../src";
 import { saveConfig } from "../src";
-import { ConfigStore } from "../src";
-import { createLogger } from "../src";
-import { openDatabase, DEFAULT_DB_PATH } from "../src";
-import { ConductorQueries, dbEnvLookup } from "../src";
 import { LogBroadcaster } from "../src";
-import type { LogEntry } from "../src";
 import { buildApi } from "../src";
-import { MetricCollector } from "../src";
+import { openSession } from "../src";
 
 const PORT = Number(process.env.CONDUCTOR_PORT ?? 4000);
 
@@ -25,86 +20,19 @@ async function main() {
     }
   }
 
-  const config = loadConfig(configPath);
-  const logger = createLogger({ secretKeys: config.env_secrets });
-  // Next to the config (not cwd), so the CLI's `openQueries` finds the same DB.
-  const db = openDatabase(join(dirname(configPath), DEFAULT_DB_PATH));
-  const queries = new ConductorQueries(db);
   const broadcaster = new LogBroadcaster();
-
-  const store = new ConfigStore(configPath, config, dbEnvLookup(queries));
-
-  // CPU/memory metrics collector — samples process-group totals every 5s
-  // and persists them to SQLite for historical query by the UI.
-  const collector = new MetricCollector(
-    () =>
-      [...store.getQueues().values()]
-        .flatMap((q) => q.listSnapshots())
-        .filter((s) => s.status === "running")
-        .map((s) => ({ pid: s.pid })),
-    queries,
-    {
-      intervalMs: 5000,
-      retentionHours: 24,
-      // Write live values back into the wrapper so snapshots served by
-      // /api/processes carry current CPU/memory for the UI's live columns.
-      onSample: (pid, cpuPercent, memoryBytes) => {
-        for (const queue of store.getQueues().values()) {
-          const wrapper = queue.findByPid(pid);
-          if (wrapper) {
-            wrapper.updateMetrics(cpuPercent, memoryBytes);
-            break;
-          }
-        }
-      },
-    },
-  );
-
-  // Every log line from any managed process is persisted and broadcast
-  // so both the CLI (via `conductor logs`) and the UI's live SSE stream
-  // can see it, regardless of who started the process.
-  const onLog = (entry: LogEntry) => {
-    const row = queries.insertLog({
-      process_id: String(entry.pid),
-      command_id: entry.commandId,
-      profile: entry.profile,
-      timestamp: entry.timestamp,
-      level: entry.stream === "stderr" ? "error" : "info",
-      stream: entry.stream,
-      message: entry.message,
-    });
-    broadcaster.publish(row);
-  };
+  const session = openSession(dirname(configPath), { broadcaster });
 
   const app = await buildApi({
-    logger,
-    queries,
-    store,
+    logger: session.logger,
+    queries: session.queries,
+    store: session.store,
     broadcaster,
-    onLog,
+    onLog: session.onLog,
   });
 
   await app.listen({ port: PORT, host: "0.0.0.0" });
-  logger.info(`Conductor core listening on http://localhost:${PORT}`);
-
-  // Start the metrics collector now that the API is running
-  collector.start();
-
-  // Time-window log retention sweep. Session-scoped retention doesn't need
-  // its own timer - it runs inline on every /api/profiles/:profile/run.
-  const logRetentionInterval = setInterval(
-    () => {
-      const days = store.getConfig().log_retention_days;
-      if (days <= 0) return;
-      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-      try {
-        queries.deleteLogsBefore(cutoff);
-      } catch (err) {
-        logger.error({ err }, "Log retention sweep failed");
-      }
-    },
-    60 * 60 * 1000,
-  );
+  session.logger.info(`Conductor core listening on http://localhost:${PORT}`);
 
   // Stop every managed process cleanly (respecting each command's
   // stop_signal/stop_timeout_ms) before exiting, so killing the server -
@@ -114,12 +42,9 @@ async function main() {
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
-    logger.info(`Received ${signal}, stopping all managed processes...`);
-    await Promise.all([...store.getQueues().values()].map((queue) => queue.stopAll()));
-    collector.stop();
-    clearInterval(logRetentionInterval);
+    session.logger.info(`Received ${signal}, stopping all managed processes...`);
+    await session.close();
     await app.close();
-    db.close();
     process.exit(0);
   };
   process.on("SIGINT", () => void shutdown("SIGINT"));
