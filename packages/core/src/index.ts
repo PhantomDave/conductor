@@ -15,3 +15,6 @@ export * from "./db/init";
 export * from "./db/queries";
 export * from "./api";
 export * from "./monitor";
+export * from "./workspace/recent";
+export * from "./workspace/session";
+export * from "./workspace/manager";

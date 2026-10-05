@@ -665,3 +665,43 @@ export async function fetchProcessMetrics(pid: number): Promise<MetricPoint[]> {
   const data = await parseJsonOrThrow(res, `Failed to fetch metrics for PID ${pid}`);
   return (data.metrics ?? data) as MetricPoint[];
 }
+
+// --- Workspaces -------------------------------------------------------
+
+export interface RecentWorkspaceInfo {
+  path: string;
+  name: string;
+  lastOpened: string; // ISO
+  missing: boolean;
+}
+
+export interface WorkspaceList {
+  current: { path: string; name: string } | null;
+  recent: RecentWorkspaceInfo[];
+}
+
+export async function fetchWorkspaces(): Promise<WorkspaceList> {
+  const res = await fetch(`${API_BASE}/workspaces`);
+  return parseJsonOrThrow(res, "Failed to fetch workspaces");
+}
+
+export async function openWorkspace(path: string): Promise<{ path: string; name: string }> {
+  const res = await fetch(`${API_BASE}/workspaces/open`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  return parseJsonOrThrow(res, "Failed to open workspace");
+}
+
+export async function closeWorkspace(): Promise<void> {
+  const res = await fetch(`${API_BASE}/workspaces/close`, { method: "POST" });
+  await parseJsonOrThrow(res, "Failed to close workspace");
+}
+
+export async function forgetWorkspace(path: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/workspaces?path=${encodeURIComponent(path)}`, {
+    method: "DELETE",
+  });
+  await parseJsonOrThrow(res, "Failed to remove workspace");
+}

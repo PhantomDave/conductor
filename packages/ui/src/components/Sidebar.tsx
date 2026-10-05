@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { NavLink, ScrollArea, Text, Badge, Stack, Divider, Group, ActionIcon } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import {
   IconBolt,
   IconCircleFilled,
+  IconFolderOpen,
   IconHistory,
   IconLayoutDashboard,
   IconPlayerPlay,
@@ -14,10 +17,11 @@ import {
 } from "@tabler/icons-react";
 import { useProcesses } from "../hooks/useProcesses";
 import { useProfiles } from "../hooks/useProfiles";
+import { useWorkspaces } from "../hooks/useWorkspaces";
 import { useRunProfile, useStopAllProcesses } from "../hooks/useProcessActions";
 import { useUiStore } from "../store/ui";
 import { STATUS_COLOR } from "../lib/statusColor";
-import type { ProcessInfo } from "../lib/api";
+import { closeWorkspace, type ProcessInfo } from "../lib/api";
 
 // "# running"-style section label, matching SectionHeading's comment
 // convention on the rest of the app — kept local since the sidebar's
@@ -34,11 +38,34 @@ function SidebarLabel({ children }: { children: string }) {
 export function Sidebar() {
   const { data: processes } = useProcesses();
   const { data: profiles } = useProfiles();
+  const { data: workspaces } = useWorkspaces();
   const { view, setView, selectedProcessKey, selectProcess, triggerAction } = useUiStore();
   const runProfile = useRunProfile();
   const stopAll = useStopAllProcesses();
+  const [switching, setSwitching] = useState(false);
 
   const active = processes?.filter((p) => p.status === "running" || p.status === "starting") ?? [];
+
+  async function handleSwitchWorkspace() {
+    if (active.length > 0) {
+      const noun = active.length === 1 ? "process" : "processes";
+      const ok = window.confirm(`This stops ${active.length} running ${noun}. Continue?`);
+      if (!ok) return;
+    }
+    setSwitching(true);
+    try {
+      await closeWorkspace();
+      window.location.reload();
+    } catch (err) {
+      notifications.show({
+        color: "red",
+        title: "Failed to switch workspace",
+        message: err instanceof Error ? err.message : "Unknown error",
+      });
+      setSwitching(false);
+    }
+  }
+
   const finished =
     processes?.filter(
       (p) => p.status === "stopped" || p.status === "completed" || p.status === "failed",
@@ -50,6 +77,11 @@ export function Sidebar() {
 
   return (
     <Stack h="100%" gap={0}>
+      {workspaces?.current && (
+        <Text size="xs" fw={600} px="xs" pt="xs" truncate title={workspaces.current.name}>
+          {workspaces.current.name}
+        </Text>
+      )}
       <Stack gap={4} p="xs">
         <NavLink
           label="Processes"
@@ -141,6 +173,13 @@ export function Sidebar() {
           leftSection={<IconPlayerStop size={16} />}
           disabled={active.length === 0 || stopAll.isPending}
           onClick={() => stopAll.mutate()}
+        />
+        <NavLink
+          label="Switch workspace"
+          description="Close this workspace and open another"
+          leftSection={<IconFolderOpen size={16} />}
+          disabled={switching}
+          onClick={() => void handleSwitchWorkspace()}
         />
 
         {profileNames.length > 0 && (

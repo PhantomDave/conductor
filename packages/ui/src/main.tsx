@@ -5,6 +5,7 @@ import { Notifications } from "@mantine/notifications";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { WorkspaceGate } from "./components/WorkspaceGate";
 import { conductorTheme } from "./theme";
 
 import "@mantine/core/styles.css";
@@ -20,7 +21,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <Notifications position="top-right" autoClose={4000} pauseResetOnHover="notification" />
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <App />
+          <WorkspaceGate>
+            <App />
+          </WorkspaceGate>
         </QueryClientProvider>
       </ErrorBoundary>
     </MantineProvider>

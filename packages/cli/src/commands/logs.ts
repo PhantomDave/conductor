@@ -36,13 +36,9 @@ type LogRun = {
 };
 
 async function fetchJson<T>(path: string): Promise<T> {
+  let res: Response;
   try {
-    const res = await fetch(`${CORE_URL}${path}`);
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(body?.error ?? `HTTP ${res.status}`);
-    }
-    return (await res.json()) as T;
+    res = await fetch(`${CORE_URL}${path}`);
   } catch (err) {
     console.error(
       pc.red(
@@ -51,6 +47,14 @@ async function fetchJson<T>(path: string): Promise<T> {
     );
     process.exit(1);
   }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    console.error(
+      pc.red(`✗ Conductor core at ${CORE_URL}: ${body?.error ?? `HTTP ${res.status}`}`),
+    );
+    process.exit(1);
+  }
+  return (await res.json()) as T;
 }
 
 export function registerLogsCommand(program: import("commander").Command) {

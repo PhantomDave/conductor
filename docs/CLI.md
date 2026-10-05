@@ -2,6 +2,8 @@
 
 The Conductor CLI is built with Commander v15 and runs standalone (no daemon required). The binary is published as `conductor` and installed via `bun link`.
 
+**Workspaces:** the CLI is already per workspace — it uses the `.conductor.yml` found by walking up from your cwd, so `cd` into a project folder to work on it. There is no `conductor workspace` command: switching the desktop app's open workspace happens in its start screen, since its sidecar listens on a random port the CLI can't reach.
+
 ## Commands
 
 ### conductor run

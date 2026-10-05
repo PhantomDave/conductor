@@ -5,10 +5,13 @@
 // This host can't screenshot a real GTK/Wayland window (no capture path — see
 // the desktop-screenshot-tooling-limits memory), so instead of driving the
 // Tauri shell directly this runs the same sidecar binary Tauri's Rust host
-// spawns, with the same CONDUCTOR_UI_DIST env var it sets, and points headless
-// Chromium at its HTTP URL. Tauri and the sidecar serve byte-identical
-// HTML/JS, so this proves everything except the native shell itself (see
-// TROUBLESHOOTING.md's "Tauri desktop won't launch" section for that half).
+// spawns, with the same CONDUCTOR_UI_DIST, CONDUCTOR_START_SCREEN and
+// CONDUCTOR_DATA_DIR env vars it sets, and points headless Chromium at its
+// HTTP URL. Tauri and the sidecar serve byte-identical HTML/JS, so this
+// proves everything except the native shell itself (see TROUBLESHOOTING.md's
+// "Tauri desktop won't launch" section for that half, and the native folder
+// dialog that start-screen mode's "Open folder…" button needs a manual check
+// for — this script drives the plain-browser fallback, a text field, instead).
 // Exit code 0 = pass, 1 = a check failed, 2 = prerequisites missing / hang.
 import { chromium } from "playwright-core";
 import { spawn } from "node:child_process";
@@ -46,8 +49,20 @@ if (!fs.existsSync(chromiumBin)) {
 }
 
 fs.rmSync(outDir, { recursive: true, force: true });
-const workspace = path.join(outDir, "workspace"); // sidecar cwd — isolates its auto-created .conductor.yml + SQLite DB
-fs.mkdirSync(workspace, { recursive: true });
+// CONDUCTOR_DATA_DIR: where workspaces.json (recent list) lives, mirroring
+// Tauri's app_data_dir. Seed it with a legacy single-config desktop setup
+// (a bare .conductor.yml with no workspaces.json yet) so start-screen mode's
+// recent-list seeding path (packages/core/bin/server.ts) gets exercised too.
+const dataDir = path.join(outDir, "data");
+fs.mkdirSync(dataDir, { recursive: true });
+fs.copyFileSync(
+  path.join(repoRoot, "packages/core/test/fixtures/sample.conductor.yml"),
+  path.join(dataDir, ".conductor.yml"),
+);
+// The folder the start screen opens via its path field — a separate, empty
+// dir from dataDir so opening it doesn't collide with the legacy seed above.
+const newWorkspace = path.join(outDir, "workspace");
+fs.mkdirSync(newWorkspace, { recursive: true });
 
 const serverLog = [];
 const consoleErrors = [];
@@ -59,8 +74,14 @@ const check = (ok, label, detail = "") => {
 
 const t0 = Date.now();
 const server = spawn(sidecarBin, [], {
-  cwd: workspace,
-  env: { ...process.env, CONDUCTOR_PORT: String(PORT), CONDUCTOR_UI_DIST: uiDist },
+  cwd: dataDir,
+  env: {
+    ...process.env,
+    CONDUCTOR_PORT: String(PORT),
+    CONDUCTOR_UI_DIST: uiDist,
+    CONDUCTOR_START_SCREEN: "1",
+    CONDUCTOR_DATA_DIR: dataDir,
+  },
 });
 server.stdout.on("data", (d) => serverLog.push(String(d)));
 server.stderr.on("data", (d) => serverLog.push(String(d)));
@@ -95,6 +116,33 @@ try {
 
   await page.goto(baseUrl, { timeout: 30_000, waitUntil: "load" });
 
+  // No workspace is open yet (CONDUCTOR_START_SCREEN=1), so WorkspaceGate
+  // renders StartScreen instead of the dashboard. Not Tauri, so it's the
+  // plain-browser fallback: a path TextInput, not the native folder dialog
+  // (that needs a manual check — see the file header).
+  const pathInput = page.getByPlaceholder("/path/to/project");
+  const startScreenShown = await pathInput.waitFor({ timeout: 15_000 }).then(
+    () => true,
+    () => false,
+  );
+  check(startScreenShown, "start screen appeared (no workspace open yet)");
+
+  // server.ts seeds the recent list from a legacy .conductor.yml placed
+  // directly in CONDUCTOR_DATA_DIR — assert that seeding actually ran.
+  const legacySeeded = await page
+    .getByText("Conductor Test Fixture", { exact: true })
+    .first()
+    .waitFor({ timeout: 5_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(legacySeeded, "legacy .conductor.yml seeded into the recent list");
+  await page.screenshot({ path: path.join(outDir, "00-start-screen.png") });
+
+  await pathInput.fill(newWorkspace);
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+
   // A blank white window = #root never gets children / body has no text.
   const rendered = await page
     .waitForFunction(
@@ -111,15 +159,27 @@ try {
   check(rendered, "dashboard rendered (non-blank #root)");
 
   const api = await page.evaluate(async () => {
-    const [h, p, pr] = await Promise.all(
-      ["/api/health", "/api/profiles", "/api/processes"].map((u) => globalThis.fetch(u)),
+    const [h, p, pr, w] = await Promise.all(
+      ["/api/health", "/api/profiles", "/api/processes", "/api/workspaces"].map((u) =>
+        globalThis.fetch(u),
+      ),
     );
-    return { health: h.status, profiles: p.status, processes: pr.status };
+    return {
+      health: h.status,
+      profiles: p.status,
+      processes: pr.status,
+      workspaces: await w.json(),
+    };
   });
   check(
     api.health === 200 && api.profiles === 200 && api.processes === 200,
     "sidecar API healthy from the page",
-    JSON.stringify(api),
+    JSON.stringify({ health: api.health, profiles: api.profiles, processes: api.processes }),
+  );
+  check(
+    api.workspaces.current?.path === newWorkspace,
+    "opened workspace recorded as current",
+    JSON.stringify(api.workspaces.current),
   );
   await page.screenshot({ path: path.join(outDir, "01-dashboard.png") });
 

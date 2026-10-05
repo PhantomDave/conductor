@@ -255,6 +255,41 @@ describe("SpawnQueue.stopAll", () => {
   });
 });
 
+describe("SpawnQueue.close", () => {
+  // The dep exits 0 on SIGTERM like a graceful server, so once close() stops
+  // it the waiting dependent sees a ready dependency. SIGTERM handling needs POSIX.
+  test.skipIf(process.platform === "win32")(
+    "a dependent still waiting when the queue closes is never spawned",
+    async () => {
+      const dep = makeCommand({
+        id: "dep",
+        name: "Dep",
+        run: `bun -e "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1000)"`,
+        healthcheck: { type: "log_line", pattern: "never printed", interval_ms: 100, retries: 100 },
+      });
+      const child = makeCommand({
+        id: "child",
+        name: "Child",
+        run: `bun -e "setInterval(() => {}, 1000)"`,
+        deps: ["dep"],
+      });
+      const queue = new SpawnQueue("test", [dep, child], () => testEnv());
+      const run = queue.startMany(["dep", "child"]);
+      try {
+        while (!queue.getWrapper("dep")?.pid) await Bun.sleep(20);
+        await queue.close();
+        await run;
+        expect(queue.getWrapper("child")).toBeUndefined();
+        expect(await queue.startOne("dep").catch((err: Error) => err.message)).toBe(
+          "queue is closed",
+        );
+      } finally {
+        await queue.stopAll();
+      }
+    },
+  );
+});
+
 describe("SpawnQueue.startAll - concurrency", () => {
   test("starts independent commands concurrently instead of one at a time", async () => {
     // Each command's single startup healthcheck logs "start <id>", sleeps,

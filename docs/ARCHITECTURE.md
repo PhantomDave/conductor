@@ -34,7 +34,11 @@ conductor/
 │   │   ├── healthcheck.ts            checkPort / checkHttp implementations
 │   │   └── shell.ts                  resolveShell fallback → $SHELL or %COMSPEC%
 │   ├── monitor/                      health-monitor.ts + file-watcher.ts (wired via SpawnQueue),
-│   │                                 metrics-collector.ts (wired via bin/server.ts, no UI consumer yet)
+│   │                                 metrics-collector.ts (wired via workspace/session.ts, no UI consumer yet)
+│   ├── workspace/                    One open workspace (folder + .conductor.yml) at a time
+│   │   ├── session.ts                openSession: logger, DB, store, onLog, metrics, retention for one config
+│   │   ├── manager.ts                WorkspaceManager: open/close/switch, installs a session into the API deps
+│   │   └── recent.ts                 workspaces.json recent list (newest first, max 20)
 │   ├── api.ts                        Fastify 5 HTTP server (~876 lines)
 │   └── index.ts                      15-line barrel export
 ├── packages/cli/src/                 CLI commands (Commander v15)
@@ -64,6 +68,19 @@ conductor/
 ```
 
 Store provides these mutators for everything that changes the config graph: `addCommand`, `removeCommand`, `updateCommand`, `addCommandToProfile`, `removeCommandFromProfile`, `duplicateCommand`, `addProfile`, `removeProfile`, `updateProfile`, `duplicateProfile`, `getProfileCommands`. There is also `setBasePath`, `getResolvedBasePath`, `setDefaultShell`, `importConfig`, `compileConfigExamples`, and `refreshEnv`. Every mutation writes to SQLite's audit_log table.
+
+### Workspaces: Session → Manager
+
+```
+bin/server.ts ──▶ WorkspaceManager ──open(dir)──▶ prepareSession (validate/create .conductor.yml)
+                        │                          old session.close() (queue.close, collector, DB)
+                        │                          openSession(dir) ──▶ Object.assign(api deps)
+                        └──▶ buildApi(deps): onRequest guard 409s /api/* until a session is installed
+```
+
+A **WorkspaceSession** (`workspace/session.ts`) is everything one `.conductor.yml` needs at runtime: logger, SQLite DB at `<dir>/.conductor/data/conductor.sqlite`, `ConfigStore`, `onLog`, the metrics collector and the log-retention timer. The **WorkspaceManager** (`workspace/manager.ts`) owns the one current session: `open` validates the new config first (a bad config leaves the current one running), closes the old session, opens the new one, swaps its fields into the API deps and records it in `<CONDUCTOR_DATA_DIR>/workspaces.json`. A concurrent `open`/`close` throws `WorkspaceBusyError` (409); shutdown awaits `idle()` so a switch in flight finishes stopping first. Closing a session calls `SpawnQueue.close()`, which (unlike `stopAll`) refuses every later spawn, so a run still waiting on a dependency cannot start processes into a workspace being torn down.
+
+Boot: `CONDUCTOR_DATA_DIR`, if unset, defaults to cwd with `CONDUCTOR_START_SCREEN=1` (the desktop app) and to `<config dir>/.conductor/data` otherwise. In start-screen mode nothing is opened and the UI picks a workspace; a legacy `<dataDir>/.conductor.yml` seeds an empty recent list. Otherwise cwd discovery picks the config as before and the manager opens its folder, recording it next to that config. SIGTERM/SIGINT close the current session before exit.
 
 ### Process Execution Flow
 
@@ -106,14 +123,14 @@ The broadcaster at `packages/core/src/logs/broadcaster.ts` uses a pub/sub patter
 
 ## SQLite Schema Overview
 
-| Table             | Key fields                                                               | Purpose                                                                                                                          |
-| ----------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| execution_history | id, command_id, profile, start_time, end_time, exit_code, duration_ms    | Audit of every run attempt per command                                                                                           |
-| logs              | id, process_id, command_id, profile, timestamp, level, stream, message   | All captured stdout/stderr + error output; index by command_id and timestamp                                                     |
-| process_metadata  | pid (composite PK), command_id, profile, created_at, ended_at, exit_code | Snapshot of each started process for recovery & ps queries                                                                       |
-| process_metrics   | id, pid, timestamp, cpu_percent, memory_bytes                            | Sampled every 5s by `MetricCollector` (bin/server.ts); queried via GET /api/processes/:pid/metrics — no UI chart consumes it yet |
-| env_vars          | id (PK), scope, profile, key, value, secret                              | Managed env vars: global or per-profile; kept separate from .conductor.yml                                                       |
-| audit_log         | id (PK), timestamp, action, actor, details                               | Every mutation event for auditing/debugging                                                                                      |
+| Table             | Key fields                                                               | Purpose                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| execution_history | id, command_id, profile, start_time, end_time, exit_code, duration_ms    | Audit of every run attempt per command                                                                                                  |
+| logs              | id, process_id, command_id, profile, timestamp, level, stream, message   | All captured stdout/stderr + error output; index by command_id and timestamp                                                            |
+| process_metadata  | pid (composite PK), command_id, profile, created_at, ended_at, exit_code | Snapshot of each started process for recovery & ps queries                                                                              |
+| process_metrics   | id, pid, timestamp, cpu_percent, memory_bytes                            | Sampled every 5s by `MetricCollector` (workspace/session.ts); queried via GET /api/processes/:pid/metrics — no UI chart consumes it yet |
+| env_vars          | id (PK), scope, profile, key, value, secret                              | Managed env vars: global or per-profile; kept separate from .conductor.yml                                                              |
+| audit_log         | id (PK), timestamp, action, actor, details                               | Every mutation event for auditing/debugging                                                                                             |
 
 ## Configuration Store vs Config File
 
@@ -147,7 +164,7 @@ profiles:
 
 - **`health-monitor.ts`** — wired: `SpawnQueue` keeps a `HealthMonitor` per running command, polling its healthcheck and firing crash/recovery notifications.
 - **`file-watcher.ts`** — wired: `SpawnQueue` starts a `FileWatcher` per command with a non-empty `watch[]`, restarting it (and its running dependents) on a matching change. See [IDEAS.md §3](./IDEAS.md#3-watch-and-restart).
-- **`metrics-collector.ts`** — wired for collection only: `bin/server.ts` instantiates `MetricCollector`, sampling process-group CPU/RSS every 5s into `process_metrics` and feeding live values back into `/api/processes` snapshots. `GET /api/processes/:pid/metrics` returns real history, and `packages/ui/src/lib/api.ts` has a `fetchProcessMetrics` helper — but no UI component calls it yet, so there's no chart. See [IDEAS.md §4](./IDEAS.md#4-resource-alerts-that-never-kill).
+- **`metrics-collector.ts`** — wired for collection only: `workspace/session.ts` instantiates `MetricCollector`, sampling process-group CPU/RSS every 5s into `process_metrics` and feeding live values back into `/api/processes` snapshots. `GET /api/processes/:pid/metrics` returns real history, and `packages/ui/src/lib/api.ts` has a `fetchProcessMetrics` helper — but no UI component calls it yet, so there's no chart. See [IDEAS.md §4](./IDEAS.md#4-resource-alerts-that-never-kill).
 
 ## Testing Strategy
 
