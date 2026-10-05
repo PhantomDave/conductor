@@ -891,3 +891,86 @@ describe("SpawnQueue - config_files", () => {
     }
   }, 10_000);
 });
+
+describe("SpawnQueue - a new run after stopping everything", () => {
+  test("a dependency left over from the previous run doesn't satisfy the new one", async () => {
+    // Run 1: a one-shot dep (completes with exit 0) and a service using it.
+    const dep = makeCommand({ id: "dep", name: "Dep", run: `bun -e "1"` });
+    const child = makeCommand({
+      id: "child",
+      name: "Child",
+      run: `bun -e "setInterval(() => {}, 1000)"`,
+      deps: ["dep"],
+    });
+    const queue = new SpawnQueue("test", [dep, child], () => testEnv());
+    await queue.startMany(["dep", "child"]);
+    await queue.getWrapper("dep")?.drained;
+    expect(queue.getWrapper("dep")?.status).toBe("completed");
+
+    // The UI's "Stop all": DELETE /processes/:pid for every running process
+    // only, so the completed dep is never touched.
+    for (const w of queue.listWrappers()) {
+      if (w.status === "running") await queue.stopByPid(w.pid!);
+    }
+    const oldChild = queue.getWrapper("child");
+
+    // Run 2: the dep now fails. Its exit 0 from run 1 must not let the child start.
+    queue.setCommands([
+      makeCommand({
+        id: "dep",
+        name: "Dep",
+        run: `bun -e "setInterval(() => {}, 1000)"`,
+        healthcheck: {
+          type: "command",
+          command: "exit 1",
+          interval_ms: 10,
+          timeout_ms: 100,
+          retries: 2,
+        },
+      }),
+      child,
+    ]);
+    try {
+      await queue.startMany(["dep", "child"]);
+      expect(queue.getWrapper("dep")?.status).toBe("failed");
+      expect(queue.getWrapper("child")).toBe(oldChild);
+      expect(oldChild?.status).toBe("stopped");
+    } finally {
+      await queue.stopAll();
+    }
+  });
+});
+
+describe("SpawnQueue - starting a command mid-run", () => {
+  test("reuses a one-shot dependency that already completed in this run", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "conductor-queue-midrun-"));
+    const migrate = makeCommand({
+      id: "migrate",
+      name: "Migrate",
+      cwd: dir,
+      run: `bun -e "require('fs').appendFileSync('runs.txt', 'x')"`,
+    });
+    const db = makeCommand({ id: "db", name: "DB", run: `bun -e "setInterval(() => {}, 1000)"` });
+    const api = makeCommand({
+      id: "api",
+      name: "API",
+      run: `bun -e "setInterval(() => {}, 1000)"`,
+      deps: ["migrate", "db"],
+    });
+    const queue = new SpawnQueue("test", [migrate, db, api], () => testEnv());
+    try {
+      await queue.startMany(["migrate", "db", "api"]);
+      await queue.getWrapper("migrate")?.drained;
+      await queue.stopOne("api");
+
+      // db is still up: same run, so the completed migration isn't repeated.
+      await queue.startOne("api");
+
+      expect(queue.getWrapper("api")?.status).toBe("running");
+      expect(readFileSync(join(dir, "runs.txt"), "utf8")).toBe("x");
+    } finally {
+      await queue.stopAll();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
