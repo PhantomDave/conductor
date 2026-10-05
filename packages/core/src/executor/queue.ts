@@ -79,6 +79,12 @@ export class SpawnQueue {
    * process belongs to; restarts (manual, auto, watch) keep the tag.
    */
   private launchProfile = new Map<string, string>();
+  /**
+   * Commands whose current wrapper had already ended when a new start
+   * began: that outcome belongs to the previous run, so dependency checks
+   * treat it as absent until the fresh wrapper replaces it.
+   */
+  private staleWrappers = new Set<string>();
 
   constructor(
     private readonly profile: string,
@@ -114,7 +120,7 @@ export class SpawnQueue {
    */
   private isDependencyReady(depId: string): boolean {
     const wrapper = this.wrappers.get(depId);
-    if (!wrapper) return false;
+    if (!wrapper || this.staleWrappers.has(depId)) return false;
     const snapshot = wrapper.getSnapshot();
     if (!snapshot) return false;
     if (snapshot.status === "running") return true;
@@ -139,7 +145,7 @@ export class SpawnQueue {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitMs) {
-      const wrapper = this.wrappers.get(depId);
+      const wrapper = this.staleWrappers.has(depId) ? undefined : this.wrappers.get(depId);
 
       if (wrapper) {
         const status = wrapper.status;
@@ -429,6 +435,7 @@ export class SpawnQueue {
     this.setupHealthObserver(wrapper, cmd);
 
     this.wrappers.set(cmd.id, wrapper);
+    this.staleWrappers.delete(cmd.id);
     this.ensureWatcher(cmd, wrapper);
 
     // Attempt a start — if we throw here (e.g. spawn failure), record failed_start
@@ -614,13 +621,13 @@ export class SpawnQueue {
   }
 
   /**
-   * Fail-fast cycle check scoped to `commandIds` and their transitive
-   * dependencies only. Every profile shares one global `SpawnQueue` (see
+   * Returns `commandIds` plus every transitive dependency, throwing on a
+   * cycle among them. Scoped to that closure only. Every profile shares one global `SpawnQueue` (see
    * ConfigStore), so checking every command in the queue instead would
    * make a cycle accidentally introduced in one profile block starts for
    * every other, unrelated profile too.
    */
-  private checkForCycles(commandIds: string[]): void {
+  private dependencyClosure(commandIds: string[]): Set<string> {
     const byId = new Map(this.commands.map((c) => [c.id, c]));
     const visited = new Set<string>();
     const visiting = new Set<string>();
@@ -640,6 +647,35 @@ export class SpawnQueue {
     };
 
     for (const id of commandIds) visit(id);
+    return visited;
+  }
+
+  /**
+   * Starting a dependency chain none of which is still up (e.g. "stop all",
+   * then run) is a new instance: what the previous run left behind - exit
+   * codes, the auto-restart budget, a blocked mark - must not decide
+   * anything in this one. While any of it is up it's the same run, so a
+   * one-shot dep that already completed isn't re-run. A pending recovery is
+   * kept either way: a crash stays open until the command is back up.
+   */
+  private beginRun(commandIds: string[]): void {
+    const closure = this.dependencyClosure(commandIds);
+    const ended = (id: string) => {
+      const status = this.wrappers.get(id)?.status;
+      return (
+        status === undefined ||
+        status === "completed" ||
+        status === "stopped" ||
+        status === "failed"
+      );
+    };
+    if (![...closure].every(ended)) return;
+    for (const id of closure) {
+      if (!this.wrappers.has(id)) continue;
+      this.staleWrappers.add(id);
+      this.restartAttempts.delete(id);
+      this.blockedCommands.delete(id);
+    }
   }
 
   /**
@@ -670,7 +706,7 @@ export class SpawnQueue {
    * while still getting the same concurrent, dependency-aware startup.
    */
   async startMany(commandIds: string[], onLog?: LogHandler, profile?: string): Promise<void> {
-    this.checkForCycles(commandIds); // fail fast on a real cycle instead of a 60s timeout per node
+    this.beginRun(commandIds); // throws on a real cycle instead of a 60s timeout per node
     await Promise.all(
       commandIds.map((id) => this.ensureStarted(id, onLog, profile).catch(() => {})),
     );
@@ -687,7 +723,7 @@ export class SpawnQueue {
    * that launched it; omitted, a command keeps its previous tag.
    */
   async startOne(commandId: string, onLog?: LogHandler, profile?: string): Promise<void> {
-    this.checkForCycles([commandId]); // fail fast on a real cycle instead of a 60s timeout per node
+    this.beginRun([commandId]); // throws on a real cycle instead of a 60s timeout per node
     // Starting by hand is the same fresh intent as restarting by hand: don't
     // let attempts spent before an operator stopped the command count here.
     this.restartAttempts.delete(commandId);
