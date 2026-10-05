@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { ConfigError, createDefaultConfig, loadConfig } from "../config/loader";
@@ -26,7 +26,7 @@ export function resolveWorkspaceDir(input: string): string {
   if (basename(dir) === ".conductor.yml") {
     dir = dirname(dir);
   }
-  if (!existsSync(dir)) {
+  if (!statSync(dir, { throwIfNoEntry: false })?.isDirectory()) {
     throw new ConfigError(`Folder not found: ${dir}`);
   }
   return dir;

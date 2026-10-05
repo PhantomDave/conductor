@@ -45,6 +45,12 @@ describe("resolveWorkspaceDir", () => {
   test("throws ConfigError for a missing folder", () => {
     expect(() => resolveWorkspaceDir(join(dir, "does-not-exist"))).toThrow(/Folder not found/);
   });
+
+  test("throws ConfigError for a path that is a regular file, not a directory", () => {
+    const filePath = join(dir, "not-a-dir.txt");
+    writeFileSync(filePath, "hello");
+    expect(() => resolveWorkspaceDir(filePath)).toThrow(/Folder not found/);
+  });
 });
 
 describe("prepareSession", () => {
