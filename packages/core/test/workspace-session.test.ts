@@ -99,4 +99,14 @@ describe("openSession", () => {
       expect(() => session.queries.listEnvVars("global")).toThrow();
     },
   );
+
+  test("close() still releases the DB when stopping processes fails", async () => {
+    const session = openSession(dir, { broadcaster: new LogBroadcaster(), dbPath: ":memory:" });
+    session.store.getQueue().stopAll = async () => {
+      throw new Error("boom");
+    };
+
+    expect(await session.close().catch((err: Error) => err.message)).toBe("boom");
+    expect(() => session.queries.listEnvVars("global")).toThrow();
+  });
 });

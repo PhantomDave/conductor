@@ -15,6 +15,7 @@ import type { ConductorConfig } from "./config/schema";
 import { ConfigError } from "./config/loader";
 import { listAvailableShells } from "./executor/shell";
 import { parseDockerCompose } from "./docker-compose/parser";
+import { WorkspaceBusyError, type WorkspaceManager } from "./workspace/manager";
 
 export interface ApiDependencies {
   logger: ConductorLogger;
@@ -22,6 +23,8 @@ export interface ApiDependencies {
   store: ConfigStore;
   broadcaster: LogBroadcaster;
   onLog: LogHandler;
+  /** Set by the sidecar: enables /api/workspaces* and the no-workspace guard. */
+  workspaces?: WorkspaceManager;
 }
 
 const CommandInputSchema = z.object({
@@ -147,6 +150,69 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   await app.register(cors, {
     origin: /^https?:\/\/localhost(:\d+)?$/,
   });
+
+  const workspaces = deps.workspaces;
+  if (workspaces) {
+    // Registered right after cors so preflights are answered and 409s still
+    // carry CORS headers. Only /api/* is guarded: the static UI must load
+    // with no workspace open so it can render the start screen.
+    // Callback style, not async: under Bun an async hook's early reply
+    // still lets the route handler run (raw.writableEnded lags), which then
+    // throws ERR_HTTP_HEADERS_SENT. Not calling done() stops the chain.
+    const guardError = (url: string): string | null => {
+      const path = url.split("?", 1)[0]!;
+      if (!path.startsWith("/api/") || path === "/api/health") return null;
+      if (path.startsWith("/api/workspaces")) return null;
+      if (workspaces.switching) return "workspace switch in progress";
+      return workspaces.current ? null : "no workspace open";
+    };
+    app.addHook("onRequest", (request, reply, done) => {
+      const error = guardError(request.url);
+      if (error) {
+        reply.status(409).send({ error });
+        return;
+      }
+      done();
+    });
+
+    const workspaceError = (err: unknown, reply: FastifyReply) =>
+      err instanceof WorkspaceBusyError
+        ? reply.status(409).send({ error: err.message })
+        : handleConfigError(err, reply);
+
+    app.get("/api/workspaces", async () => workspaces.list());
+
+    app.post<{ Body: { path: string } }>("/api/workspaces/open", async (request, reply) => {
+      const parsed = z.object({ path: z.string().min(1) }).safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid path" });
+      }
+      try {
+        const session = await workspaces.open(parsed.data.path);
+        return { path: session.dir, name: session.name };
+      } catch (err) {
+        return workspaceError(err, reply);
+      }
+    });
+
+    app.post("/api/workspaces/close", async (_request, reply) => {
+      try {
+        await workspaces.close();
+        return {};
+      } catch (err) {
+        return workspaceError(err, reply);
+      }
+    });
+
+    app.delete<{ Querystring: { path?: string } }>("/api/workspaces", async (request, reply) => {
+      const parsed = z.object({ path: z.string().min(1) }).safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid path" });
+      }
+      workspaces.forget(parsed.data.path);
+      return {};
+    });
+  }
 
   app.get("/api/health", async () => ({ status: "ok" }));
 

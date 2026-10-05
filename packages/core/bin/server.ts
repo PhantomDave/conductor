@@ -1,38 +1,61 @@
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { discoverConfigPath, createDefaultConfig } from "../src";
-import { saveConfig } from "../src";
-import { LogBroadcaster } from "../src";
-import { buildApi } from "../src";
-import { openSession } from "../src";
+import { basename, dirname, join, resolve } from "node:path";
+import {
+  buildApi,
+  createDefaultConfig,
+  createLogger,
+  discoverConfigPath,
+  loadConfig,
+  LogBroadcaster,
+  readRecent,
+  recordRecent,
+  saveConfig,
+  WorkspaceManager,
+  type ApiDependencies,
+} from "../src";
 
 const PORT = Number(process.env.CONDUCTOR_PORT ?? 4000);
 
 async function main() {
-  // Bootstrap: if no .conductor.yml exists anywhere up the tree, create
-  // one in the current directory so the UI/API have something to persist
-  // into immediately, instead of requiring a config file up front.
-  let configPath = discoverConfigPath();
-  if (!configPath) {
-    configPath = join(process.cwd(), ".conductor.yml");
-    if (!existsSync(configPath)) {
-      saveConfig(configPath, createDefaultConfig());
+  const dataDir = resolve(process.env.CONDUCTOR_DATA_DIR ?? process.cwd());
+  const broadcaster = new LogBroadcaster();
+  // ponytail: deps fields are unset until a workspace opens; the onRequest guard keeps handlers from running before that
+  const deps = { broadcaster } as ApiDependencies;
+  const manager = new WorkspaceManager({ dataDir, deps, session: { broadcaster } });
+  deps.workspaces = manager;
+  const logger = createLogger();
+
+  if (process.env.CONDUCTOR_START_SCREEN === "1") {
+    // Start-screen mode (the desktop app): open nothing, let the UI pick.
+    // Seed the recent list with the legacy single-config desktop setup.
+    const legacy = join(dataDir, ".conductor.yml");
+    if (existsSync(legacy) && readRecent(dataDir).length === 0) {
+      let name = basename(dataDir);
+      try {
+        name = loadConfig(legacy).name ?? name;
+      } catch {
+        // A broken legacy config must not block boot; opening it reports the error.
+      }
+      recordRecent(dataDir, { path: dataDir, name });
     }
+  } else {
+    // Bootstrap: if no .conductor.yml exists anywhere up the tree, create
+    // one in the current directory so the UI/API have something to persist
+    // into immediately, instead of requiring a config file up front.
+    let configPath = discoverConfigPath();
+    if (!configPath) {
+      configPath = join(process.cwd(), ".conductor.yml");
+      if (!existsSync(configPath)) {
+        saveConfig(configPath, createDefaultConfig());
+      }
+    }
+    await manager.open(dirname(configPath));
   }
 
-  const broadcaster = new LogBroadcaster();
-  const session = openSession(dirname(configPath), { broadcaster });
-
-  const app = await buildApi({
-    logger: session.logger,
-    queries: session.queries,
-    store: session.store,
-    broadcaster,
-    onLog: session.onLog,
-  });
+  const app = await buildApi(deps);
 
   await app.listen({ port: PORT, host: "0.0.0.0" });
-  session.logger.info(`Conductor core listening on http://localhost:${PORT}`);
+  logger.info(`Conductor core listening on http://localhost:${PORT}`);
 
   // Stop every managed process cleanly (respecting each command's
   // stop_signal/stop_timeout_ms) before exiting, so killing the server -
@@ -42,8 +65,12 @@ async function main() {
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
-    session.logger.info(`Received ${signal}, stopping all managed processes...`);
-    await session.close();
+    logger.info(`Received ${signal}, stopping all managed processes...`);
+    try {
+      await manager.close();
+    } catch (err) {
+      logger.error({ err }, "Failed to close the workspace cleanly");
+    }
     await app.close();
     process.exit(0);
   };
