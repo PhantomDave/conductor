@@ -159,15 +159,16 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     // Callback style, not async: under Bun an async hook's early reply
     // still lets the route handler run (raw.writableEnded lags), which then
     // throws ERR_HTTP_HEADERS_SENT. Not calling done() stops the chain.
-    const guardError = (url: string): string | null => {
-      const path = url.split("?", 1)[0]!;
-      if (!path.startsWith("/api/") || path === "/api/health") return null;
-      if (path.startsWith("/api/workspaces")) return null;
+    // Keyed on the matched route pattern, not the raw URL, so an encoded
+    // path (`/%61pi/...`) can't slip past; unmatched URLs pass through to 404.
+    const guardError = (route: string | undefined): string | null => {
+      if (!route?.startsWith("/api/") || route === "/api/health") return null;
+      if (route === "/api/workspaces" || route.startsWith("/api/workspaces/")) return null;
       if (workspaces.switching) return "workspace switch in progress";
       return workspaces.current ? null : "no workspace open";
     };
     app.addHook("onRequest", (request, reply, done) => {
-      const error = guardError(request.url);
+      const error = guardError(request.routeOptions.url);
       if (error) {
         reply.status(409).send({ error });
         return;

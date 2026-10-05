@@ -85,6 +85,8 @@ export class SpawnQueue {
    * treat it as absent until the fresh wrapper replaces it.
    */
   private staleWrappers = new Set<string>();
+  /** Set by close(): this queue is being torn down for good, so nothing may spawn. */
+  private closed = false;
 
   constructor(
     private readonly profile: string,
@@ -420,6 +422,9 @@ export class SpawnQueue {
     env: Record<string, string>,
     onLog?: LogHandler,
   ): Promise<boolean> {
+    // Every spawn (start, restart, auto-restart, watch) ends up here, after
+    // any dependency wait, so checking here catches starts already in flight.
+    if (this.closed) throw new Error("queue is closed");
     const profile = this.profileOf(cmd.id);
     const wrapper = new ProcessWrapper(cmd, profile, env);
     if (onLog) this.lastLogHandler = onLog;
@@ -881,6 +886,15 @@ export class SpawnQueue {
       waited = [...this.wrappers.values()].map((w) => w.drained);
       await Promise.all(waited);
     } while ([...this.wrappers.values()].some((w) => !waited.includes(w.drained)));
+  }
+
+  /**
+   * stopAll, then refuse every later start - for tearing the queue down with
+   * its workspace. A plain stopAll leaves the queue usable for the next run.
+   */
+  async close(): Promise<void> {
+    this.closed = true;
+    await this.stopAll();
   }
 
   async stopAll(): Promise<void> {

@@ -19,11 +19,13 @@ export class WorkspaceBusyError extends Error {
  * Owns the one active WorkspaceSession and swaps it at runtime: validates
  * the new folder's config first, stops the old session, then installs the
  * new one into the API deps. While a switch runs, `switching` is true and
- * any concurrent open/close throws WorkspaceBusyError.
+ * any concurrent open/close rejects with WorkspaceBusyError; idle() waits it out.
  */
 export class WorkspaceManager {
   #current: WorkspaceSession | null = null;
   #switching = false;
+  /** The open/close in flight (or the last one), settled - for idle(). */
+  #pending: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly opts: { dataDir: string; deps: ApiDependencies; session: SessionOptions },
@@ -37,10 +39,13 @@ export class WorkspaceManager {
     return this.#switching;
   }
 
-  async open(input: string): Promise<WorkspaceSession> {
-    if (this.#switching) throw new WorkspaceBusyError();
-    this.#switching = true;
-    try {
+  /** Resolves once any open/close in flight has finished; its error is ignored. */
+  async idle(): Promise<void> {
+    await this.#pending;
+  }
+
+  open(input: string): Promise<WorkspaceSession> {
+    return this.#exclusive(async () => {
       const dir = resolveWorkspaceDir(input);
       if (this.#current?.dir === dir) return this.#current;
       prepareSession(dir); // throws on a bad config before anything is stopped
@@ -53,23 +58,32 @@ export class WorkspaceManager {
       const { store, queries, logger, onLog } = session;
       Object.assign(this.opts.deps, { store, queries, logger, onLog });
       this.#current = session;
-      recordRecent(this.opts.dataDir, { path: dir, name: session.name });
+      try {
+        recordRecent(this.opts.dataDir, { path: dir, name: session.name });
+      } catch (err) {
+        // The switch itself worked; a stale recent list isn't worth failing it.
+        logger.error({ err }, "Failed to record the recent workspace");
+      }
       return session;
-    } finally {
-      this.#switching = false;
-    }
+    });
   }
 
-  async close(): Promise<void> {
-    if (this.#switching) throw new WorkspaceBusyError();
-    this.#switching = true;
-    try {
+  close(): Promise<void> {
+    return this.#exclusive(async () => {
       const old = this.#current;
       this.#current = null;
       await old?.close();
-    } finally {
+    });
+  }
+
+  #exclusive<T>(run: () => Promise<T>): Promise<T> {
+    if (this.#switching) return Promise.reject(new WorkspaceBusyError());
+    this.#switching = true;
+    const result = run().finally(() => {
       this.#switching = false;
-    }
+    });
+    this.#pending = result.catch(() => {});
+    return result;
   }
 
   list(): {

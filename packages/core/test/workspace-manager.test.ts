@@ -86,6 +86,8 @@ describe("WorkspaceManager + API", () => {
     const profiles = await app.inject({ method: "GET", url: "/api/profiles" });
     expect(profiles.statusCode).toBe(409);
     expect(profiles.json()).toEqual({ error: "no workspace open" });
+    expect((await app.inject({ method: "GET", url: "/%61pi/profiles" })).statusCode).toBe(409);
+    expect((await app.inject({ method: "GET", url: "/api/nope" })).statusCode).toBe(404);
 
     expect((await app.inject({ method: "GET", url: "/api/health" })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: "/api/workspaces" })).json()).toEqual({
@@ -128,6 +130,17 @@ describe("WorkspaceManager + API", () => {
     expect(res.statusCode).toBe(400);
     expect(manager.current).toBe(sessionA);
     expect(isAlive(pid)).toBe(true);
+  });
+
+  test("a switch still succeeds when the recent list can't be written", async () => {
+    writeFileSync(join(root, "data"), "not a directory");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/workspaces/open",
+      payload: { path: dirB },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(manager.current!.dir).toBe(dirB);
   });
 
   test("open(current) is a no-op", async () => {
@@ -178,10 +191,52 @@ describe("WorkspaceManager + API", () => {
         const run = await app.inject({ method: "POST", url: "/api/profiles/dev/run" });
         expect(run.statusCode).toBe(409);
         expect(run.json()).toEqual({ error: "workspace switch in progress" });
+        // Shutdown waits the switch out instead of exiting mid-stop.
+        await manager.idle();
+        expect(manager.switching).toBe(false);
       } finally {
         await switching;
       }
       expect(manager.current!.dir).toBe(dirB);
+    },
+  );
+
+  // The dependency exits 0 on SIGTERM like a graceful server, which reads as
+  // "ready" to its waiting dependent once the switch has stopped it.
+  test.skipIf(process.platform === "win32")(
+    "a run waiting on a dependency during a switch never spawns into the closed workspace",
+    async () => {
+      writeWorkspace(dirA, "Workspace A", [
+        {
+          id: "db",
+          name: "DB",
+          run: `bun -e "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1000)"`,
+          healthcheck: {
+            type: "log_line",
+            pattern: "never printed",
+            interval_ms: 100,
+            timeout_ms: 1000,
+            retries: 100,
+          },
+        },
+        { id: "app", name: "App", run: LONG_RUNNER, deps: ["db"] },
+      ]);
+      await manager.open(dirA);
+      const queueA = manager.current!.store.getQueue();
+      const run = app.inject({ method: "POST", url: "/api/profiles/dev/run" });
+      let appPid: number | undefined;
+      try {
+        while (!queueA.listSnapshots().some((s) => s.commandId === "db" && s.pid > 0)) {
+          await Bun.sleep(20);
+        }
+        await manager.open(dirB);
+        await run;
+        await Bun.sleep(300); // past waitForDependency's 100ms poll
+        appPid = queueA.listSnapshots().find((s) => s.commandId === "app")?.pid;
+        expect(appPid === undefined || !isAlive(appPid)).toBe(true);
+      } finally {
+        if (appPid !== undefined && isAlive(appPid)) process.kill(appPid, "SIGKILL");
+      }
     },
   );
 

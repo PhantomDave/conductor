@@ -73,12 +73,12 @@ Store provides these mutators for everything that changes the config graph: `add
 
 ```
 bin/server.ts ──▶ WorkspaceManager ──open(dir)──▶ prepareSession (validate/create .conductor.yml)
-                        │                          old session.close() (stopAll, collector, DB)
+                        │                          old session.close() (queue.close, collector, DB)
                         │                          openSession(dir) ──▶ Object.assign(api deps)
                         └──▶ buildApi(deps): onRequest guard 409s /api/* until a session is installed
 ```
 
-A **WorkspaceSession** (`workspace/session.ts`) is everything one `.conductor.yml` needs at runtime: logger, SQLite DB at `<dir>/.conductor/data/conductor.sqlite`, `ConfigStore`, `onLog`, the metrics collector and the log-retention timer. The **WorkspaceManager** (`workspace/manager.ts`) owns the one current session: `open` validates the new config first (a bad config leaves the current one running), closes the old session, opens the new one, swaps its fields into the API deps and records it in `<CONDUCTOR_DATA_DIR>/workspaces.json`. A concurrent `open`/`close` throws `WorkspaceBusyError` (409).
+A **WorkspaceSession** (`workspace/session.ts`) is everything one `.conductor.yml` needs at runtime: logger, SQLite DB at `<dir>/.conductor/data/conductor.sqlite`, `ConfigStore`, `onLog`, the metrics collector and the log-retention timer. The **WorkspaceManager** (`workspace/manager.ts`) owns the one current session: `open` validates the new config first (a bad config leaves the current one running), closes the old session, opens the new one, swaps its fields into the API deps and records it in `<CONDUCTOR_DATA_DIR>/workspaces.json`. A concurrent `open`/`close` throws `WorkspaceBusyError` (409); shutdown awaits `idle()` so a switch in flight finishes stopping first. Closing a session calls `SpawnQueue.close()`, which (unlike `stopAll`) refuses every later spawn, so a run still waiting on a dependency cannot start processes into a workspace being torn down.
 
 Boot: `CONDUCTOR_DATA_DIR` defaults to cwd. With `CONDUCTOR_START_SCREEN=1` (the desktop app) nothing is opened and the UI picks a workspace; a legacy `<dataDir>/.conductor.yml` seeds an empty recent list. Otherwise cwd discovery picks the config as before and the manager opens its folder. SIGTERM/SIGINT close the current session before exit.
 

@@ -151,9 +151,9 @@ export function openSession(dir: string, opts: SessionOptions): WorkspaceSession
     logger,
     onLog,
     async close() {
-      // finally: a failed stopAll must still release the timers and DB.
+      // finally: a failed close must still release the timers and DB.
       try {
-        await Promise.all([...store.getQueues().values()].map((q) => q.stopAll()));
+        await Promise.all([...store.getQueues().values()].map((q) => q.close()));
       } finally {
         collector.stop();
         clearInterval(logRetentionInterval);

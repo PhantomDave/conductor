@@ -67,6 +67,9 @@ async function main() {
     shuttingDown = true;
     logger.info(`Received ${signal}, stopping all managed processes...`);
     try {
+      // A switch mid-flight is still stopping the old workspace (maybe
+      // waiting to SIGKILL a child that ignores TERM): let it finish first.
+      await manager.idle();
       await manager.close();
     } catch (err) {
       logger.error({ err }, "Failed to close the workspace cleanly");
