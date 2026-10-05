@@ -37,7 +37,7 @@ Conductor's sidecar boots against exactly one `.conductor.yml`, picked at startu
   - **Guard (`onRequest` hook):** with no current session, or while switching, every `/api/*` route except `/api/health` and `/api/workspaces*` returns 409 `{ error: "no workspace open" | "workspace switch in progress" }`.
 
 - **Boot** (`bin/server.ts`):
-  - `CONDUCTOR_DATA_DIR` defaults to `process.cwd()`.
+  - `CONDUCTOR_DATA_DIR`, if unset, defaults to `process.cwd()` in start-screen mode and to `<config dir>/.conductor/data` in discovery mode (amended after the final review: a cwd default left a stray `workspaces.json` wherever core was run).
   - `CONDUCTOR_START_SCREEN=1`: no session at boot. If `<dataDir>/.conductor.yml` exists and the recent list is empty, seed the list with it (this is the legacy desktop config).
   - Otherwise: today's discovery/bootstrap picks the dir, then `manager.open(dir)`.
   - SIGTERM/SIGINT run `manager.close()` (closing the _current_ session), then app close.
