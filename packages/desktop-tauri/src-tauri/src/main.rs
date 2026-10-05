@@ -9,6 +9,7 @@ use std::time::Duration;
 use tauri::menu::{AboutMetadataBuilder, MenuBuilder, SubmenuBuilder};
 use tauri::path::BaseDirectory;
 use tauri::{image::Image, AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -83,7 +84,7 @@ async fn start_sidecar(app: &AppHandle, state: &SidecarState) -> Result<u16, Str
         .shell()
         .sidecar("conductor-server")
         .map_err(|e| e.to_string())?
-        .current_dir(data_dir)
+        .current_dir(data_dir.clone())
         .env("CONDUCTOR_PORT", port.to_string())
         .env("CONDUCTOR_UI_DIST", ui_dist.to_string_lossy().to_string())
         // Tell the sidecar's logger to skip pino-pretty (single-file-exe
@@ -92,6 +93,10 @@ async fn start_sidecar(app: &AppHandle, state: &SidecarState) -> Result<u16, Str
         // sidecar's own env as a base layer, so setting it here would leak
         // "production" into tooling launched through the desktop app.
         .env("CONDUCTOR_LOG_JSON", "1")
+        // Desktop always boots to the workspace picker (StartScreen); the
+        // user opens a recent or new workspace via /api/workspaces/open.
+        .env("CONDUCTOR_START_SCREEN", "1")
+        .env("CONDUCTOR_DATA_DIR", data_dir.to_string_lossy().to_string())
         .spawn()
         .map_err(|e| e.to_string())?;
 
@@ -191,6 +196,18 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
     println!("[updater] installed, restarting");
     app.request_restart();
     Ok(())
+}
+
+/// Native "Open folder…" dialog for the start screen. The plugin's `pick_folder`
+/// only offers a callback, never a future, and its blocking variant must not run
+/// on the async runtime - so bridge it through a oneshot instead.
+#[tauri::command]
+async fn pick_folder(app: AppHandle) -> Option<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |path| {
+        let _ = tx.send(path);
+    });
+    rx.await.ok().flatten().map(|path| path.to_string())
 }
 
 fn build_menu(app: &AppHandle) -> tauri::Result<()> {
@@ -310,11 +327,16 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(SidecarState {
             child: Mutex::new(None),
             exited: Arc::new(AtomicBool::new(false)),
         })
-        .invoke_handler(tauri::generate_handler![check_update, install_update])
+        .invoke_handler(tauri::generate_handler![
+            check_update,
+            install_update,
+            pick_folder
+        ])
         .setup(|app| {
             // Before the window exists, so GNOME can match it on creation.
             if cfg!(target_os = "linux") {
