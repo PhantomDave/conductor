@@ -78,7 +78,17 @@ beforeEach(async () => {
 afterEach(async () => {
   await manager.close().catch(() => {});
   await app.close();
-  rmSync(root, { recursive: true, force: true });
+  // Windows lets go of a just-stopped child's cwd a moment after stop resolves (EBUSY), so retry briefly.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      rmSync(root, { recursive: true, force: true });
+      break;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (attempt >= 30 || (code !== "EBUSY" && code !== "EPERM")) throw err;
+      await Bun.sleep(100);
+    }
+  }
 });
 
 describe("WorkspaceManager + API", () => {
