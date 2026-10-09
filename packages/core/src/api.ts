@@ -9,13 +9,36 @@ import type { ConductorQueries } from "./db/queries";
 import type { ConfigStore } from "./config/store";
 import type { LogBroadcaster } from "./logs/broadcaster";
 import type { LogHandler } from "./executor/wrapper";
-import { ConfigFileSchema, HealthcheckSchema } from "./config/schema";
 import { looksSecret } from "./env/masker";
 import type { ConductorConfig } from "./config/schema";
 import { ConfigError } from "./config/loader";
 import { listAvailableShells } from "./executor/shell";
 import { parseDockerCompose } from "./docker-compose/parser";
 import { WorkspaceBusyError, type WorkspaceManager } from "./workspace/manager";
+import { registerMcp } from "./mcp/server";
+import {
+  CommandInputSchema,
+  CommandPatchSchema,
+  EnvVarInputSchema,
+  EnvImportSchema,
+  NotificationsQuerySchema,
+  LogsQuerySchema,
+  LogRunsQuerySchema,
+  PidParamSchema,
+  MetricsQuerySchema,
+  WorkspacePathSchema,
+  BasePathSchema,
+  DefaultShellSchema,
+  LogRetentionSchema,
+  ConfigureInputSchema,
+  ConfigImportSchema,
+  DockerComposeParseSchema,
+  ProfileUpdateSchema,
+  CommandSyncSchema,
+  CommandDuplicateSchema,
+  CommandMoveSchema,
+} from "./api-schemas";
+export * from "./api-schemas";
 
 export interface ApiDependencies {
   logger: ConductorLogger;
@@ -27,32 +50,6 @@ export interface ApiDependencies {
   workspaces?: WorkspaceManager;
 }
 
-const CommandInputSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(1),
-  category: z
-    .string()
-    .nullable()
-    .optional()
-    .transform((value) => value?.trim() || undefined),
-  description: z.string().optional(),
-  run: z.string().min(1),
-  cwd: z.string().optional(),
-  shell: z.boolean().optional(),
-  deps: z.array(z.string()).optional(),
-  env_overrides: z.record(z.string(), z.string()).optional(),
-  watch: z.array(z.string()).optional(),
-  config_files: z.array(ConfigFileSchema).optional(),
-  readonly: z.boolean().optional(),
-  stop_signal: z.string().optional(),
-  stop_timeout_ms: z.number().optional(),
-  stop_command: z.string().min(1).optional(),
-  restart: z.enum(["manual", "on_failure", "always"]).optional(),
-  healthcheck: HealthcheckSchema.optional(),
-});
-
-const CommandPatchSchema = CommandInputSchema.omit({ id: true }).partial();
-
 function normalizeCommandPatch(body: unknown, patch: z.infer<typeof CommandPatchSchema>) {
   if (typeof body === "object" && body !== null && "category" in body && !patch.category) {
     return { ...patch, category: undefined };
@@ -60,52 +57,8 @@ function normalizeCommandPatch(body: unknown, patch: z.infer<typeof CommandPatch
   return patch;
 }
 
-const EnvVarInputSchema = z.object({
-  scope: z.enum(["global", "profile"]),
-  profile: z.string().nullable().optional(),
-  key: z.string().min(1),
-  value: z.string(),
-  secret: z.boolean().optional(),
-});
-
-const EnvImportSchema = z.object({
-  scope: z.enum(["global", "profile"]),
-  profile: z.string().nullable().optional(),
-  text: z.string(),
-  secret: z.boolean().optional(),
-});
-
-const NotificationsQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(1000).optional().default(100),
-  offset: z.coerce.number().int().min(0).optional().default(0),
-});
-
-const LogsQuerySchema = z.object({
-  pid: z.coerce.number().int().positive().optional(),
-  commandId: z.string().min(1).optional(),
-  profile: z.string().min(1).optional(),
-  level: z.enum(["debug", "info", "warn", "error"]).optional(),
-  grep: z.string().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(2000).optional(),
-});
-
-const LogRunsQuerySchema = z.object({
-  commandId: z.string().min(1).optional(),
-  profile: z.string().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(2000).optional(),
-});
-
 const LogStreamQuerySchema = LogsQuerySchema.omit({ limit: true }).extend({
   limit: z.coerce.number().int().min(1).max(500).optional().default(500),
-});
-
-const PidParamSchema = z.object({
-  pid: z.coerce.number().int().positive(),
-});
-
-const MetricsQuerySchema = z.object({
-  from: z.string().optional(),
-  to: z.string().optional(),
 });
 
 /** Parses `.env`-style text ("KEY=VALUE" per line, `#` comments, blank lines ignored). */
@@ -184,7 +137,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     app.get("/api/workspaces", async () => workspaces.list());
 
     app.post<{ Body: { path: string } }>("/api/workspaces/open", async (request, reply) => {
-      const parsed = z.object({ path: z.string().min(1) }).safeParse(request.body);
+      const parsed = WorkspacePathSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid path" });
       }
@@ -206,7 +159,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     });
 
     app.delete<{ Querystring: { path?: string } }>("/api/workspaces", async (request, reply) => {
-      const parsed = z.object({ path: z.string().min(1) }).safeParse(request.query);
+      const parsed = WorkspacePathSchema.safeParse(request.query);
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid path" });
       }
@@ -238,7 +191,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   });
 
   app.put<{ Body: { base_path: string } }>("/api/base-path", async (request, reply) => {
-    const parsed = z.object({ base_path: z.string().min(1) }).safeParse(request.body);
+    const parsed = BasePathSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply
         .status(400)
@@ -263,9 +216,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   });
 
   app.put<{ Body: { default_shell: string | null } }>("/api/shells", async (request, reply) => {
-    const parsed = z
-      .object({ default_shell: z.string().min(1).nullable() })
-      .safeParse(request.body);
+    const parsed = DefaultShellSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply
         .status(400)
@@ -293,12 +244,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   app.put<{ Body: { log_retention_days: number; log_retention_sessions: number } }>(
     "/api/log-retention",
     async (request, reply) => {
-      const parsed = z
-        .object({
-          log_retention_days: z.number().int().min(0),
-          log_retention_sessions: z.number().int().min(0),
-        })
-        .safeParse(request.body);
+      const parsed = LogRetentionSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply
           .status(400)
@@ -322,12 +268,6 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
 
   // --- Config example compiler (.env.example -> .env, etc.) --------------
 
-  const ConfigureInputSchema = z.object({
-    profile: z.string().optional(),
-    force: z.boolean().optional(),
-    plan: z.boolean().optional(),
-  });
-
   app.post<{ Body: unknown }>("/api/configure", async (request, reply) => {
     const parsed = ConfigureInputSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -349,10 +289,6 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   });
 
   // --- Config import (whole .conductor.yml, e.g. a shared template) -----
-
-  const ConfigImportSchema = z.object({
-    yaml: z.string().min(1),
-  });
 
   app.post<{ Body: unknown }>("/api/config/import", async (request, reply) => {
     const parsed = ConfigImportSchema.safeParse(request.body);
@@ -390,10 +326,6 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   });
 
   // --- docker compose parsing and extraction --------------------------------
-
-  const DockerComposeParseSchema = z.object({
-    yaml: z.string().min(1),
-  });
 
   async function parseDockerComposeRequest(
     request: { body: unknown },
@@ -452,10 +384,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
     "/api/profiles/:profile",
     async (request, reply) => {
       const oldName = request.params.profile;
-      const body = z
-        .object({ newName: z.string().min(1).optional(), description: z.string().optional() })
-        .strict()
-        .safeParse(request.body);
+      const body = ProfileUpdateSchema.safeParse(request.body);
 
       if (!body.success) {
         return reply.status(400).send({ error: "Invalid request body" });
@@ -600,12 +529,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   app.post<{ Params: { profile: string } }>(
     "/api/profiles/:profile/commands/sync",
     async (request, reply) => {
-      const parsed = z
-        .object({
-          add: z.array(z.string().min(1)).optional(),
-          remove: z.array(z.string().min(1)).optional(),
-        })
-        .safeParse(request.body);
+      const parsed = CommandSyncSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid body" });
       }
@@ -660,9 +584,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
         // Duplicate command at root level (creates new ID)
         const command = deps.store.duplicateCommand(request.params.id);
         // Optionally add to target profile if specified
-        const body = z
-          .object({ targetProfile: z.string().min(1).optional() })
-          .safeParse(request.body);
+        const body = CommandDuplicateSchema.safeParse(request.body);
         if (body.success && body.data.targetProfile) {
           deps.store.addCommandToProfile(body.data.targetProfile, command.id);
         }
@@ -679,7 +601,7 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   app.post<{ Params: { profile: string; id: string }; Body: unknown }>(
     "/api/profiles/:profile/commands/:id/move",
     async (request, reply) => {
-      const body = z.object({ targetProfile: z.string().min(1) }).safeParse(request.body);
+      const body = CommandMoveSchema.safeParse(request.body);
       if (!body.success) {
         return reply
           .status(400)
@@ -1133,6 +1055,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       unsubscribe();
     });
   });
+
+  // MCP endpoint for AI agents. Not under /api/, so the workspace guard does
+  // not apply to the endpoint itself (tools dispatch back through /api/*, where it does).
+  // Registered before the static/SPA block so its not-found handler can't swallow it.
+  await registerMcp(app);
 
   // If CONDUCTOR_UI_DIST points at a built UI bundle (set by the Tauri
   // desktop shell's Rust host, or anyone self-hosting the dashboard), serve it from

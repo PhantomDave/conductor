@@ -39,11 +39,16 @@ conductor/
 │   │   ├── session.ts                openSession: logger, DB, store, onLog, metrics, retention for one config
 │   │   ├── manager.ts                WorkspaceManager: open/close/switch, installs a session into the API deps
 │   │   └── recent.ts                 workspaces.json recent list (newest first, max 20)
+│   ├── mcp/                          MCP endpoint at /mcp (see "MCP" below)
+│   │   ├── server.ts                 checkMcpRequest loopback guard + registerMcp (stateless Streamable HTTP)
+│   │   ├── tools.ts                  TOOLS registry: 47 tools, defined per area in tools/*.ts
+│   │   ├── route.ts                  defineTool, R/D/M annotations, callRoute (dispatch via app.inject)
+│   │   └── endpoint-file.ts          ~/.conductor/endpoint.json: written on listen, removed on shutdown
 │   ├── api.ts                        Fastify 5 HTTP server (~876 lines)
 │   └── index.ts                      15-line barrel export
 ├── packages/cli/src/                 CLI commands (Commander v15)
 │   ├── config-context.ts             CLI → config store bridge
-│   └── commands/                     run | configure | list | config validate | env | ps | logs | stop
+│   └── commands/                     run | configure | list | config validate | env | ps | logs | stop | mcp
 ├── packages/ui/src/                  React 19 + Vite + Mantine 9 dashboard
 │   ├── pages/Dashboard.tsx           Only UI page (all panels in one view)
 │   ├── components/                   CommandForm, ProcessBoard, LogViewer, etc.
@@ -120,6 +125,16 @@ Each spawned process is wrapped in `ProcessWrapper` which tracks: pid, status, e
 ### SSE Log Streaming
 
 The broadcaster at `packages/core/src/logs/broadcaster.ts` uses a pub/sub pattern keyed by log entry metadata. Every log write from ProcessWrapper goes through `broadcaster.publish(entry)`. The endpoint `/api/logs/stream` connects an EventSource; the server replays recent history lines first (with optional filters like `pid`, `commandId`, `profile`) then tails live events. Heartbeats every 15 seconds keep proxies alive (no data frames sent — just silence).
+
+### MCP (`/mcp`)
+
+`packages/core/src/mcp/` exposes the API to AI agents as MCP tools. Each tool is a `defineTool` entry that maps its arguments onto an existing route, and `callRoute` runs that route through `app.inject()` on the same Fastify instance. Validation, the workspace guard and the audit log therefore stay in one place, and a non-2xx response becomes an `isError` tool result. Two kinds of tool have their own logic. `process_wait` polls the process list, and `env_list`, `env_set` and `env_import` wrap `callRoute` to redact secret values (the HTTP routes return them as stored). Its contract is in [API.md](./API.md#mcp-endpoint).
+
+Security: the server binds `0.0.0.0`, so `checkMcpRequest` runs before the transport sees any request. It rejects non-loopback peers and any `Host` or `Origin` that is not a loopback name, with 403.
+
+The transport is stateless. Each POST builds a new `McpServer` and `StreamableHTTPServerTransport` (no session ID, JSON responses) and closes them when the response ends. Nothing is shared between requests, so there is no session table to leak or to expire.
+
+Discovery: after `listen`, `bin/server.ts` writes `{ url, pid, startedAt }` to `endpoint.json` (path overridable with `CONDUCTOR_ENDPOINT_FILE`). The file is removed on shutdown only if its pid is the current process, so one instance never deletes another's file. `conductor mcp` reads it, and ignores it when its pid is dead.
 
 ## SQLite Schema Overview
 
