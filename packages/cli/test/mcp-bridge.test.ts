@@ -1,11 +1,12 @@
 // Black-box tests for `conductor mcp`: spawn the real binary against a real
 // core instance and speak MCP to it over stdio.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { resolveBaseUrl } from "../src/commands/mcp";
 import { startCore } from "../../core/test/fixtures/api-harness";
 
 const BIN = join(import.meta.dir, "..", "bin", "conductor.ts");
@@ -95,16 +96,6 @@ describe("conductor mcp", () => {
     }
   });
 
-  test("ignores an endpoint file whose pid is dead", async () => {
-    const dead = Bun.spawn([process.execPath, "-e", ""], { stdout: "ignore", stderr: "ignore" });
-    await dead.exited;
-    const file = join(tmp, "stale.json");
-    writeFileSync(file, JSON.stringify({ url: core.url, pid: dead.pid, startedAt: "x" }));
-    // Falls through to http://localhost:4000, which is not served here.
-    const r = await spawnBridge(["--url", "http://127.0.0.1:1"], { CONDUCTOR_ENDPOINT_FILE: file });
-    expect(r.code).toBe(1);
-  });
-
   test("unreachable core exits 1 with empty stdout and a stderr hint", async () => {
     const r = await spawnBridge(["--url", "http://127.0.0.1:1"]);
     expect(r.code).toBe(1);
@@ -153,5 +144,63 @@ describe("conductor mcp", () => {
     const lines = out.split("\n").filter(Boolean);
     expect(lines.length).toBe(2);
     for (const line of lines) expect(JSON.parse(line).jsonrpc).toBe("2.0");
+  });
+});
+
+describe("resolveBaseUrl", () => {
+  const KEYS = ["CONDUCTOR_ENDPOINT_FILE", "CONDUCTOR_API_URL"] as const;
+  let saved: Record<string, string | undefined>;
+  let file: string;
+
+  const writeEndpoint = (pid: number) =>
+    writeFileSync(file, JSON.stringify({ url: "http://127.0.0.1:5555", pid, startedAt: "x" }));
+
+  beforeEach(() => {
+    saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
+    file = join(tmp, "resolve.json");
+    process.env.CONDUCTOR_ENDPOINT_FILE = file;
+    delete process.env.CONDUCTOR_API_URL;
+    rmSync(file, { force: true });
+  });
+
+  afterEach(() => {
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  test("a dead-pid endpoint file is ignored", async () => {
+    const dead = Bun.spawn([process.execPath, "-e", ""], { stdout: "ignore", stderr: "ignore" });
+    await dead.exited;
+    writeEndpoint(dead.pid);
+    expect(resolveBaseUrl()).toBe("http://localhost:4000");
+  });
+
+  test("a live-pid endpoint file is used", () => {
+    writeEndpoint(process.pid);
+    expect(resolveBaseUrl()).toBe("http://127.0.0.1:5555");
+  });
+
+  test("CONDUCTOR_API_URL wins over a live endpoint file", () => {
+    writeEndpoint(process.pid);
+    process.env.CONDUCTOR_API_URL = "http://127.0.0.1:6666/";
+    expect(resolveBaseUrl()).toBe("http://127.0.0.1:6666");
+  });
+
+  test("an explicit --url wins over everything", () => {
+    writeEndpoint(process.pid);
+    process.env.CONDUCTOR_API_URL = "http://127.0.0.1:6666";
+    expect(resolveBaseUrl("http://127.0.0.1:7777")).toBe("http://127.0.0.1:7777");
+  });
+
+  test("empty or whitespace-only values count as unset", () => {
+    writeEndpoint(process.pid);
+    process.env.CONDUCTOR_API_URL = "  ";
+    expect(resolveBaseUrl("")).toBe("http://127.0.0.1:5555");
+    expect(resolveBaseUrl("   ")).toBe("http://127.0.0.1:5555");
+    rmSync(file);
+    process.env.CONDUCTOR_API_URL = "";
+    expect(resolveBaseUrl("")).toBe("http://localhost:4000");
   });
 });

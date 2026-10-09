@@ -9,7 +9,12 @@ const STDIN_DRAIN_TIMEOUT_MS = 60_000;
 
 /** `--url`, then `CONDUCTOR_API_URL`, then a live instance's endpoint file, then the default port. */
 export function resolveBaseUrl(flag?: string): string {
-  const url = flag ?? process.env.CONDUCTOR_API_URL ?? readEndpointFile()?.url ?? DEFAULT_URL;
+  // Empty or whitespace-only values count as unset.
+  const url =
+    flag?.trim() ||
+    process.env.CONDUCTOR_API_URL?.trim() ||
+    readEndpointFile()?.url.trim() ||
+    DEFAULT_URL;
   return url.replace(/\/+$/, "");
 }
 
@@ -64,10 +69,17 @@ export function registerMcpCommand(program: import("commander").Command) {
       // `echo '{...}' | conductor mcp` still gets its answers.
       const pending = new Set<string | number>();
       let stdinEnded = false;
-      const settle = async (message: JSONRPCMessage) => {
-        await stdio.send(message);
-        if ("id" in message && message.id !== undefined) pending.delete(message.id);
-        if (stdinEnded && pending.size === 0) shutdown();
+      const settle = (message: JSONRPCMessage) => {
+        stdio
+          .send(message)
+          .then(() => {
+            if ("id" in message && message.id !== undefined) pending.delete(message.id);
+            if (stdinEnded && pending.size === 0) shutdown();
+          })
+          .catch((err: Error) => {
+            warn(`could not write to stdout: ${err.message}`);
+            shutdown();
+          });
       };
 
       stdio.onerror = (err) => warn(`stdio: ${err.message}`);
@@ -81,7 +93,7 @@ export function registerMcpCommand(program: import("commander").Command) {
           warn(`could not reach core: ${err.message}`);
           // Answer the request ourselves, or the client would wait forever.
           if (hasId(message)) {
-            void settle({
+            settle({
               jsonrpc: "2.0",
               id: message.id,
               error: { code: -32603, message: `Conductor core request failed: ${err.message}` },
@@ -94,7 +106,7 @@ export function registerMcpCommand(program: import("commander").Command) {
         const version = (message as { result?: { protocolVersion?: unknown } }).result
           ?.protocolVersion;
         if (typeof version === "string") http.setProtocolVersion(version);
-        void settle(message);
+        settle(message);
       };
 
       const onStdinEnd = () => {
