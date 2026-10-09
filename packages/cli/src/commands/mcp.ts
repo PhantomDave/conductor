@@ -1,5 +1,8 @@
 import { readEndpointFile } from "@conductor/core";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import {
+  StreamableHTTPClientTransport,
+  StreamableHTTPError,
+} from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 
@@ -7,18 +10,28 @@ const DEFAULT_URL = "http://localhost:4000";
 const PROBE_TIMEOUT_MS = 2000;
 const STDIN_DRAIN_TIMEOUT_MS = 60_000;
 
-/** `--url`, then `CONDUCTOR_API_URL`, then a live instance's endpoint file, then the default port. */
-export function resolveBaseUrl(flag?: string): string {
-  // Empty or whitespace-only values count as unset.
-  const url =
-    flag?.trim() ||
-    process.env.CONDUCTOR_API_URL?.trim() ||
-    readEndpointFile()?.url.trim() ||
-    DEFAULT_URL;
-  return url.replace(/\/+$/, "");
+export type BaseUrlSource = "flag" | "env" | "endpoint-file" | "default";
+
+export interface ResolvedBase {
+  url: string;
+  source: BaseUrlSource;
 }
 
-async function isReachable(base: string): Promise<boolean> {
+const stripTrailingSlashes = (url: string) => url.replace(/\/+$/, "");
+
+/** `--url`, then `CONDUCTOR_API_URL`, then a live instance's endpoint file, then the default port. */
+export function resolveBaseUrl(flag?: string): ResolvedBase {
+  // Empty or whitespace-only values count as unset.
+  const fromFlag = flag?.trim();
+  if (fromFlag) return { url: stripTrailingSlashes(fromFlag), source: "flag" };
+  const fromEnv = process.env.CONDUCTOR_API_URL?.trim();
+  if (fromEnv) return { url: stripTrailingSlashes(fromEnv), source: "env" };
+  const fromFile = readEndpointFile()?.url.trim();
+  if (fromFile) return { url: stripTrailingSlashes(fromFile), source: "endpoint-file" };
+  return { url: DEFAULT_URL, source: "default" };
+}
+
+export async function isReachable(base: string): Promise<boolean> {
   try {
     const res = await fetch(`${base}/api/health`, {
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
@@ -27,6 +40,26 @@ async function isReachable(base: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Probe the resolved base URL. An endpoint file can outlive its core's real
+ * port (a pid reused by an unrelated process), so when the URL came from the
+ * file and does not answer, try the default port once before giving up.
+ * `url` is null when nothing answered; `tried` lists every URL probed.
+ */
+export async function findReachableBase(
+  resolved: ResolvedBase,
+  probe: (base: string) => Promise<boolean> = isReachable,
+  defaultUrl: string = DEFAULT_URL,
+): Promise<{ url: string | null; tried: string[]; fellBack: boolean }> {
+  const tried = [resolved.url];
+  if (await probe(resolved.url)) return { url: resolved.url, tried, fellBack: false };
+  if (resolved.source === "endpoint-file" && defaultUrl !== resolved.url) {
+    tried.push(defaultUrl);
+    if (await probe(defaultUrl)) return { url: defaultUrl, tried, fellBack: true };
+  }
+  return { url: null, tried, fellBack: false };
 }
 
 function warn(message: string) {
@@ -44,20 +77,31 @@ export function registerMcpCommand(program: import("commander").Command) {
     .option("--url <url>", "Conductor core base URL (default: auto-discovered)")
     .action(async (opts: { url?: string }) => {
       // stdout carries JSON-RPC only; anything that logs there would corrupt the stream.
-      console.log = console.error;
-      console.info = console.error;
+      for (const method of ["log", "info", "debug", "dir", "table", "trace"] as const) {
+        console[method] = console.error;
+      }
 
-      const base = resolveBaseUrl(opts.url);
-      if (!(await isReachable(base))) {
+      const resolved = resolveBaseUrl(opts.url);
+      const probed = await findReachableBase(resolved);
+      if (probed.url === null) {
+        const where =
+          probed.tried.length > 1
+            ? `${probed.tried[0]} (from the endpoint file) or ${probed.tried[1]} (the default)`
+            : probed.tried[0];
         warn(
-          `Conductor core is not reachable at ${base}. Start it with \`bun run dev:core\` or open the desktop app.`,
+          `Conductor core is not reachable at ${where}. Start it with \`bun run dev:core\` or open the desktop app.`,
         );
         process.exit(1);
+      }
+      const base = probed.url;
+      if (probed.fellBack) {
+        warn(`the endpoint file's URL ${probed.tried[0]} did not answer; using ${base}`);
       }
 
       const stdio = new StdioServerTransport();
       const http = new StreamableHTTPClientTransport(new URL("/mcp", base));
 
+      let warnedLoopback = false;
       let closing = false;
       const shutdown = () => {
         if (closing) return;
@@ -90,6 +134,11 @@ export function registerMcpCommand(program: import("commander").Command) {
       stdio.onmessage = (message) => {
         if (hasId(message)) pending.add(message.id);
         http.send(message).catch((err: Error) => {
+          // /mcp refuses non-loopback hosts with 403; say why, once.
+          if (err instanceof StreamableHTTPError && err.code === 403 && !warnedLoopback) {
+            warnedLoopback = true;
+            warn(`/mcp only accepts loopback hosts (localhost, 127.0.0.1, [::1]); got ${base}`);
+          }
           warn(`could not reach core: ${err.message}`);
           // Answer the request ourselves, or the client would wait forever.
           if (hasId(message)) {

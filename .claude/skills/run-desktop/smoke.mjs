@@ -81,6 +81,9 @@ const server = spawn(sidecarBin, [], {
     CONDUCTOR_UI_DIST: uiDist,
     CONDUCTOR_START_SCREEN: "1",
     CONDUCTOR_DATA_DIR: dataDir,
+    // Keep the sidecar off the real ~/.conductor/endpoint.json: core writes
+    // it on start and removes it on exit.
+    CONDUCTOR_ENDPOINT_FILE: path.join(dataDir, "endpoint.json"),
   },
 });
 server.stdout.on("data", (d) => serverLog.push(String(d)));

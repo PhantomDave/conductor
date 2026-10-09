@@ -128,7 +128,7 @@ The broadcaster at `packages/core/src/logs/broadcaster.ts` uses a pub/sub patter
 
 ### MCP (`/mcp`)
 
-`packages/core/src/mcp/` exposes the API to AI agents as MCP tools. Each tool is a `defineTool` entry that maps its arguments onto an existing route, and `callRoute` runs that route through `app.inject()` on the same Fastify instance. Validation, the workspace guard and the audit log therefore stay in one place, and a non-2xx response becomes an `isError` tool result. Only `process_wait` has its own logic: it polls the process list. Its contract is in [API.md](./API.md#mcp-endpoint).
+`packages/core/src/mcp/` exposes the API to AI agents as MCP tools. Each tool is a `defineTool` entry that maps its arguments onto an existing route, and `callRoute` runs that route through `app.inject()` on the same Fastify instance. Validation, the workspace guard and the audit log therefore stay in one place, and a non-2xx response becomes an `isError` tool result. Two kinds of tool have their own logic. `process_wait` polls the process list, and `env_list`, `env_set` and `env_import` wrap `callRoute` to redact secret values (the HTTP routes return them as stored). Its contract is in [API.md](./API.md#mcp-endpoint).
 
 Security: the server binds `0.0.0.0`, so `checkMcpRequest` runs before the transport sees any request. It rejects non-loopback peers and any `Host` or `Origin` that is not a loopback name, with 403.
 

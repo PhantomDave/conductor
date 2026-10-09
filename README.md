@@ -127,6 +127,7 @@ Conductor configs are YAML files starting at the root with two top-level section
 | `conductor ps`                            | List all running processes (hits API at :4000)                     |
 | `conductor logs [--follow]`               | Query or stream logs from the core API (supports filters)          |
 | `conductor stop <profile>`                | Gracefully stop all processes in a profile via core API            |
+| `conductor mcp`                           | Bridge a stdio MCP client to the running core (see below)          |
 
 Full reference: [CLI.md](./docs/CLI.md)
 
@@ -178,7 +179,7 @@ The desktop app checks for updates automatically on launch via GitHub Releases. 
 
 ## Use with AI agents (MCP)
 
-The core exposes the whole API as 47 [MCP](https://modelcontextprotocol.io) tools at `/mcp`, so an agent can list workspaces, start profiles, read logs and edit config. Requests are accepted from the local machine only. Add it to Claude Code with the HTTP transport, for a core running on port 4000:
+The core exposes nearly the whole API (not health or the SSE log stream) as 47 [MCP](https://modelcontextprotocol.io) tools at `/mcp`, so an agent can list workspaces, start profiles, read logs and edit config. Requests are accepted from the local machine only. Add it to Claude Code with the HTTP transport, for a core running on port 4000:
 
 ```bash
 claude mcp add --transport http conductor http://localhost:4000/mcp

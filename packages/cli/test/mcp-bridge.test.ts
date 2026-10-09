@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { resolveBaseUrl } from "../src/commands/mcp";
+import { findReachableBase, isReachable, resolveBaseUrl } from "../src/commands/mcp";
 import { startCore } from "../../core/test/fixtures/api-harness";
 
 const BIN = join(import.meta.dir, "..", "bin", "conductor.ts");
@@ -174,33 +174,159 @@ describe("resolveBaseUrl", () => {
     const dead = Bun.spawn([process.execPath, "-e", ""], { stdout: "ignore", stderr: "ignore" });
     await dead.exited;
     writeEndpoint(dead.pid);
-    expect(resolveBaseUrl()).toBe("http://localhost:4000");
+    expect(resolveBaseUrl()).toEqual({ url: "http://localhost:4000", source: "default" });
   });
 
   test("a live-pid endpoint file is used", () => {
     writeEndpoint(process.pid);
-    expect(resolveBaseUrl()).toBe("http://127.0.0.1:5555");
+    expect(resolveBaseUrl()).toEqual({ url: "http://127.0.0.1:5555", source: "endpoint-file" });
   });
 
   test("CONDUCTOR_API_URL wins over a live endpoint file", () => {
     writeEndpoint(process.pid);
     process.env.CONDUCTOR_API_URL = "http://127.0.0.1:6666/";
-    expect(resolveBaseUrl()).toBe("http://127.0.0.1:6666");
+    expect(resolveBaseUrl()).toEqual({ url: "http://127.0.0.1:6666", source: "env" });
   });
 
   test("an explicit --url wins over everything", () => {
     writeEndpoint(process.pid);
     process.env.CONDUCTOR_API_URL = "http://127.0.0.1:6666";
-    expect(resolveBaseUrl("http://127.0.0.1:7777")).toBe("http://127.0.0.1:7777");
+    expect(resolveBaseUrl("http://127.0.0.1:7777")).toEqual({
+      url: "http://127.0.0.1:7777",
+      source: "flag",
+    });
   });
 
   test("empty or whitespace-only values count as unset", () => {
     writeEndpoint(process.pid);
     process.env.CONDUCTOR_API_URL = "  ";
-    expect(resolveBaseUrl("")).toBe("http://127.0.0.1:5555");
-    expect(resolveBaseUrl("   ")).toBe("http://127.0.0.1:5555");
+    const fromFile = { url: "http://127.0.0.1:5555", source: "endpoint-file" };
+    expect(resolveBaseUrl("")).toEqual(fromFile);
+    expect(resolveBaseUrl("   ")).toEqual(fromFile);
     rmSync(file);
     process.env.CONDUCTOR_API_URL = "";
-    expect(resolveBaseUrl("")).toBe("http://localhost:4000");
+    expect(resolveBaseUrl("")).toEqual({ url: "http://localhost:4000", source: "default" });
+  });
+});
+
+describe("findReachableBase", () => {
+  /** A URL nothing listens on: bind a port, note it, release it. */
+  function closedUrl(): string {
+    const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response("") });
+    const url = `http://127.0.0.1:${server.port}`;
+    void server.stop(true);
+    return url;
+  }
+
+  test("a reachable URL is used without trying the default", async () => {
+    const probed: string[] = [];
+    const probe = async (u: string) => (probed.push(u), true);
+    const r = await findReachableBase(
+      { url: "http://a", source: "endpoint-file" },
+      probe,
+      "http://d",
+    );
+    expect(r).toEqual({ url: "http://a", tried: ["http://a"], fellBack: false });
+    expect(probed).toEqual(["http://a"]);
+  });
+
+  test("an unreachable endpoint-file URL falls back to the default", async () => {
+    const probe = async (u: string) => u === "http://d";
+    const r = await findReachableBase(
+      { url: "http://a", source: "endpoint-file" },
+      probe,
+      "http://d",
+    );
+    expect(r).toEqual({ url: "http://d", tried: ["http://a", "http://d"], fellBack: true });
+  });
+
+  test("both failing reports everything tried", async () => {
+    const r = await findReachableBase(
+      { url: "http://a", source: "endpoint-file" },
+      async () => false,
+      "http://d",
+    );
+    expect(r).toEqual({ url: null, tried: ["http://a", "http://d"], fellBack: false });
+  });
+
+  test.each(["flag", "env", "default"] as const)("%s never falls back", async (source) => {
+    const probed: string[] = [];
+    const probe = async (u: string) => (probed.push(u), false);
+    const r = await findReachableBase({ url: "http://a", source }, probe, "http://d");
+    expect(r.url).toBeNull();
+    expect(probed).toEqual(["http://a"]);
+  });
+
+  test("stale endpoint file (live pid, closed port) falls back to a running core", async () => {
+    const file = join(tmp, "stale.json");
+    writeFileSync(file, JSON.stringify({ url: closedUrl(), pid: process.pid, startedAt: "x" }));
+    const saved = {
+      file: process.env.CONDUCTOR_ENDPOINT_FILE,
+      api: process.env.CONDUCTOR_API_URL,
+    };
+    process.env.CONDUCTOR_ENDPOINT_FILE = file;
+    delete process.env.CONDUCTOR_API_URL;
+    try {
+      const resolved = resolveBaseUrl();
+      expect(resolved.source).toBe("endpoint-file");
+      // The real default (:4000) cannot be bound in tests, so the running core stands in for it.
+      const r = await findReachableBase(resolved, isReachable, core.url);
+      expect(r.url).toBe(core.url);
+      expect(r.fellBack).toBe(true);
+    } finally {
+      if (saved.file === undefined) delete process.env.CONDUCTOR_ENDPOINT_FILE;
+      else process.env.CONDUCTOR_ENDPOINT_FILE = saved.file;
+      if (saved.api !== undefined) process.env.CONDUCTOR_API_URL = saved.api;
+    }
+  });
+
+  test("the bridge names both URLs when the endpoint file and the default are unreachable", async () => {
+    const file = join(tmp, "stale2.json");
+    const stale = closedUrl();
+    writeFileSync(file, JSON.stringify({ url: stale, pid: process.pid, startedAt: "x" }));
+    const r = await spawnBridge([], { CONDUCTOR_ENDPOINT_FILE: file });
+    expect(r.code).toBe(1);
+    expect(r.stdout).toBe("");
+    expect(r.stderr).toContain("not reachable");
+    expect(r.stderr).toContain(stale);
+    expect(r.stderr).toContain("http://localhost:4000");
+  });
+});
+
+describe("loopback-only hint", () => {
+  test("a 403 from /mcp writes one stderr hint, not one per request", async () => {
+    const stub = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: (req) =>
+        new URL(req.url).pathname === "/api/health"
+          ? new Response("ok")
+          : new Response("forbidden", { status: 403 }),
+    });
+    const base = `http://127.0.0.1:${stub.port}`;
+    try {
+      const proc = Bun.spawn([process.execPath, BIN, "mcp", "--url", base], {
+        env: bridgeEnv(),
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      for (const id of [1, 2, 3]) {
+        void proc.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method: "tools/list" })}\n`);
+      }
+      await proc.stdin.flush();
+      void proc.stdin.end();
+      const [stdout, stderr] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+      await proc.exited;
+      const hint = `conductor mcp: /mcp only accepts loopback hosts (localhost, 127.0.0.1, [::1]); got ${base}`;
+      expect(stderr.split(hint).length - 1).toBe(1);
+      // Every request still gets an answer, so the client is not left waiting.
+      expect(stdout.split("\n").filter(Boolean).length).toBe(3);
+    } finally {
+      void stub.stop(true);
+    }
   });
 });

@@ -45,7 +45,7 @@ type ToolAnnotations = McpToolDef["annotations"];
 export const READ: ToolAnnotations = { readOnlyHint: true };
 /** Mutations that add or change things without removing or stopping anything. */
 export const MUTATE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false };
-/** Deletes, stops, closes, imports and prunes: state is lost or interrupted. */
+/** Deletes, stops, closes, prunes and `config_import`: state is lost or interrupted. */
 export const DESTROY: ToolAnnotations = { readOnlyHint: false, destructiveHint: true };
 
 /** `encodeURIComponent` under a short name, for building route paths. */

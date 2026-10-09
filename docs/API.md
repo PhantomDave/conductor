@@ -97,12 +97,12 @@ Events emitted during process lifecycle (spawned, healthy, stopped, failed).
 
 All env vars are stored in SQLite's `env_vars` table. The API supports per-scope management and import/export.
 
-| Method | Path              | Body/Query                                                      | Description                                                                                                                                                                                                           |
-| ------ | ----------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/env`        | `?scope=global\|profile&profile=&key=`                          | Query env vars with optional scoping; returns an array of env objects `{ id, scope, profile, key, value, secret }`. When a var name matches `env_secrets`, the value field is `[FILTERED]` in API responses.          |
-| PUT    | `/api/env`        | `{ scope: "global"\|"profile", profile?, key, value, secret? }` | Upsert an env var. For `profile` scope, writes to `.env.<profile>.local`; for all scopes, the CLI also writes the corresponding local file.                                                                           |
-| DELETE | `/api/env/:id`    | —                                                               | Delete a single env var entry by ID                                                                                                                                                                                   |
-| POST   | `/api/env/import` | `{ scope, profile?, text, secret? }`                            | Batch-import vars from dotenv-formatted text (`.env` format). Auto-detects `looksSecret` on variable names during bulk processing. Parses `.env`-style syntax with single/double/quoting support and inline comments. |
+| Method | Path              | Body/Query                                                      | Description                                                                                                                                                                                                                                                                                          |
+| ------ | ----------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/env`        | `?scope=global\|profile&profile=&key=`                          | Query env vars with optional scoping; returns `{ vars: [...] }`, each `{ id, scope, profile, key, value, is_secret }`. Values are returned as stored, secrets included; masking is done by the UI only. The MCP tools `env_list`, `env_set` and `env_import` do mask them (see [Secrets](#secrets)). |
+| PUT    | `/api/env`        | `{ scope: "global"\|"profile", profile?, key, value, secret? }` | Upsert an env var; returns `{ var }` (the stored row). For `profile` scope, writes to `.env.<profile>.local`; for all scopes, the CLI also writes the corresponding local file.                                                                                                                      |
+| DELETE | `/api/env/:id`    | —                                                               | Delete a single env var entry by ID                                                                                                                                                                                                                                                                  |
+| POST   | `/api/env/import` | `{ scope, profile?, text, secret? }`                            | Batch-import vars (returns `{ imported, vars }`: the count and the stored rows) from dotenv-formatted text (`.env` format). Auto-detects `looksSecret` on variable names during bulk processing. Parses `.env`-style syntax with single/double/quoting support and inline comments.                  |
 
 ### Logs
 
@@ -168,7 +168,7 @@ The server listens on all interfaces and the tools can run shell commands, so `/
 
 Each tool is a thin mapping onto one of the routes below. The request is dispatched in-process through Fastify's `inject()`, so validation, the workspace guard and the audit log behave exactly as they do over HTTP. Tool names are `snake_case` as `<area>_<action>`.
 
-The last column is the MCP annotation: **R** is read-only (`readOnlyHint`), **D** is destructive (`destructiveHint`: deletes, stops, closes, imports and prunes), and **M** is any other mutation.
+The last column is the MCP annotation: **R** is read-only (`readOnlyHint`), **D** is destructive (`destructiveHint`: deletes, stops, closes and prunes, plus `config_import`, which overwrites the config), and **M** is any other mutation.
 
 | Tool                        | Method + route                                       | R/D/M |
 | --------------------------- | ---------------------------------------------------- | ----- |
@@ -235,7 +235,7 @@ Not exposed: `/api/health` (the bridge probes it itself), `/api/logs/stream` (SS
 - `until` is `running`, `healthy` (healthcheck passing), `stopped` (stopped on request) or `exited`. `exited` also matches `completed` and `failed`, and `completed` is treated as a clean exit.
 - It returns an error at once when the process has already reached a terminal state (`stopped`, `completed` or `failed`) that can never satisfy `until`. For example, a process that failed while waiting for `running`.
 - `timeout_ms` defaults to 30000 and is capped at 120000. On timeout the error includes the last snapshot. Many MCP clients abort a request after about 60 s, so prefer shorter waits and call again.
-- The wait is cancelled when the client disconnects; the tool then returns an error.
+- The wait is cancelled when the HTTP connection to `/mcp` closes; the tool then returns an error. A `notifications/cancelled` message sent as a separate stateless POST does not abort a wait that is already in flight.
 
 ### Secrets
 
