@@ -99,7 +99,7 @@ export function registerMcpCommand(program: import("commander").Command) {
       }
 
       const stdio = new StdioServerTransport();
-      const http = new StreamableHTTPClientTransport(new URL("/mcp", base));
+      const http = new StreamableHTTPClientTransport(new URL(`${base}/mcp`));
 
       let warnedLoopback = false;
       let closing = false;
@@ -138,8 +138,9 @@ export function registerMcpCommand(program: import("commander").Command) {
           if (err instanceof StreamableHTTPError && err.code === 403 && !warnedLoopback) {
             warnedLoopback = true;
             warn(`/mcp only accepts loopback hosts (localhost, 127.0.0.1, [::1]); got ${base}`);
+          } else {
+            warn(`could not reach core: ${err.message}`);
           }
-          warn(`could not reach core: ${err.message}`);
           // Answer the request ourselves, or the client would wait forever.
           if (hasId(message)) {
             settle({
@@ -158,7 +159,9 @@ export function registerMcpCommand(program: import("commander").Command) {
         settle(message);
       };
 
+      // stdin emits both "end" and "close"; only the first one counts.
       const onStdinEnd = () => {
+        if (stdinEnded) return;
         stdinEnded = true;
         if (pending.size === 0) shutdown();
         else setTimeout(shutdown, STDIN_DRAIN_TIMEOUT_MS).unref();

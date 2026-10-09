@@ -26,6 +26,8 @@ describe("endpoint file", () => {
     expect(endpointFilePath()).toBe(file);
     delete process.env.CONDUCTOR_ENDPOINT_FILE;
     expect(endpointFilePath().endsWith(join(".conductor", "endpoint.json"))).toBe(true);
+    process.env.CONDUCTOR_ENDPOINT_FILE = "";
+    expect(endpointFilePath().endsWith(join(".conductor", "endpoint.json"))).toBe(true);
   });
 
   test("write then read round-trips url and own pid, creating the directory", () => {

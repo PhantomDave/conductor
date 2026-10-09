@@ -10,7 +10,7 @@ export interface EndpointInfo {
 
 /** Where a running core advertises its URL (the desktop sidecar binds a random port). */
 export function endpointFilePath(): string {
-  return process.env.CONDUCTOR_ENDPOINT_FILE ?? join(homedir(), ".conductor", "endpoint.json");
+  return process.env.CONDUCTOR_ENDPOINT_FILE || join(homedir(), ".conductor", "endpoint.json");
 }
 
 export function writeEndpointFile(url: string): void {

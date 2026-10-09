@@ -76,6 +76,8 @@ async function main() {
   logger.info(`Conductor core listening on http://localhost:${boundPort}`);
 
   // Let `conductor mcp` find this instance (the desktop sidecar's port is random).
+  // ponytail: one file per machine, last core to start wins; running two cores at
+  // once leaves the bridge pointing at whichever started later (or at :4000 once it exits)
   try {
     writeEndpointFile(`http://127.0.0.1:${boundPort}`);
   } catch (err) {

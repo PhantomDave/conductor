@@ -52,6 +52,7 @@ export function checkMcpRequest(input: {
 }
 
 function createMcpServer(app: FastifyInstance): McpServer {
+  // ponytail: serverInfo version is fixed, not read from package.json
   const server = new McpServer({ name: "conductor", version: "0.1.0" });
   for (const def of TOOLS) {
     server.registerTool(
