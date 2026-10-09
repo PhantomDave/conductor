@@ -42,7 +42,31 @@ function reached(until: WaitState, snapshot: ProcessSnapshot): boolean {
   }
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Whether `until` can still be reached from this snapshot. `stopped`,
+ * `completed` and `failed` are terminal: a process in one of them never moves
+ * on, so waiting for anything it has not already reached is pointless.
+ */
+function unreachable(until: WaitState, snapshot: ProcessSnapshot): boolean {
+  const terminal =
+    snapshot.status === "stopped" ||
+    snapshot.status === "completed" ||
+    snapshot.status === "failed";
+  return terminal && !reached(until, snapshot);
+}
+
+/** Sleeps `ms`, or less if `signal` aborts first. */
+const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done, { once: true });
+  });
 
 export const executionTools: McpToolDef[] = [
   defineTool({
@@ -125,7 +149,7 @@ export const executionTools: McpToolDef[] = [
   defineTool({
     name: "process_wait",
     description:
-      "Wait until a process reaches a state, then return its snapshot. Identify it by commandId (the newest process of that command) or pid, not both. until: 'running' (status running), 'healthy' (healthcheck passing), 'stopped' (stopped on request), 'exited' (stopped, completed or failed). Errors immediately if the process fails (unless until is 'exited'), and on timeout (default 30000 ms, max 120000 ms; many MCP clients abort requests after about 60 s, so prefer shorter waits and call again).",
+      "Wait until a process reaches a state, then return its snapshot. Identify it by commandId (the newest process of that command) or pid, not both. until: 'running' (status running), 'healthy' (healthcheck passing), 'stopped' (stopped on request), 'exited' (stopped, completed or failed). Errors immediately if the process has already ended in a state that can never satisfy 'until' (e.g. it exited or failed while waiting for 'running'), and on timeout (default 30000 ms, max 120000 ms; many MCP clients abort requests after about 60 s, so prefer shorter waits and call again).",
     input: {
       commandId: z.string().min(1).optional().describe("Command to wait for (newest process)"),
       pid: z.number().int().positive().optional().describe("Specific process id to wait for"),
@@ -133,7 +157,7 @@ export const executionTools: McpToolDef[] = [
       timeout_ms: z.number().int().min(1).max(MAX_TIMEOUT_MS).optional(),
     },
     annotations: READ,
-    run: async (args, { app }) => {
+    run: async (args, { app, signal }) => {
       const { commandId, pid, until } = args;
       if ((commandId === undefined) === (pid === undefined)) {
         return textResult("provide exactly one of commandId or pid", true);
@@ -144,6 +168,7 @@ export const executionTools: McpToolDef[] = [
       let last: ProcessSnapshot | undefined;
 
       for (;;) {
+        if (signal?.aborted) return textResult(`wait for ${target} aborted by the client`, true);
         const res = await callRoute(app, { method: "GET", url: "/api/processes" });
         if (res.isError) return res;
         const first = res.content[0];
@@ -159,14 +184,17 @@ export const executionTools: McpToolDef[] = [
         if (last) {
           const json = JSON.stringify(last, null, 2);
           if (reached(until, last)) return textResult(json);
-          if (last.status === "failed") {
-            return textResult(`${target} failed before reaching '${until}':\n${json}`, true);
+          if (unreachable(until, last)) {
+            return textResult(
+              `${target} is already '${last.status}' and can never be '${until}':\n${json}`,
+              true,
+            );
           }
         }
 
         const remaining = deadline - Date.now();
         if (remaining <= 0) break;
-        await sleep(Math.min(POLL_MS, remaining));
+        await sleep(Math.min(POLL_MS, remaining), signal);
       }
 
       return textResult(

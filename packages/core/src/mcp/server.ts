@@ -57,8 +57,8 @@ function createMcpServer(app: FastifyInstance): McpServer {
     server.registerTool(
       def.name,
       { description: def.description, inputSchema: def.input, annotations: def.annotations },
-      async (args: unknown) => {
-        if (def.run) return def.run(args, { app });
+      async (args: unknown, extra: { signal?: AbortSignal }) => {
+        if (def.run) return def.run(args, { app, signal: extra.signal });
         if (def.request) return callRoute(app, def.request(args));
         throw new Error(`tool ${def.name} has neither request nor run`);
       },

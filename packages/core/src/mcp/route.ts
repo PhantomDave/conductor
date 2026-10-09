@@ -28,6 +28,8 @@ export interface McpToolDef {
 
 export interface ToolContext {
   app: FastifyInstance;
+  /** Aborted when the client cancels the request or disconnects. */
+  signal?: AbortSignal;
 }
 
 export interface RouteRequest {

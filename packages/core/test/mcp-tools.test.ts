@@ -136,6 +136,16 @@ describe("MCP tool surface", () => {
     expect(textOf(missing)).toContain("does-not-exist");
   });
 
+  test("input that passes the tool schema but fails the route's own check is an isError with its message", async () => {
+    // `profile` is optional in the shape; the route requires it for scope "profile" (400).
+    const res = await client.callTool({
+      name: "env_set",
+      arguments: { scope: "profile", key: "K", value: "v" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toBe("profile is required when scope is 'profile'");
+  });
+
   test("env_set with secret: true is filtered in env_list", async () => {
     const set = await callJson(client, "env_set", {
       scope: "global",
@@ -296,6 +306,47 @@ describe("MCP tool surface", () => {
       });
       expect(exited.pid).toBe(running.pid);
       expect(exited.status).toBe("completed");
+    });
+
+    test.skipIf(!posix)(
+      "fails fast when the process already ended in a state that cannot satisfy until",
+      async () => {
+        await defineCommand({ id: "once", name: "Once", run: "true" });
+        await callJson(client, "command_execute", { id: "once" });
+        // Let the one-shot exit, so the snapshot is terminal.
+        await callJson(client, "process_wait", {
+          commandId: "once",
+          until: "exited",
+          timeout_ms: 5000,
+        });
+
+        for (const until of ["running", "healthy", "stopped"]) {
+          const started = Date.now();
+          const res = await client.callTool({
+            name: "process_wait",
+            arguments: { commandId: "once", until, timeout_ms: 20_000 },
+          });
+          expect(res.isError).toBe(true);
+          expect(textOf(res)).toContain(`already 'completed' and can never be '${until}'`);
+          expect(textOf(res)).toContain('"commandId": "once"');
+          expect(textOf(res)).not.toContain("timed out");
+          expect(Date.now() - started).toBeLessThan(2000);
+        }
+      },
+    );
+
+    test.skipIf(!posix)("stops polling when the request is aborted", async () => {
+      const tool = TOOLS.find((t) => t.name === "process_wait")!;
+      const abort = new AbortController();
+      const started = Date.now();
+      setTimeout(() => abort.abort(), 300);
+      const res = await tool.run!(
+        { commandId: "ghost", until: "running", timeout_ms: 20_000 },
+        { app: h.app, signal: abort.signal },
+      );
+      expect(res.isError).toBe(true);
+      expect(JSON.stringify(res.content)).toContain("aborted by the client");
+      expect(Date.now() - started).toBeLessThan(2000);
     });
 
     test.skipIf(!posix)("until stopped succeeds after process_stop", async () => {
