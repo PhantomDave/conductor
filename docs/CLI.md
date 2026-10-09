@@ -2,7 +2,7 @@
 
 The Conductor CLI is built with Commander v15 and runs standalone (no daemon required). The binary is published as `conductor` and installed via `bun link`.
 
-**Workspaces:** the CLI is already per workspace — it uses the `.conductor.yml` found by walking up from your cwd, so `cd` into a project folder to work on it. There is no `conductor workspace` command: switching the desktop app's open workspace happens in its start screen. The desktop sidecar listens on a random port, so `ps`, `stop`, `logs` and `log-retention` (which use `CONDUCTOR_API_URL` or port 4000) can't reach it; the `conductor mcp` bridge finds it through [`endpoint.json`](#conductor-mcp).
+**Workspaces:** the CLI is already per workspace — it uses the `.conductor.yml` found by walking up from your cwd, so `cd` into a project folder to work on it. There is no `conductor workspace` command: switching the desktop app's open workspace happens in its start screen. The desktop sidecar listens on a random port, so `ps`, `stop`, `notifications`, `logs` and `log-retention` (which use `CONDUCTOR_API_URL` or port 4000) can't reach it; the `conductor mcp` bridge finds it through [`endpoint.json`](#conductor-mcp).
 
 ## Commands
 
@@ -145,11 +145,11 @@ claude mcp add conductor -- conductor mcp
 
 ## CLI Environment Variables
 
-| Variable                  | Purpose                                                                                            | Default                      |
-| ------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `CONDUCTOR_API_URL`       | Override the HTTP API server URL used by `ps`, `stop`, `logs`, `log-retention` and `conductor mcp` | `http://localhost:4000`      |
-| `CONDUCTOR_ENDPOINT_FILE` | Path of the endpoint file that `conductor mcp` reads (and the core writes)                         | `~/.conductor/endpoint.json` |
-| `BASE_PATH`               | Base directory for config resolution (overrides `.conductor.yml`)                                  | `"."`                        |
+| Variable                  | Purpose                                                                                                             | Default                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `CONDUCTOR_API_URL`       | Override the HTTP API server URL used by `ps`, `stop`, `notifications`, `logs`, `log-retention` and `conductor mcp` | `http://localhost:4000`      |
+| `CONDUCTOR_ENDPOINT_FILE` | Path of the endpoint file that `conductor mcp` reads (and the core writes)                                          | `~/.conductor/endpoint.json` |
+| `BASE_PATH`               | Base directory for config resolution (overrides `.conductor.yml`)                                                   | `"."`                        |
 
 ## Exit Codes
 
