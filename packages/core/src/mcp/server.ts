@@ -100,8 +100,8 @@ export async function registerMcp(app: FastifyInstance): Promise<void> {
         enableJsonResponse: true,
       });
       reply.raw.on("close", () => {
-        void transport.close();
-        void server.close();
+        // server.close() also closes the transport it is connected to.
+        server.close().catch(() => {});
       });
       // The SDK writes the response itself; Fastify must not touch it.
       reply.hijack();

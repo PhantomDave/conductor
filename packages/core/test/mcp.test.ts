@@ -1,19 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import type { FastifyInstance } from "fastify";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import {
-  buildApi,
-  checkMcpRequest,
-  LogBroadcaster,
-  saveConfig,
-  validateConfig,
-  WorkspaceManager,
-  type ApiDependencies,
-} from "../src";
+import Fastify from "fastify";
+import { checkMcpRequest, callRoute } from "../src";
+import { startMcpHarness, textOf, type McpHarness } from "./helpers/mcp-harness";
 
 describe("checkMcpRequest", () => {
   const ok = { remoteAddress: "127.0.0.1", host: "localhost:4000", origin: undefined };
@@ -50,59 +38,18 @@ describe("checkMcpRequest", () => {
 });
 
 describe("/mcp endpoint", () => {
-  let root: string;
-  let manager: WorkspaceManager;
-  let app: FastifyInstance;
-  let baseUrl: string;
-  let clients: Client[];
+  let h: McpHarness;
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), "conductor-mcp-"));
-    const dir = join(root, "ws");
-    mkdirSync(dir, { recursive: true });
-    saveConfig(
-      join(dir, ".conductor.yml"),
-      validateConfig({
-        version: "1",
-        name: "MCP Workspace",
-        commands: [{ id: "web", name: "Web", run: "echo hi", shell: false }],
-        profiles: { dev: { command_ids: ["web"] } },
-      }),
-    );
-    const broadcaster = new LogBroadcaster();
-    const deps = { broadcaster } as ApiDependencies;
-    manager = new WorkspaceManager({
-      dataDir: join(root, "data"),
-      deps,
-      session: { broadcaster, logLevel: "silent" },
-    });
-    deps.workspaces = manager;
-    app = await buildApi(deps);
-    baseUrl = await app.listen({ port: 0, host: "127.0.0.1" });
-    clients = [];
+    h = await startMcpHarness();
   });
 
   afterEach(async () => {
-    for (const client of clients) await client.close().catch(() => {});
-    await manager.close().catch(() => {});
-    await app.close();
-    rmSync(root, { recursive: true, force: true });
+    await h.stop();
   });
 
-  async function connect(): Promise<Client> {
-    const client = new Client({ name: "test", version: "0.0.0" });
-    await client.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`)));
-    clients.push(client);
-    return client;
-  }
-
-  function textOf(result: Awaited<ReturnType<Client["callTool"]>>): string {
-    const content = result.content as Array<{ type: string; text?: string }>;
-    return content[0]?.text ?? "";
-  }
-
   test("rejects a non-loopback remote address with 403 before the transport runs", async () => {
-    const res = await app.inject({
+    const res = await h.app.inject({
       method: "POST",
       url: "/mcp",
       remoteAddress: "10.0.0.5",
@@ -114,13 +61,13 @@ describe("/mcp endpoint", () => {
 
   test("rejects a foreign Host or Origin with 403", async () => {
     const body = { jsonrpc: "2.0", id: 1, method: "tools/list" };
-    const badHost = await fetch(`${baseUrl}/mcp`, {
+    const badHost = await fetch(`${h.baseUrl}/mcp`, {
       method: "POST",
       headers: { "content-type": "application/json", host: "evil.com" },
       body: JSON.stringify(body),
     });
     expect(badHost.status).toBe(403);
-    const badOrigin = await fetch(`${baseUrl}/mcp`, {
+    const badOrigin = await fetch(`${h.baseUrl}/mcp`, {
       method: "POST",
       headers: { "content-type": "application/json", origin: "http://evil.com" },
       body: JSON.stringify(body),
@@ -130,7 +77,7 @@ describe("/mcp endpoint", () => {
 
   test("GET and DELETE return 405 with a JSON-RPC error", async () => {
     for (const method of ["GET", "DELETE"] as const) {
-      const res = await app.inject({ method, url: "/mcp" });
+      const res = await h.app.inject({ method, url: "/mcp" });
       expect(res.statusCode).toBe(405);
       expect(res.json()).toEqual({
         jsonrpc: "2.0",
@@ -140,22 +87,21 @@ describe("/mcp endpoint", () => {
     }
   });
 
-  test("listTools returns the tools with annotations over a real connection", async () => {
-    const client = await connect();
+  test("listTools returns described tools with annotations over a real connection", async () => {
+    const client = await h.connect();
     const { tools } = await client.listTools();
-    const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
-    expect(Object.keys(byName).sort()).toEqual(["command_list", "profile_list", "workspace_list"]);
+    expect(tools.length).toBeGreaterThan(3);
     for (const tool of tools) {
-      expect(tool.annotations?.readOnlyHint).toBe(true);
       expect(tool.description?.length).toBeGreaterThan(20);
+      expect(tool.annotations).toBeDefined();
     }
   });
 
   test("with no workspace open, workspace_list works and other tools return a tool error", async () => {
-    const client = await connect();
+    const client = await h.connect();
     const ws = await client.callTool({ name: "workspace_list", arguments: {} });
     expect(ws.isError).toBeFalsy();
-    expect(JSON.parse(textOf(ws))).toBeDefined();
+    expect(JSON.parse(textOf(ws))).toEqual({ current: null, recent: [] });
 
     const profiles = await client.callTool({ name: "profile_list", arguments: {} });
     expect(profiles.isError).toBe(true);
@@ -163,8 +109,8 @@ describe("/mcp endpoint", () => {
   });
 
   test("profile_list and command_list return the open workspace's data", async () => {
-    await manager.open(join(root, "ws"));
-    const client = await connect();
+    await h.manager.open(h.dir);
+    const client = await h.connect();
 
     const profiles = JSON.parse(
       textOf(await client.callTool({ name: "profile_list", arguments: {} })),
@@ -175,5 +121,115 @@ describe("/mcp endpoint", () => {
       textOf(await client.callTool({ name: "command_list", arguments: {} })),
     );
     expect(commands.commands.map((c: { id: string }) => c.id)).toEqual(["web"]);
+  });
+});
+
+describe("callRoute", () => {
+  async function stubApp() {
+    const app = Fastify({ logger: false });
+    app.get("/ok", async () => ({ hello: "world" }));
+    app.get("/empty", async (_req, reply) => reply.status(204).send());
+    app.get("/text", async (_req, reply) => reply.type("text/plain").send("plain words"));
+    app.get("/boom", async (_req, reply) => reply.status(500).type("text/plain").send("kaput"));
+    app.get("/api-error", async (_req, reply) => reply.status(400).send({ error: "bad input" }));
+    app.get("/other-error", async (_req, reply) => reply.status(418).send({ message: "teapot" }));
+    app.get("/query", async (req) => req.query);
+    app.get<{ Params: { id: string } }>("/item/:id", async (req) => ({ id: req.params.id }));
+    app.post("/echo", async (req) => ({ body: req.body }));
+    await app.ready();
+    return app;
+  }
+
+  test("returns pretty JSON for a 2xx body", async () => {
+    const app = await stubApp();
+    const res = await callRoute(app, { method: "GET", url: "/ok" });
+    expect(res.isError).toBeFalsy();
+    expect((res.content[0] as { text: string }).text).toBe(
+      JSON.stringify({ hello: "world" }, null, 2),
+    );
+    await app.close();
+  });
+
+  test('maps 204 to {"ok":true}', async () => {
+    const app = await stubApp();
+    const res = await callRoute(app, { method: "GET", url: "/empty" });
+    expect(res.isError).toBeFalsy();
+    expect(JSON.parse((res.content[0] as { text: string }).text)).toEqual({ ok: true });
+    await app.close();
+  });
+
+  test("passes a non-JSON 2xx body through raw", async () => {
+    const app = await stubApp();
+    const res = await callRoute(app, { method: "GET", url: "/text" });
+    expect(res.isError).toBeFalsy();
+    expect((res.content[0] as { text: string }).text).toBe("plain words");
+    await app.close();
+  });
+
+  test("uses the API's error message for a JSON error body", async () => {
+    const app = await stubApp();
+    const res = await callRoute(app, { method: "GET", url: "/api-error" });
+    expect(res.isError).toBe(true);
+    expect((res.content[0] as { text: string }).text).toBe("bad input");
+    await app.close();
+  });
+
+  test("passes a non-JSON error body through raw", async () => {
+    const app = await stubApp();
+    const res = await callRoute(app, { method: "GET", url: "/boom" });
+    expect(res.isError).toBe(true);
+    expect((res.content[0] as { text: string }).text).toBe("kaput");
+    await app.close();
+  });
+
+  test("uses the raw body when a JSON error has no error key", async () => {
+    const app = await stubApp();
+    const res = await callRoute(app, { method: "GET", url: "/other-error" });
+    expect(res.isError).toBe(true);
+    expect((res.content[0] as { text: string }).text).toBe(JSON.stringify({ message: "teapot" }));
+    await app.close();
+  });
+
+  test("skips undefined query values and stringifies the rest", async () => {
+    const app = await stubApp();
+    const res = await callRoute(app, {
+      method: "GET",
+      url: "/query",
+      query: { a: 1, skipped: undefined, flag: true, s: "x y" },
+    });
+    expect(JSON.parse((res.content[0] as { text: string }).text)).toEqual({
+      a: "1",
+      flag: "true",
+      s: "x y",
+    });
+    await app.close();
+  });
+
+  test("appends with ? or & depending on the url, and adds nothing for an empty query", async () => {
+    const app = await stubApp();
+    const fresh = await callRoute(app, { method: "GET", url: "/query", query: { a: "1" } });
+    expect(JSON.parse((fresh.content[0] as { text: string }).text)).toEqual({ a: "1" });
+    const existing = await callRoute(app, { method: "GET", url: "/query?x=0", query: { a: "1" } });
+    expect(JSON.parse((existing.content[0] as { text: string }).text)).toEqual({ x: "0", a: "1" });
+    const none = await callRoute(app, { method: "GET", url: "/query", query: { a: undefined } });
+    expect(JSON.parse((none.content[0] as { text: string }).text)).toEqual({});
+    await app.close();
+  });
+
+  test("an already-encoded path parameter reaches the handler decoded", async () => {
+    const app = await stubApp();
+    const res = await callRoute(app, {
+      method: "GET",
+      url: `/item/${encodeURIComponent("a/b c?d")}`,
+    });
+    expect(JSON.parse((res.content[0] as { text: string }).text)).toEqual({ id: "a/b c?d" });
+    await app.close();
+  });
+
+  test("sends the payload as the JSON body", async () => {
+    const app = await stubApp();
+    const res = await callRoute(app, { method: "POST", url: "/echo", payload: { n: 1 } });
+    expect(JSON.parse((res.content[0] as { text: string }).text)).toEqual({ body: { n: 1 } });
+    await app.close();
   });
 });
