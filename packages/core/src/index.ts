@@ -20,3 +20,4 @@ export * from "./workspace/session";
 export * from "./workspace/manager";
 export * from "./mcp/server";
 export * from "./mcp/tools";
+export * from "./mcp/endpoint-file";

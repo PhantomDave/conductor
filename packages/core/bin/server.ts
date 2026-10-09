@@ -9,8 +9,10 @@ import {
   LogBroadcaster,
   readRecent,
   recordRecent,
+  removeEndpointFile,
   saveConfig,
   WorkspaceManager,
+  writeEndpointFile,
   type ApiDependencies,
 } from "../src";
 
@@ -68,7 +70,17 @@ async function main() {
   const app = await buildApi(deps);
 
   await app.listen({ port: PORT, host: "0.0.0.0" });
-  logger.info(`Conductor core listening on http://localhost:${PORT}`);
+  // PORT 0 asks the OS for a free port; advertise the one actually bound.
+  const address = app.server.address();
+  const boundPort = typeof address === "object" && address ? address.port : PORT;
+  logger.info(`Conductor core listening on http://localhost:${boundPort}`);
+
+  // Let `conductor mcp` find this instance (the desktop sidecar's port is random).
+  try {
+    writeEndpointFile(`http://127.0.0.1:${boundPort}`);
+  } catch (err) {
+    logger.warn({ err }, "Could not write the endpoint discovery file");
+  }
 
   // Stop every managed process cleanly (respecting each command's
   // stop_signal/stop_timeout_ms) before exiting, so killing the server -
@@ -78,6 +90,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
+    removeEndpointFile();
     logger.info(`Received ${signal}, stopping all managed processes...`);
     try {
       // A switch mid-flight is still stopping the old workspace (maybe

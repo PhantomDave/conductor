@@ -12,6 +12,7 @@ import {
 } from "../src/commands/ps";
 import { registerLogsCommand } from "../src/commands/logs";
 import { registerLogRetentionCommand } from "../src/commands/log-retention";
+import { registerMcpCommand } from "../src/commands/mcp";
 
 const program = new Command();
 
@@ -27,5 +28,6 @@ registerStopCommand(program);
 registerNotificationsCommand(program);
 registerLogsCommand(program);
 registerLogRetentionCommand(program);
+registerMcpCommand(program);
 
 program.parse(process.argv);

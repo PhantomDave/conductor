@@ -21,6 +21,7 @@
       },
       "dependencies": {
         "@conductor/core": "workspace:*",
+        "@modelcontextprotocol/sdk": "^1.32.1",
         "commander": "^15.0.0",
         "picocolors": "^1.1.1",
       },
