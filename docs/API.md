@@ -150,6 +150,97 @@ In the desktop shell (Tauri; the Rust host sets `CONDUCTOR_UI_DIST` on the sidec
 - Enabled for localhost on any port via `cors({ origin: /localhost/ })`: so the dev-mode React dashboard at `http://localhost:3000` can make cross-origin AJAX/fetch requests against the API server running on `4000`.
 - No authentication or token mechanisms are implemented; trust model is that Conductor only binds to localhost by default. When used inside the Tauri desktop shell, the port and CORS restrictions are irrelevant as everything runs on the same origin.
 
+## MCP Endpoint
+
+The core also serves a [Model Context Protocol](https://modelcontextprotocol.io) server at `/mcp` (Streamable HTTP, JSON responses, stateless). Each POST is self-contained: no `Mcp-Session-Id` is issued and no state is kept between requests. Agents normally reach it through the `conductor mcp` stdio bridge (see [CLI.md](./CLI.md#conductor-mcp)); an HTTP client can post to `http://localhost:4000/mcp` directly.
+
+### Access rules
+
+The server listens on all interfaces and the tools can run shell commands, so `/mcp` checks each request before the MCP layer sees it. It answers **403** `{ "error": "forbidden" }` unless all of these hold:
+
+- the TCP peer is loopback: `127.0.0.1`, `::1` or `::ffff:127.0.0.1`;
+- the `Host` header's hostname (port ignored) is `localhost`, `127.0.0.1` or `::1`, which blocks DNS rebinding;
+- if an `Origin` header is sent, it parses as `http:` or `https:` with one of the same hostnames, which blocks cross-site browser requests.
+
+`GET` and `DELETE` on `/mcp` return **405** with a JSON-RPC error. Only `POST` carries messages.
+
+### Tools
+
+Each tool is a thin mapping onto one of the routes below. The request is dispatched in-process through Fastify's `inject()`, so validation, the workspace guard and the audit log behave exactly as they do over HTTP. Tool names are `snake_case` as `<area>_<action>`.
+
+The last column is the MCP annotation: **R** is read-only (`readOnlyHint`), **D** is destructive (`destructiveHint`: deletes, stops, closes, imports and prunes), and **M** is any other mutation.
+
+| Tool                        | Method + route                                       | R/D/M |
+| --------------------------- | ---------------------------------------------------- | ----- |
+| `workspace_list`            | GET `/api/workspaces`                                | R     |
+| `workspace_open`            | POST `/api/workspaces/open`                          | M     |
+| `workspace_close`           | POST `/api/workspaces/close`                         | D     |
+| `workspace_forget`          | DELETE `/api/workspaces?path=`                       | D     |
+| `profile_list`              | GET `/api/profiles`                                  | R     |
+| `profile_create`            | POST `/api/profiles`                                 | M     |
+| `profile_update`            | PUT `/api/profiles/:profile`                         | M     |
+| `profile_delete`            | DELETE `/api/profiles/:profile`                      | D     |
+| `profile_duplicate`         | POST `/api/profiles/:profile/duplicate`              | M     |
+| `profile_export`            | GET `/api/profiles/:profile/export`                  | R     |
+| `command_list`              | GET `/api/command`                                   | R     |
+| `command_create`            | POST `/api/command`                                  | M     |
+| `command_update`            | PUT `/api/command/:id`                               | M     |
+| `command_delete`            | DELETE `/api/command/:id`                            | D     |
+| `profile_command_add`       | POST `/api/profiles/:profile/commands`               | M     |
+| `profile_command_update`    | PUT `/api/profiles/:profile/commands/:id`            | M     |
+| `profile_command_sync`      | POST `/api/profiles/:profile/commands/sync`          | M     |
+| `profile_command_remove`    | DELETE `/api/profiles/:profile/commands/:id`         | D     |
+| `profile_command_duplicate` | POST `/api/profiles/:profile/commands/:id/duplicate` | M     |
+| `profile_command_move`      | POST `/api/profiles/:profile/commands/:id/move`      | M     |
+| `profile_run`               | POST `/api/profiles/:profile/run`                    | M     |
+| `profile_stop`              | POST `/api/profiles/:profile/stop`                   | D     |
+| `command_execute`           | POST `/api/commands/:id/execute`                     | M     |
+| `command_restart`           | POST `/api/commands/:id/restart`                     | M     |
+| `process_list`              | GET `/api/processes`                                 | R     |
+| `process_stop`              | DELETE `/api/processes/:pid`                         | D     |
+| `process_metrics`           | GET `/api/processes/:pid/metrics`                    | R     |
+| `process_wait`              | polls GET `/api/processes` (see below)               | R     |
+| `notification_list`         | GET `/api/notifications`                             | R     |
+| `notification_clear`        | DELETE `/api/notifications`                          | D     |
+| `env_list`                  | GET `/api/env`                                       | R     |
+| `env_set`                   | PUT `/api/env`                                       | M     |
+| `env_delete`                | DELETE `/api/env/:id`                                | D     |
+| `env_import`                | POST `/api/env/import`                               | M     |
+| `log_query`                 | GET `/api/logs`                                      | R     |
+| `log_runs`                  | GET `/api/logs/runs`                                 | R     |
+| `log_prune`                 | POST `/api/logs/prune`                               | D     |
+| `config_export`             | GET `/api/config/export`                             | R     |
+| `config_import`             | POST `/api/config/import`                            | D     |
+| `configure`                 | POST `/api/configure`                                | M     |
+| `base_path_get`             | GET `/api/base-path`                                 | R     |
+| `base_path_set`             | PUT `/api/base-path`                                 | M     |
+| `shell_get`                 | GET `/api/shells`                                    | R     |
+| `shell_set`                 | PUT `/api/shells`                                    | M     |
+| `log_retention_get`         | GET `/api/log-retention`                             | R     |
+| `log_retention_set`         | PUT `/api/log-retention`                             | M     |
+| `docker_compose_parse`      | POST `/api/docker-compose/parse`                     | R     |
+
+Not exposed: `/api/health` (the bridge probes it itself), `/api/logs/stream` (SSE; use `log_query` or `process_wait`), and the legacy `/api/docker compose/parse` alias (use `docker_compose_parse`).
+
+### Results and errors
+
+- **Success** returns one text content item holding the response body as indented JSON. An empty body or a 204 returns `{"ok":true}`.
+- **Failure** returns `isError: true` with the API's `error` message as text. For example, every tool outside `workspace_*` returns `no workspace open` while no workspace is open, and `workspace switch in progress` during a switch. These are tool results the agent can read, never JSON-RPC protocol errors.
+
+### process_wait
+
+`process_wait` is the one tool that does not map onto a single route. It polls the process list every 500 ms until the process reaches a state:
+
+- Identify the process with exactly one of `commandId` (the newest process of that command) or `pid`. A command that has not spawned yet is waited for.
+- `until` is `running`, `healthy` (healthcheck passing), `stopped` (stopped on request) or `exited`. `exited` also matches `completed` and `failed`, and `completed` is treated as a clean exit.
+- It returns an error at once when the process has already reached a terminal state (`stopped`, `completed` or `failed`) that can never satisfy `until`. For example, a process that failed while waiting for `running`.
+- `timeout_ms` defaults to 30000 and is capped at 120000. On timeout the error includes the last snapshot. Many MCP clients abort a request after about 60 s, so prefer shorter waits and call again.
+- The wait is cancelled when the client disconnects; the tool then returns an error.
+
+### Secrets
+
+`env_list`, `env_set` and `env_import` replace the value of every secret variable with `[FILTERED]` in their output, whatever the HTTP route reports. Agents can see that a variable exists and whether it is secret, but not its value. Process output returned by `log_query` is passed through as stored.
+
 ## Audit Log
 
 Every mutating operation (command creation/update/deletion, profile changes, env var changes) writes an audit entry to SQLite's `audit_log` table. Fields include: timestamp, action (`create`, `update`, `delete`), actor (profile name or "anonymous"), and details (the changed field names). Audit entries are not exposed via the HTTP API at this time but are queryable through ConductorQueries directly.
