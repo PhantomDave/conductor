@@ -90,7 +90,17 @@ export async function startMcpHarness(): Promise<McpHarness> {
       for (const client of clients) await client.close().catch(() => {});
       await manager.close().catch(() => {});
       await app.close();
-      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      // Windows lets go of a just-closed workspace's files a moment later (EBUSY), so retry briefly.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          rmSync(root, { recursive: true, force: true });
+          break;
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException).code;
+          if (attempt >= 30 || (code !== "EBUSY" && code !== "EPERM")) throw err;
+          await Bun.sleep(100);
+        }
+      }
     },
   };
 }
