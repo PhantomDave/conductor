@@ -16,6 +16,7 @@ import { ConfigError } from "./config/loader";
 import { listAvailableShells } from "./executor/shell";
 import { parseDockerCompose } from "./docker-compose/parser";
 import { WorkspaceBusyError, type WorkspaceManager } from "./workspace/manager";
+import { registerMcp } from "./mcp/server";
 
 export interface ApiDependencies {
   logger: ConductorLogger;
@@ -27,7 +28,7 @@ export interface ApiDependencies {
   workspaces?: WorkspaceManager;
 }
 
-const CommandInputSchema = z.object({
+export const CommandInputSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1),
   category: z
@@ -51,7 +52,7 @@ const CommandInputSchema = z.object({
   healthcheck: HealthcheckSchema.optional(),
 });
 
-const CommandPatchSchema = CommandInputSchema.omit({ id: true }).partial();
+export const CommandPatchSchema = CommandInputSchema.omit({ id: true }).partial();
 
 function normalizeCommandPatch(body: unknown, patch: z.infer<typeof CommandPatchSchema>) {
   if (typeof body === "object" && body !== null && "category" in body && !patch.category) {
@@ -60,7 +61,7 @@ function normalizeCommandPatch(body: unknown, patch: z.infer<typeof CommandPatch
   return patch;
 }
 
-const EnvVarInputSchema = z.object({
+export const EnvVarInputSchema = z.object({
   scope: z.enum(["global", "profile"]),
   profile: z.string().nullable().optional(),
   key: z.string().min(1),
@@ -68,19 +69,19 @@ const EnvVarInputSchema = z.object({
   secret: z.boolean().optional(),
 });
 
-const EnvImportSchema = z.object({
+export const EnvImportSchema = z.object({
   scope: z.enum(["global", "profile"]),
   profile: z.string().nullable().optional(),
   text: z.string(),
   secret: z.boolean().optional(),
 });
 
-const NotificationsQuerySchema = z.object({
+export const NotificationsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(1000).optional().default(100),
   offset: z.coerce.number().int().min(0).optional().default(0),
 });
 
-const LogsQuerySchema = z.object({
+export const LogsQuerySchema = z.object({
   pid: z.coerce.number().int().positive().optional(),
   commandId: z.string().min(1).optional(),
   profile: z.string().min(1).optional(),
@@ -89,7 +90,7 @@ const LogsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(2000).optional(),
 });
 
-const LogRunsQuerySchema = z.object({
+export const LogRunsQuerySchema = z.object({
   commandId: z.string().min(1).optional(),
   profile: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(2000).optional(),
@@ -99,11 +100,11 @@ const LogStreamQuerySchema = LogsQuerySchema.omit({ limit: true }).extend({
   limit: z.coerce.number().int().min(1).max(500).optional().default(500),
 });
 
-const PidParamSchema = z.object({
+export const PidParamSchema = z.object({
   pid: z.coerce.number().int().positive(),
 });
 
-const MetricsQuerySchema = z.object({
+export const MetricsQuerySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
 });
@@ -1133,6 +1134,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       unsubscribe();
     });
   });
+
+  // MCP endpoint for AI agents. Not under /api/, so the workspace guard does
+  // not apply to the endpoint itself (tools dispatch back through /api/*, where it does).
+  // Registered before the static/SPA block so its not-found handler can't swallow it.
+  await registerMcp(app);
 
   // If CONDUCTOR_UI_DIST points at a built UI bundle (set by the Tauri
   // desktop shell's Rust host, or anyone self-hosting the dashboard), serve it from
