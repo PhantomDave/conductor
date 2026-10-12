@@ -34,10 +34,14 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      # Pinned: Bun 1.4.3's `--compile` output is corrupted by the patchelf
+      # pass linuxdeploy runs while bundling the AppImage (ldd fails on the
+      # patched sidecar and it no longer starts), so the Linux release breaks.
+      # Bump only after checking the AppImage still bundles.
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.2
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
