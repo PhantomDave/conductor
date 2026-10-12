@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { findReachableBase, isReachable, resolveBaseUrl } from "../src/commands/mcp";
 import { startCore } from "../../core/test/fixtures/api-harness";
 
@@ -96,11 +97,57 @@ describe("conductor mcp", () => {
     }
   });
 
-  test("unreachable core exits 1 with empty stdout and a stderr hint", async () => {
+  test("unreachable core stays up with empty stdout and a stderr hint", async () => {
+    // Exiting would make the client mark the server failed for good; the
+    // bridge waits for the core instead and exits only when stdin closes.
     const r = await spawnBridge(["--url", "http://127.0.0.1:1"]);
-    expect(r.code).toBe(1);
+    expect(r.code).toBe(0);
     expect(r.stdout).toBe("");
     expect(r.stderr).toContain("not reachable");
+  });
+
+  test("follows the core to a new port after a restart", async () => {
+    const file = join(tmp, "restart.json");
+    const advertise = (url: string) =>
+      writeFileSync(file, JSON.stringify({ url, pid: process.pid, startedAt: "x" }));
+    let first: Awaited<ReturnType<typeof startCore>> | null = await startCore();
+    advertise(first.url);
+    const client = await connect([], { CONDUCTOR_ENDPOINT_FILE: file });
+    let second: Awaited<ReturnType<typeof startCore>> | null = null;
+    try {
+      expect((await client.callTool({ name: "profile_list", arguments: {} })).isError).toBeFalsy();
+      await first.stop();
+      first = null;
+      second = await startCore();
+      expect(second.url).not.toBe(core.url);
+      advertise(second.url);
+      // Parallel calls fail together; their lookups must not cancel each other.
+      const results = await Promise.all(
+        [1, 2, 3].map(() => client.callTool({ name: "profile_list", arguments: {} })),
+      );
+      for (const result of results) expect(result.isError).toBeFalsy();
+    } finally {
+      await client.close();
+      await first?.stop();
+      await second?.stop();
+    }
+  });
+
+  test("starts before the core and announces its tools once it is up", async () => {
+    const file = join(tmp, "late.json");
+    rmSync(file, { force: true });
+    const client = await connect([], { CONDUCTOR_ENDPOINT_FILE: file });
+    try {
+      expect((await client.listTools()).tools).toEqual([]);
+      const changed = new Promise<void>((resolve) =>
+        client.setNotificationHandler(ToolListChangedNotificationSchema, () => resolve()),
+      );
+      writeFileSync(file, JSON.stringify({ url: core.url, pid: process.pid, startedAt: "x" }));
+      await changed;
+      expect((await client.listTools()).tools.map((t) => t.name)).toContain("profile_list");
+    } finally {
+      await client.close();
+    }
   });
 
   test("exits 0 when stdin closes", async () => {
@@ -285,7 +332,7 @@ describe("findReachableBase", () => {
     const stale = closedUrl();
     writeFileSync(file, JSON.stringify({ url: stale, pid: process.pid, startedAt: "x" }));
     const r = await spawnBridge([], { CONDUCTOR_ENDPOINT_FILE: file });
-    expect(r.code).toBe(1);
+    expect(r.code).toBe(0);
     expect(r.stdout).toBe("");
     expect(r.stderr).toContain("not reachable");
     expect(r.stderr).toContain(stale);
