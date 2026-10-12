@@ -205,7 +205,10 @@ export function registerMcpCommand(program: import("commander").Command) {
         lookup ??= (async () => {
           const probed = await findReachableBase(resolveBaseUrl(opts.url));
           if (probed.url === null) return false;
-          if (probed.url !== base) warn(`connected to Conductor core at ${probed.url}`);
+          // Same core: keep the transport, since closing it would abort requests
+          // already resent on it by a concurrent lookup.
+          if (http && probed.url === base) return true;
+          warn(`connected to Conductor core at ${probed.url}`);
           await attach(probed.url);
           return true;
         })().finally(() => {

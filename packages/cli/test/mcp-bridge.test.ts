@@ -121,8 +121,11 @@ describe("conductor mcp", () => {
       second = await startCore();
       expect(second.url).not.toBe(core.url);
       advertise(second.url);
-      const result = await client.callTool({ name: "profile_list", arguments: {} });
-      expect(result.isError).toBeFalsy();
+      // Parallel calls fail together; their lookups must not cancel each other.
+      const results = await Promise.all(
+        [1, 2, 3].map(() => client.callTool({ name: "profile_list", arguments: {} })),
+      );
+      for (const result of results) expect(result.isError).toBeFalsy();
     } finally {
       await client.close();
       await first?.stop();
