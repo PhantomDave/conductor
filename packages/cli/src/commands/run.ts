@@ -6,6 +6,7 @@ import {
   compileConfigExamples,
   dbEnvLookup,
   declaredEnvKeys,
+  sharedEnvKeys,
   type LogEntry,
   type CommandConfig,
 } from "@conductor/core";
@@ -37,10 +38,24 @@ export function registerRunCommand(program: import("commander").Command) {
         dbProfileEnv: dbEnv(profile),
       };
       const env = buildProfileEnv(envParams);
-      const report = compileConfigExamples(env.BASE_PATH ?? process.cwd(), env);
-      if (report.created > 0) {
+      const report = compileConfigExamples(env.BASE_PATH ?? process.cwd(), env, {
+        converge: {
+          declaredKeys: new Set([...sharedEnvKeys(envParams), "BASE_PATH"]),
+          secretKeys: config.env_secrets,
+        },
+      });
+      if (report.created > 0 || report.updated > 0) {
         console.log(
-          pc.dim(`Compiled ${report.created} config file(s) from their .example templates.`),
+          pc.dim(
+            `Compiled ${report.created} and updated ${report.updated} config file(s) from their .example templates.`,
+          ),
+        );
+      }
+      if (report.staticTemplates.length > 0) {
+        console.log(
+          pc.yellow(
+            `⚠ ${report.staticTemplates.length} file(s) came from templates with no \${VAR} - run "conductor configure" to see which.`,
+          ),
         );
       }
       if (report.missingVars.length > 0) {

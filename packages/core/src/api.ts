@@ -773,8 +773,9 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
 
       // Auto-compile any missing .env/appsettings.json from their
       // .example counterparts before starting commands, so a fresh
-      // checkout works without a manual "configurations" step. Never
-      // overwrites files that already exist.
+      // checkout works without a manual "configurations" step. An existing
+      // file isn't replaced, but the keys Conductor declares are converged
+      // into it.
       const configReport = deps.store.compileConfigExamples(profile);
 
       // A "session" is one profile run — tag every log line from here on

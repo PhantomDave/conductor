@@ -33,12 +33,12 @@ export function useCompileConfigExamples() {
         notifications.show({
           color: "orange",
           title: "Compiled with errors",
-          message: `${report.created} created, ${report.skipped} skipped, ${report.errors} failed`,
+          message: `${report.created} created, ${report.updated} updated, ${report.skipped} skipped, ${report.errors} failed`,
         });
       } else {
         notifications.show({
           color: "green",
-          message: `${report.created} file(s) created, ${report.skipped} already existed`,
+          message: `${report.created} file(s) created, ${report.updated} updated, ${report.skipped} already up to date`,
         });
       }
     },

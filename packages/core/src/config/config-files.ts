@@ -213,6 +213,30 @@ export function planConfigFiles(cmd: CommandConfig, ctx: ConfigFileContext): Con
   return cmd.config_files.map((file) => evaluateFile(cmd.id, file, ctx).plan);
 }
 
+function writeEvaluated({ plan, next }: { plan: ConfigFilePlan; next?: string }): ConfigFilePlan {
+  if (next === undefined) return plan;
+  try {
+    writeFileSync(plan.path, next, "utf-8");
+  } catch (err) {
+    plan.error = (err as Error).message;
+  }
+  return plan;
+}
+
+/**
+ * Converges one file that no command declared, in `auto` mode: every key
+ * already in the file that Conductor also provides is rewritten with
+ * Conductor's value, everything else (unknown keys, comments, order) is
+ * left alone. This is what the example compiler uses, so a target that
+ * already exists still gets Conductor's values instead of being skipped.
+ */
+export function applyAutoKeys(path: string, ctx: ConfigFileContext): ConfigFilePlan {
+  return writeEvaluated(evaluateFile(EXAMPLE_COMMAND_ID, { path, set: {}, auto: true }, ctx));
+}
+
+/** `commandId` on plans that come from the example compiler, not from a command's `config_files`. */
+export const EXAMPLE_COMMAND_ID = "__examples__";
+
 /**
  * Converges `cmd.config_files`: rewrites only the keys that differ,
  * leaves every other line (comments, order, line endings) as it was, and
@@ -221,16 +245,7 @@ export function planConfigFiles(cmd: CommandConfig, ctx: ConfigFileContext): Con
  * read-modify-write must not interleave with another.
  */
 export function applyConfigFiles(cmd: CommandConfig, ctx: ConfigFileContext): ConfigFilePlan[] {
-  return cmd.config_files.map((file) => {
-    const { plan, next } = evaluateFile(cmd.id, file, ctx);
-    if (next === undefined) return plan;
-    try {
-      writeFileSync(plan.path, next, "utf-8");
-    } catch (err) {
-      plan.error = (err as Error).message;
-    }
-    return plan;
-  });
+  return cmd.config_files.map((file) => writeEvaluated(evaluateFile(cmd.id, file, ctx)));
 }
 
 export interface ConfigUsageLint {
