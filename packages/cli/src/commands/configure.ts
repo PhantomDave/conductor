@@ -6,6 +6,7 @@ import {
   configureConfigFiles,
   dbEnvLookup,
   firstProfileOf,
+  sharedEnvKeys,
   type ConfigFilesReport,
 } from "@conductor/core";
 import { openQueries, requireConfig } from "../config-context";
@@ -41,14 +42,24 @@ export function registerConfigureCommand(program: import("commander").Command) {
 
       // The example compile is a write, so a plan skips it.
       if (!opts.plan) {
-        const report = compileConfigExamples(basePath, env, { force: opts.force });
+        const report = compileConfigExamples(basePath, env, {
+          force: opts.force,
+          converge: {
+            declaredKeys: new Set([...sharedEnvKeys(envParams), "BASE_PATH"]),
+            secretKeys: config.env_secrets,
+          },
+        });
         console.log(pc.bold(`Scanned ${pc.dim(report.basePath)}`));
         for (const result of report.results) {
           const rel = result.targetPath.replace(`${report.basePath}/`, "");
+          const keys =
+            result.changedKeys.length > 0 ? pc.dim(` (${result.changedKeys.join(", ")})`) : "";
           if (result.action === "created") {
-            console.log(pc.green(`  ✓ ${rel}`));
+            console.log(pc.green(`  ✓ ${rel}`) + keys);
+          } else if (result.action === "updated") {
+            console.log(pc.yellow(`  ~ ${rel}`) + keys);
           } else if (result.action === "skipped-exists") {
-            console.log(pc.dim(`  - ${rel} (already exists, use --force to overwrite)`));
+            console.log(pc.dim(`  - ${rel} (already up to date)`));
           } else {
             console.log(pc.red(`  ✗ ${rel}: ${result.error}`));
           }
@@ -56,9 +67,17 @@ export function registerConfigureCommand(program: import("commander").Command) {
 
         console.log(
           pc.bold(
-            `\n${report.created} created, ${report.skipped} skipped, ${report.errors} error(s)`,
+            `\n${report.created} created, ${report.updated} updated, ${report.skipped} skipped, ${report.errors} error(s)`,
           ),
         );
+        if (report.staticTemplates.length > 0) {
+          console.log(
+            pc.yellow(
+              `⚠ Created from templates with no \${VAR}, so their values are whatever the template hardcodes: ` +
+                report.staticTemplates.map((p) => relative(basePath, p)).join(", "),
+            ),
+          );
+        }
         if (report.missingVars.length > 0) {
           console.log(
             pc.yellow(

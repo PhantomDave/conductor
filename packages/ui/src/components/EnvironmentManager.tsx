@@ -450,8 +450,12 @@ function ConfigCompilerCard({ profileNames }: { profileNames: string[] }) {
                 {report.created} created
               </Text>
               {", "}
+              <Text span fw={600} c="yellow">
+                {report.updated} updated
+              </Text>
+              {", "}
               <Text span c="dimmed">
-                {report.skipped} already existed
+                {report.skipped} already up to date
               </Text>
               {report.errors > 0 && (
                 <>
@@ -472,10 +476,19 @@ function ConfigCompilerCard({ profileNames }: { profileNames: string[] }) {
                     <Text
                       span
                       size="xs"
-                      c={r.action === "created" ? "green" : r.action === "error" ? "red" : "dimmed"}
+                      c={
+                        r.action === "created"
+                          ? "green"
+                          : r.action === "updated"
+                            ? "yellow"
+                            : r.action === "error"
+                              ? "red"
+                              : "dimmed"
+                      }
                     >
                       {r.action === "created" && "created"}
-                      {r.action === "skipped-exists" && "already exists"}
+                      {r.action === "updated" && `updated: ${r.changedKeys.join(", ")}`}
+                      {r.action === "skipped-exists" && "already up to date"}
                       {r.action === "error" && `error: ${r.error}`}
                     </Text>
                   </List.Item>
@@ -498,6 +511,23 @@ function ConfigCompilerCard({ profileNames }: { profileNames: string[] }) {
                 below (Global or this profile) then compile again with "Overwrite existing" checked:{" "}
                 <Text span ff="monospace" size="xs">
                   {report.missingVars.join(", ")}
+                </Text>
+              </Alert>
+            )}
+            {report.staticTemplates.length > 0 && (
+              <Alert
+                color="yellow"
+                variant="light"
+                icon={<IconAlertTriangle size={16} />}
+                title="Templates with no variables"
+              >
+                These files were copied from an example that references no <Code>{"${VAR}"}</Code>,
+                so their values are whatever the template hardcodes - only keys Conductor also
+                provides were filled in:{" "}
+                <Text span ff="monospace" size="xs">
+                  {report.staticTemplates
+                    .map((path) => path.replace(`${report.basePath}/`, ""))
+                    .join(", ")}
                 </Text>
               </Alert>
             )}

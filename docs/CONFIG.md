@@ -149,7 +149,7 @@ When you run `conductor configure [profile]` (CLI), click **Compile** in the Env
 - `appsettings.example.json` → `appsettings.json`
 - `appsettings.Development.example.json` → `appsettings.Development.json`
 
-`${VAR}` tokens in templates are filled in from the resolved env. Missing variables are left blank and reported, not treated as errors. Existing files are never overwritten unless you pass `--force`, so this only helps on a fresh checkout. To keep an existing `.env` up to date, use `config_files` (below).
+`${VAR}` tokens in templates are filled in from the resolved env. Missing variables are left blank and reported, not treated as errors. An existing file is not replaced wholesale unless you pass `--force`, but **Conductor has the last word on the keys it declares**: every key already in the file that Conductor also provides is rewritten with its value on each run (same convergence as `config_files` below - unknown keys, comments and ordering are left alone). That also covers the common case of a template that hardcodes placeholders instead of using `${VAR}`: the file is reported as coming from a template with no variables, and the matching keys are still filled in. Linked git worktrees found beneath base_path are skipped - they're separate checkouts.
 
 ## Declared config files
 

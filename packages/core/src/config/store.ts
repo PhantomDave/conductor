@@ -7,6 +7,7 @@ import {
   buildCommandEnv,
   buildProfileEnv,
   declaredEnvKeys,
+  sharedEnvKeys,
   resolveBasePath,
   type BuildCommandEnvParams,
   type BuildEnvParams,
@@ -186,11 +187,20 @@ export class ConfigStore {
    * profile's resolved env - so there's no per-service "configurations"
    * command to author or maintain in `.conductor.yml`; any new service
    * that follows the example-file convention picks this up automatically.
-   * Existing target files are left untouched unless `opts.force` is set.
+   * An existing target isn't rewritten wholesale unless `opts.force` is
+   * set, but the keys Conductor declares are converged into it on every
+   * run, so its values can't drift from the env store.
    */
   compileConfigExamples(profileName?: string, opts: { force?: boolean } = {}): CompileReport {
-    const env = buildProfileEnv(this.envParams(profileName));
-    return compileConfigExamples(this.getResolvedBasePath(), env, opts);
+    const params = this.envParams(profileName);
+    const env = buildProfileEnv(params);
+    return compileConfigExamples(this.getResolvedBasePath(), env, {
+      ...opts,
+      converge: {
+        declaredKeys: new Set([...sharedEnvKeys(params), "BASE_PATH"]),
+        secretKeys: this.config.env_secrets,
+      },
+    });
   }
 
   /**

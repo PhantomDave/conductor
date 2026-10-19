@@ -101,7 +101,7 @@ interface ConductorConfigSchema {
 
 ### Example-Templates Compilation
 
-The `configure` command and CLI's `compileConfigExamples` function scans the config's base_path for `.example` dot-files (`.env.example`, `.appsettings.json.example`). For each, it reads the template and replaces `${VAR}` references with current env values, writing results under base_path as `.env.<profile>` or app-specific files. Returns a `CompileReport` (`created`, `skipped`, `errors`, `missingVars`, `results[]`).
+The `configure` command and CLI's `compileConfigExamples` function scans the config's base_path for `.example` dot-files (`.env.example`, `.appsettings.json.example`). For each, it reads the template and replaces `${VAR}` references with current env values, writing results under base_path as `.env.<profile>` or app-specific files. Each target is then converged with the env Conductor declares, so existing files get current values too. Returns a `CompileReport` (`created`, `updated`, `skipped`, `errors`, `missingVars`, `staticTemplates`, `results[]`).
 
 ## HTTP API (packages/core/src/api.ts)
 

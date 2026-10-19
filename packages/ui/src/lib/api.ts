@@ -492,8 +492,10 @@ export async function importConfig(yamlText: string): Promise<ConductorConfigInf
 export interface CompileResult {
   examplePath: string;
   targetPath: string;
-  action: "created" | "skipped-exists" | "error";
+  action: "created" | "updated" | "skipped-exists" | "error";
   missingVars: string[];
+  changedKeys: string[];
+  staticTemplate: boolean;
   error?: string;
 }
 
@@ -501,9 +503,11 @@ export interface CompileReport {
   basePath: string;
   results: CompileResult[];
   created: number;
+  updated: number;
   skipped: number;
   errors: number;
   missingVars: string[];
+  staticTemplates: string[];
 }
 
 export interface ConfigFilePlan {
