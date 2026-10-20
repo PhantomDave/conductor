@@ -31,6 +31,9 @@
     "license": "MIT",
     "licenseFile": "../../../LICENSE",
     "category": "DeveloperTool",
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "shortDescription": "Universal task runner & dashboard for developers"
   },
   "plugins": {
