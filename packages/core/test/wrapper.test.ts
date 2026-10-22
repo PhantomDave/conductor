@@ -119,6 +119,37 @@ describe("ProcessWrapper.start", () => {
     expect(lines).toEqual(["a", "b", "c"]);
   });
 
+  test("yields to the event loop between chunks of an output burst", async () => {
+    // A slow handler (like the per-line SQLite write) lets the pipe fill up;
+    // already-buffered chunks then resolve as microtasks, so without a yield
+    // the whole burst runs in one event-loop turn and HTTP handling starves.
+    const cmd = makeCommand({
+      id: "burst",
+      name: "Burst",
+      run: `bun -e "for (let i = 0; i < 50000; i++) console.log('line ' + i + ' of a burst')"`,
+    });
+    const wrapper = new ProcessWrapper(cmd, "test", testEnv());
+    let turns = 0;
+    let running = true;
+    const tick = () => {
+      turns++;
+      if (running) setImmediate(tick);
+    };
+    setImmediate(tick);
+    const turnsSeen = new Set<number>();
+    wrapper.onLog(() => {
+      turnsSeen.add(turns);
+      const start = performance.now();
+      while (performance.now() - start < 0.03) {
+        // busy-wait ~30µs, about what a per-line SQLite write cost
+      }
+    });
+    await runToExit(wrapper);
+    await wrapper.drained;
+    running = false;
+    expect(turnsSeen.size).toBeGreaterThan(5);
+  }, 20_000);
+
   test("flags hasMatchedLogLine once a log_line healthcheck pattern appears in output", async () => {
     const cmd = makeCommand({
       id: "log-line-match",

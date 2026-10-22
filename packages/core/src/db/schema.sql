@@ -26,7 +26,11 @@ CREATE TABLE IF NOT EXISTS logs (
   session_id INTEGER
 );
 
+-- Both end in the rowid (id), so "one process/command, newest first" reads
+-- just its own rows; without idx_logs_process the viewer's history query
+-- walked idx_logs_timestamp across every process.
 CREATE INDEX IF NOT EXISTS idx_logs_command ON logs(command_id);
+CREATE INDEX IF NOT EXISTS idx_logs_process ON logs(process_id, id);
 CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
 CREATE INDEX IF NOT EXISTS idx_logs_session ON logs(session_id);
 

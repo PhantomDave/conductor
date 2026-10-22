@@ -74,23 +74,37 @@ export class ConductorQueries {
   }
 
   insertLog(row: Omit<LogRow, "id" | "session_id">): LogRow {
-    const sessionId = this.currentSessionByProfile.get(row.profile) ?? null;
-    return this.db
-      .prepare(
-        `INSERT INTO logs (process_id, command_id, profile, timestamp, level, stream, message, session_id)
-         VALUES ($process_id, $command_id, $profile, $timestamp, $level, $stream, $message, $session_id)
-         RETURNING *`,
-      )
-      .get({
-        $process_id: row.process_id,
-        $command_id: row.command_id,
-        $profile: row.profile,
-        $timestamp: row.timestamp,
-        $level: row.level,
-        $stream: row.stream,
-        $message: row.message,
-        $session_id: sessionId,
-      }) as LogRow;
+    return this.insertLogs([row])[0] as LogRow;
+  }
+
+  /**
+   * Inserts a batch in one transaction, returning the stored rows (ids
+   * included) in order. A burst of output written one autocommit per line
+   * kept the event loop busy for seconds.
+   */
+  insertLogs(rows: Array<Omit<LogRow, "id" | "session_id">>): LogRow[] {
+    if (rows.length === 0) return [];
+    // db.query caches the compiled statement across calls.
+    const insert = this.db.query(
+      `INSERT INTO logs (process_id, command_id, profile, timestamp, level, stream, message, session_id)
+       VALUES ($process_id, $command_id, $profile, $timestamp, $level, $stream, $message, $session_id)
+       RETURNING *`,
+    );
+    return this.db.transaction(() =>
+      rows.map(
+        (row) =>
+          insert.get({
+            $process_id: row.process_id,
+            $command_id: row.command_id,
+            $profile: row.profile,
+            $timestamp: row.timestamp,
+            $level: row.level,
+            $stream: row.stream,
+            $message: row.message,
+            $session_id: this.currentSessionByProfile.get(row.profile) ?? null,
+          }) as LogRow,
+      ),
+    )();
   }
 
   queryLogs(filters: {
@@ -135,8 +149,10 @@ export class ConductorQueries {
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
     const limit = filters.limit ?? 200;
 
+    // By id, not timestamp: ids follow insertion order, and the order matches
+    // idx_logs_process / idx_logs_command so no sort over a whole run is needed.
     return this.db
-      .prepare(`SELECT * FROM logs ${where} ORDER BY timestamp DESC, id DESC LIMIT $limit`)
+      .prepare(`SELECT * FROM logs ${where} ORDER BY id DESC LIMIT $limit`)
       .all({ ...params, $limit: limit }) as LogRow[];
   }
 

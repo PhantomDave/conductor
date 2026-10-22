@@ -25,7 +25,7 @@ import { fetchLogs, streamLogs, type LogRow, type ProcessInfo } from "../lib/api
 import { useUiStore } from "../store/ui";
 import { useStopProcess, useRestartCommand } from "../hooks/useProcessActions";
 import { LogLines } from "./LogLines";
-import { mergeLogs } from "../lib/mergeLogs";
+import { MAX_LOG_ROWS, mergeLogs } from "../lib/mergeLogs";
 import { STATUS_COLOR } from "../lib/statusColor";
 
 type StreamFilter = "all" | "stdout" | "stderr";
@@ -69,15 +69,28 @@ export function LogViewer({ process }: { process: ProcessInfo }) {
 
     // Live tail: SSE replays recent history too, overlapping the fetch above
     // (kept for an instant first paint) in either order, so both merge by id.
+    // Entries are applied once per frame: a burst sends thousands a second.
+    let queued: LogRow[] = [];
+    let frame = 0;
     const unsubscribe = streamLogs(pid, (entry) => {
-      setLogState((prev) => ({
-        pid,
-        rows: mergeLogs(prev.pid === pid ? prev.rows : [], [entry]),
-      }));
+      queued.push(entry);
+      // rAF doesn't run in a hidden window; only the newest lines survive the cap anyway.
+      if (queued.length >= 2 * MAX_LOG_ROWS) queued = queued.slice(-MAX_LOG_ROWS);
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const batch = queued;
+        queued = [];
+        setLogState((prev) => ({
+          pid,
+          rows: mergeLogs(prev.pid === pid ? prev.rows : [], batch),
+        }));
+      });
     });
 
     return () => {
       cancelled = true;
+      cancelAnimationFrame(frame);
       unsubscribe();
     };
   }, [process.pid]);
@@ -91,11 +104,12 @@ export function LogViewer({ process }: { process: ProcessInfo }) {
     });
   }, [logs, search, streamFilter]);
 
+  // On the array, not its length: once the cap is reached new lines no longer change it.
   useEffect(() => {
     if (autoScroll) {
       viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight });
     }
-  }, [filteredLogs.length, autoScroll]);
+  }, [filteredLogs, autoScroll]);
 
   // Auto-scroll pauses if the user scrolls up to read history, and
   // resumes once they scroll back to the bottom.
@@ -203,7 +217,14 @@ export function LogViewer({ process }: { process: ProcessInfo }) {
               {logs.length === 0 ? "No log output yet." : "No lines match the current filter."}
             </Text>
           ) : (
-            <LogLines logs={filteredLogs} />
+            <>
+              {logs.length >= MAX_LOG_ROWS && (
+                <Text c="dimmed" size="xs" mb="xs">
+                  Showing the last {MAX_LOG_ROWS} lines. Older output is in History.
+                </Text>
+              )}
+              <LogLines logs={filteredLogs} />
+            </>
           )}
         </ScrollArea>
       </Paper>
