@@ -64,9 +64,9 @@ export class ConfigStore {
     return new SpawnQueue(
       "__global__",
       this.config.commands,
-      (cmd) => buildCommandEnv(this.commandEnvParams(cmd)),
-      (cmd) => ({
-        declaredKeys: declaredEnvKeys(this.commandEnvParams(cmd)),
+      (cmd, profile) => buildCommandEnv(this.commandEnvParams(cmd, profile)),
+      (cmd, profile) => ({
+        declaredKeys: declaredEnvKeys(this.commandEnvParams(cmd, profile)),
         secretKeys: this.config.env_secrets,
       }),
     );
@@ -83,9 +83,18 @@ export class ConfigStore {
     };
   }
 
-  /** Env params for a command, in the context of the first profile that references it. */
-  private commandEnvParams(cmd: CommandConfig): BuildCommandEnvParams {
-    return { ...this.envParams(firstProfileOf(this.config, cmd.id)), cmd };
+  /**
+   * Env params for a command, in the context of the profile that launched it
+   * (so a command shared by dev and staging gets the env of the run it is
+   * part of), or of the first profile that references it when it was started
+   * outside a known profile.
+   */
+  private commandEnvParams(cmd: CommandConfig, launchedBy?: string): BuildCommandEnvParams {
+    const scope =
+      launchedBy && this.config.profiles[launchedBy]
+        ? launchedBy
+        : firstProfileOf(this.config, cmd.id);
+    return { ...this.envParams(scope), cmd };
   }
 
   /** Absolute directory that relative `cwd`s resolve against (see `base_path`). */

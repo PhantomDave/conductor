@@ -91,13 +91,17 @@ export class SpawnQueue {
   constructor(
     private readonly profile: string,
     private commands: CommandConfig[],
-    private readonly resolveEnv: (cmd: CommandConfig) => Record<string, string>,
+    /** `profile` is the one that launched `cmd` (see launchProfile), if any. */
+    private readonly resolveEnv: (cmd: CommandConfig, profile?: string) => Record<string, string>,
     /**
      * Which env keys were declared in Conductor for `cmd`, and which are
      * secret - drives `config_files` auto mode. Without it only `set:` keys
      * are written.
      */
-    private readonly configFileScope?: (cmd: CommandConfig) => {
+    private readonly configFileScope?: (
+      cmd: CommandConfig,
+      profile?: string,
+    ) => {
       declaredKeys: Set<string>;
       secretKeys?: string[];
     },
@@ -392,7 +396,9 @@ export class SpawnQueue {
   ): Array<[string, "stdout" | "stderr"]> {
     const lines: Array<[string, "stdout" | "stderr"]> = [];
     if (cmd.config_files.length === 0) return lines;
-    const scope = this.configFileScope?.(cmd) ?? { declaredKeys: new Set<string>() };
+    const scope = this.configFileScope?.(cmd, this.launchProfile.get(cmd.id)) ?? {
+      declaredKeys: new Set<string>(),
+    };
     const cwd = wrapper.resolvedCwd();
     for (const plan of applyConfigFiles(cmd, { env, cwd, ...scope })) {
       const file = relative(cwd, plan.path) || plan.path;
@@ -809,7 +815,7 @@ export class SpawnQueue {
       await new Promise<void>((r) => setTimeout(r, 50));
     }
 
-    await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
+    await this.startSingleProcess(cmd, this.resolveEnv(cmd, this.launchProfile.get(cmd.id)), onLog);
   }
 
   /**
@@ -869,7 +875,7 @@ export class SpawnQueue {
       this.pendingRecovery.add(commandId);
     }
 
-    await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
+    await this.startSingleProcess(cmd, this.resolveEnv(cmd, this.launchProfile.get(cmd.id)), onLog);
   }
 
   /**

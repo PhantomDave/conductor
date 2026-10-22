@@ -201,3 +201,29 @@ describe("ConfigStore command categories", () => {
     expect(readFileSync(configPath, "utf-8")).not.toContain("category:");
   });
 });
+
+describe("ConfigStore process env", () => {
+  test("a command shared by two profiles gets the env of the profile that launched it", async () => {
+    const store = new ConfigStore(
+      configPath,
+      validateConfig({
+        version: "1",
+        commands: [{ id: "show", name: "Show", run: 'printf "%s" "$TARGET"' }],
+        profiles: {
+          dev: { env: { TARGET: "dev-db" }, command_ids: ["show"] },
+          staging: { env: { TARGET: "staging-db" }, command_ids: ["show"] },
+        },
+      }),
+    );
+    const queue = store.getQueue();
+    const lines: string[] = [];
+    try {
+      await queue.startMany(["show"], (e) => lines.push(e.message), "staging");
+      await queue.waitForExit();
+      expect(lines).toContain("staging-db");
+      expect(lines).not.toContain("dev-db");
+    } finally {
+      await queue.close();
+    }
+  });
+});
