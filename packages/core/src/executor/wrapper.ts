@@ -451,7 +451,10 @@ export class ProcessWrapper {
         "stderr",
       );
     });
+    // The pumps' own catch handlers log through the same handlers, which can
+    // throw too (e.g. a closed DB): swallow that so `drained` never rejects.
     this.drained = Promise.all([subprocess.exited.catch(() => {}), stdoutPump, stderrPump]).then(
+      () => {},
       () => {},
     );
 

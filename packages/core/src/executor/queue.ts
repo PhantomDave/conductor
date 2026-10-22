@@ -14,6 +14,8 @@ const MAX_RESTART_DELAY_MS = 30_000;
 const STABLE_UPTIME_MS = 60_000;
 /** Uptime a restarted command without a healthcheck needs before it counts as recovered. */
 const RECOVERY_GRACE_MS = 1000;
+/** How long close() waits for output still in the pipes after every process exited. */
+const CLOSE_DRAIN_TIMEOUT_MS = 2000;
 
 /**
  * Represents a failure event in the queue: process start failure,
@@ -903,6 +905,15 @@ export class SpawnQueue {
   async close(): Promise<void> {
     this.closed = true;
     await this.stopAll();
+    // stop() returns once the process is gone, but its last lines can still
+    // be in the pipe; the caller (a closing session) tears down the log sink
+    // next. Bounded: a stray grandchild holding the pipe must not hang this.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      Promise.all(this.listWrappers().map((w) => w.drained)),
+      new Promise((resolve) => (timer = setTimeout(resolve, CLOSE_DRAIN_TIMEOUT_MS))),
+    ]);
+    clearTimeout(timer);
   }
 
   async stopAll(): Promise<void> {
