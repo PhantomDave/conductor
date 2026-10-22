@@ -16,6 +16,7 @@ import { listAvailableShells } from "./executor/shell";
 import { parseDockerCompose } from "./docker-compose/parser";
 import { WorkspaceBusyError, type WorkspaceManager } from "./workspace/manager";
 import { registerMcp } from "./mcp/server";
+import { checkLocalRequest } from "./local-guard";
 import {
   CommandInputSchema,
   CommandPatchSchema,
@@ -102,6 +103,20 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   // the UI's dev port may shift (3000, 3001, ...) if it's already in use.
   await app.register(cors, {
     origin: /^https?:\/\/localhost(:\d+)?$/,
+  });
+
+  // Callback style for the same Bun reason as the workspace guard below.
+  app.addHook("onRequest", (request, reply, done) => {
+    const reason = checkLocalRequest({
+      remoteAddress: request.socket.remoteAddress,
+      host: request.headers.host,
+      origin: request.headers.origin,
+    });
+    if (reason) {
+      reply.status(403).send({ error: "forbidden" });
+      return;
+    }
+    done();
   });
 
   const workspaces = deps.workspaces;
@@ -1058,7 +1073,8 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   });
 
   // MCP endpoint for AI agents. Not under /api/, so the workspace guard does
-  // not apply to the endpoint itself (tools dispatch back through /api/*, where it does).
+  // not apply to the endpoint itself (tools dispatch back through /api/*, where
+  // it does); the loopback guard above covers it like every other route.
   // Registered before the static/SPA block so its not-found handler can't swallow it.
   await registerMcp(app);
 
