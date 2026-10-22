@@ -1039,6 +1039,40 @@ describe("SpawnQueue - a new run after stopping everything", () => {
   });
 });
 
+describe("SpawnQueue - a dependency stopped by hand", () => {
+  test("is started again, even if it exited 0 on the stop signal", async () => {
+    // A service that handles SIGTERM exits 0 and ends up "stopped" with exit
+    // code 0, which used to count as a satisfied dependency.
+    const db = makeCommand({
+      id: "db",
+      name: "DB",
+      run: `bun -e "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1000)"`,
+    });
+    const api = makeCommand({
+      id: "api",
+      name: "API",
+      run: `bun -e "setInterval(() => {}, 1000)"`,
+      deps: ["db"],
+    });
+    const queue = new SpawnQueue("test", [db, api], () => testEnv());
+    try {
+      await queue.startOne("api");
+      await new Promise((r) => setTimeout(r, 300)); // let db install its handler
+      await queue.stopOne("db");
+      const stopped = queue.getWrapper("db")?.getSnapshot();
+      if (process.platform !== "win32") {
+        expect(stopped?.status).toBe("stopped");
+        expect(stopped?.exitCode).toBe(0);
+      }
+
+      await queue.startOne("api");
+      expect(queue.getWrapper("db")?.status).toBe("running");
+    } finally {
+      await queue.stopAll();
+    }
+  }, 10_000);
+});
+
 describe("SpawnQueue - starting a command mid-run", () => {
   test("reuses a one-shot dependency that already completed in this run", async () => {
     const dir = mkdtempSync(join(tmpdir(), "conductor-queue-midrun-"));

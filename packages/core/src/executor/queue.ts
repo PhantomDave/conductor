@@ -122,7 +122,8 @@ export class SpawnQueue {
 
   /**
    * Checks if a dependency is ready: either currently running,
-   * or already ran to completion (exit code 0).
+   * or already ran to completion on its own (exit code 0). A dependency
+   * stopped on request is not ready even if it exited 0 on the signal.
    */
   private isDependencyReady(depId: string): boolean {
     const wrapper = this.wrappers.get(depId);
@@ -130,9 +131,7 @@ export class SpawnQueue {
     const snapshot = wrapper.getSnapshot();
     if (!snapshot) return false;
     if (snapshot.status === "running") return true;
-    return (
-      (snapshot.status === "completed" || snapshot.status === "stopped") && snapshot.exitCode === 0
-    );
+    return snapshot.status === "completed" && snapshot.exitCode === 0;
   }
 
   /**
@@ -158,7 +157,7 @@ export class SpawnQueue {
         if (status === "running") return;
 
         const snapshot = wrapper.getSnapshot();
-        if (snapshot?.exitCode === 0) return;
+        if (status === "completed" && snapshot?.exitCode === 0) return;
 
         if (status === "stopped" || status === "completed" || status === "failed") {
           const reason = `Blocked: dependency "${depId}" failed (exit code ${snapshot?.exitCode ?? "?"})`;
