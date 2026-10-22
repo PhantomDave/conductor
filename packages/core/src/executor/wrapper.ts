@@ -496,6 +496,9 @@ export class ProcessWrapper {
       for (const line of lines) {
         this.emitLogFor(owner, line, kind);
       }
+      // Chunks already sitting in the pipe resolve as microtasks, so a burst
+      // would otherwise run start to finish without letting HTTP in.
+      await new Promise((resolve) => setImmediate(resolve));
     }
 
     if (buffer.length > 0) {

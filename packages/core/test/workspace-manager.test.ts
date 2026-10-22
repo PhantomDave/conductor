@@ -286,6 +286,8 @@ describe("WorkspaceManager + API", () => {
       message: "hello-from-b",
       timestamp: new Date().toISOString(),
     });
+    // Log lines are written in a batch on the next event-loop turn.
+    await new Promise((resolve) => setImmediate(resolve));
     expect(manager.current!.queries.queryLogs({ grep: "hello-from-b" })).toHaveLength(1);
 
     await manager.close();

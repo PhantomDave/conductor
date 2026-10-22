@@ -6,6 +6,7 @@ import {
   ConfigError,
   DEFAULT_DB_PATH,
   LogBroadcaster,
+  type LogRow,
   openSession,
   prepareSession,
   resolveWorkspaceDir,
@@ -110,9 +111,45 @@ describe("openSession", () => {
     },
   );
 
+  test("onLog writes a burst in one batch and publishes the stored rows", async () => {
+    const broadcaster = new LogBroadcaster();
+    const session = openSession(dir, { broadcaster, dbPath: ":memory:" });
+    const published: LogRow[] = [];
+    broadcaster.subscribe((row) => published.push(row));
+    const entry = (message: string) => ({
+      commandId: "api",
+      commandName: "API",
+      profile: "dev",
+      pid: 42,
+      stream: "stdout" as const,
+      message,
+      timestamp: new Date().toISOString(),
+    });
+
+    for (const message of ["one", "two", "three"]) session.onLog(entry(message));
+    expect(published).toEqual([]);
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(published.map((r) => r.message)).toEqual(["one", "two", "three"]);
+    expect(published.map((r) => r.id)).toEqual(
+      session.queries
+        .queryLogs({ processId: "42" })
+        .map((r) => r.id)
+        .reverse(),
+    );
+
+    // A line still waiting for its flush is written before close() shuts the DB.
+    session.onLog(entry("last words"));
+    await session.close();
+    expect(published.at(-1)?.message).toBe("last words");
+  });
+
   test("a log line arriving after close() is dropped, not written to the closed DB", async () => {
     // A process's last lines can still be in its pipe after stop() returns.
-    const session = openSession(dir, { broadcaster: new LogBroadcaster(), dbPath: ":memory:" });
+    const broadcaster = new LogBroadcaster();
+    const published: LogRow[] = [];
+    broadcaster.subscribe((row) => published.push(row));
+    const session = openSession(dir, { broadcaster, dbPath: ":memory:" });
     await session.close();
     expect(() =>
       session.onLog({
@@ -125,6 +162,8 @@ describe("openSession", () => {
         timestamp: new Date().toISOString(),
       }),
     ).not.toThrow();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(published).toEqual([]);
   });
 
   test("close() still releases the DB when stopping processes fails", async () => {

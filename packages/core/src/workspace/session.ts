@@ -6,7 +6,7 @@ import type { ConductorConfig } from "../config/schema";
 import { ConfigStore, dbEnvLookup } from "../config/store";
 import { saveConfig } from "../config/writer";
 import { DEFAULT_DB_PATH, openDatabase } from "../db/init";
-import { ConductorQueries } from "../db/queries";
+import { ConductorQueries, type LogRow } from "../db/queries";
 import type { LogEntry, LogHandler } from "../executor/wrapper";
 import { createLogger, type ConductorLogger } from "../logger/pino";
 import type { LogBroadcaster } from "../logs/broadcaster";
@@ -118,14 +118,28 @@ export function openSession(dir: string, opts: SessionOptions): WorkspaceSession
 
   // Every log line from any managed process is persisted and broadcast
   // so both the CLI (via `conductor logs`) and the UI's live SSE stream
-  // can see it, regardless of who started the process.
+  // can see it, regardless of who started the process. Lines are buffered
+  // and written once per event-loop turn, in one transaction: the stored
+  // rows (with their ids) are what gets broadcast.
+  let pendingLogs: Array<Omit<LogRow, "id" | "session_id">> = [];
+  const flushLogs = () => {
+    const batch = pendingLogs;
+    pendingLogs = [];
+    if (batch.length === 0) return;
+    try {
+      for (const row of queries.insertLogs(batch)) broadcaster.publish(row);
+    } catch (err) {
+      logger.error({ err, lines: batch.length }, "Failed to store log lines");
+    }
+  };
   // Set once the DB is closed. A process's last lines can still be in its pipe
   // after stop() returns (waiting for them stalled every close on Windows),
-  // and they must not reach insertLog on a closed DB.
+  // and they must not reach insertLogs on a closed DB.
   let dbClosed = false;
   const onLog: LogHandler = (entry: LogEntry) => {
     if (dbClosed) return;
-    const row = queries.insertLog({
+    if (pendingLogs.length === 0) setImmediate(flushLogs);
+    pendingLogs.push({
       process_id: String(entry.pid),
       command_id: entry.commandId,
       profile: entry.profile,
@@ -134,7 +148,6 @@ export function openSession(dir: string, opts: SessionOptions): WorkspaceSession
       stream: entry.stream,
       message: entry.message,
     });
-    broadcaster.publish(row);
   };
 
   // Time-window log retention sweep. Session-scoped retention doesn't need
@@ -167,6 +180,8 @@ export function openSession(dir: string, opts: SessionOptions): WorkspaceSession
       } finally {
         collector.stop();
         clearInterval(logRetentionInterval);
+        // Lines already received are written; any later ones are dropped.
+        flushLogs();
         dbClosed = true;
         db.close();
       }
