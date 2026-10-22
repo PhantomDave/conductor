@@ -29,6 +29,9 @@ export interface BuildCommandEnvParams extends BuildEnvParams {
 function baseLayers(params: BuildEnvParams): Array<Record<string, string> | undefined> {
   const { configFilePath, config, profile, dbGlobalEnv, dbProfileEnv } = params;
   return [
+    // Python block-buffers stdout into a pipe, so its output would reach
+    // the log viewer in ~8KB lumps. Lowest layer: anything can override it.
+    { PYTHONUNBUFFERED: "1" },
     process.env as Record<string, string>,
     { BASE_PATH: resolveBasePath(configFilePath, config.base_path) },
     config.default_shell ? { CONDUCTOR_SHELL: config.default_shell } : undefined,

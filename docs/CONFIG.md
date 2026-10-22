@@ -100,6 +100,8 @@ Profiles **do not embed commands**. They contain three possible keys:
 
 Example: if global_env sets `NODE_ENV=production`, profile env sets nothing, and command env_overrides sets `NODE_ENV=development`, the final value is `development`.
 
+Below all of these, Conductor sets `PYTHONUNBUFFERED=1`. Python block-buffers stdout when it is a pipe, so without it a Python service's output reaches the log viewer in ~8KB lumps instead of line by line. Any layer above can override it; set it to an empty string to turn it off. Other runtimes that buffer piped output need their own setting.
+
 ### Secret Masking
 
 Any environment variable whose **name** appears in the top-level `env_secrets` array will have its value replaced with `[FILTERED]` everywhere — logs, UI display, and API responses. Both exact match and substring match against the var name are supported (e.g., `API_TOKEN`, `DB_PASSWORD`).

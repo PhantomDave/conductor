@@ -66,4 +66,24 @@ describe("buildCommandEnv", () => {
     expect(pathKey).toBeDefined();
     expect(env[pathKey!]).toBe(process.env[pathKey!]);
   });
+
+  // Python block-buffers stdout into a pipe, so a service's output showed
+  // up in the viewer ~8KB at a time instead of line by line.
+  test("defaults PYTHONUNBUFFERED=1 below every other layer", () => {
+    const params = { configFilePath, config, profile: config.profiles.dev };
+    const saved = process.env.PYTHONUNBUFFERED;
+    delete process.env.PYTHONUNBUFFERED;
+    try {
+      expect(buildCommandEnv({ ...params, cmd: config.commands[0]! }).PYTHONUNBUFFERED).toBe("1");
+
+      const overridden = { ...config.commands[0]!, env_overrides: { PYTHONUNBUFFERED: "" } };
+      expect(buildCommandEnv({ ...params, cmd: overridden }).PYTHONUNBUFFERED).toBe("");
+
+      process.env.PYTHONUNBUFFERED = "0";
+      expect(buildCommandEnv({ ...params, cmd: config.commands[0]! }).PYTHONUNBUFFERED).toBe("0");
+    } finally {
+      if (saved === undefined) delete process.env.PYTHONUNBUFFERED;
+      else process.env.PYTHONUNBUFFERED = saved;
+    }
+  });
 });
