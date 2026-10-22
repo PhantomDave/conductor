@@ -550,21 +550,15 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       }
       try {
         const profileName = request.params.profile;
-
-        // Add commands
-        if (parsed.data.add?.length) {
-          for (const cmdId of parsed.data.add) {
-            deps.store.addCommandToProfile(profileName, cmdId);
-            deps.queries.insertAuditEntry("sync-command-to-profile", `${profileName}/${cmdId}`);
-          }
+        const add = parsed.data.add ?? [];
+        const remove = parsed.data.remove ?? [];
+        // One write: a bad id rejects the whole batch instead of half of it.
+        deps.store.syncProfileCommands(profileName, add, remove);
+        for (const cmdId of add) {
+          deps.queries.insertAuditEntry("sync-command-to-profile", `${profileName}/${cmdId}`);
         }
-
-        // Remove commands
-        if (parsed.data.remove?.length) {
-          for (const cmdId of parsed.data.remove) {
-            deps.store.removeCommandFromProfile(profileName, cmdId);
-            deps.queries.insertAuditEntry("sync-remove-command", `${profileName}/${cmdId}`);
-          }
+        for (const cmdId of remove) {
+          deps.queries.insertAuditEntry("sync-remove-command", `${profileName}/${cmdId}`);
         }
 
         return { success: true };
@@ -623,13 +617,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
           .send({ error: body.error.issues[0]?.message ?? "Invalid request" });
       }
       try {
-        // Remove from source profile and add to target profile
-        deps.store.removeCommandFromProfile(request.params.profile, request.params.id);
-        deps.store.addCommandToProfile(body.data.targetProfile, request.params.id);
         const command = deps.store.getCommand(request.params.id);
         if (!command) {
           return reply.status(404).send({ error: `Command "${request.params.id}" not found` });
         }
+        deps.store.moveCommand(request.params.profile, body.data.targetProfile, command.id);
         deps.queries.insertAuditEntry(
           "move-command",
           `${request.params.profile}/${request.params.id} -> ${body.data.targetProfile}`,

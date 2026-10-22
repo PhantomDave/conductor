@@ -227,3 +227,46 @@ describe("ConfigStore process env", () => {
     }
   });
 });
+
+describe("ConfigStore profile membership writes are all-or-nothing", () => {
+  function twoProfiles() {
+    return new ConfigStore(
+      configPath,
+      validateConfig({
+        version: "1",
+        commands: [
+          { id: "api", name: "API", run: "true" },
+          { id: "web", name: "Web", run: "true" },
+        ],
+        profiles: {
+          dev: { command_ids: ["api"] },
+          staging: { command_ids: ["api"] },
+        },
+      }),
+    );
+  }
+
+  test("a move the target rejects leaves the command in the source", () => {
+    const store = twoProfiles();
+    expect(() => store.moveCommand("dev", "staging", "api")).toThrow(ConfigError);
+    expect(() => store.moveCommand("dev", "nope", "api")).toThrow(ConfigError);
+    expect(store.getConfig().profiles.dev.command_ids).toEqual(["api"]);
+  });
+
+  test("a valid move updates both profiles", () => {
+    const store = twoProfiles();
+    store.addCommandToProfile("dev", "web");
+    store.moveCommand("dev", "staging", "web");
+    expect(store.getConfig().profiles.dev.command_ids).toEqual(["api"]);
+    expect(store.getConfig().profiles.staging.command_ids).toEqual(["api", "web"]);
+    expect(readFileSync(configPath, "utf-8")).toContain("web");
+  });
+
+  test("a sync with one bad id changes nothing", () => {
+    const store = twoProfiles();
+    expect(() => store.syncProfileCommands("dev", ["web", "ghost"], ["api"])).toThrow(ConfigError);
+    expect(store.getConfig().profiles.dev.command_ids).toEqual(["api"]);
+    store.syncProfileCommands("dev", ["web"], ["api"]);
+    expect(store.getConfig().profiles.dev.command_ids).toEqual(["web"]);
+  });
+});

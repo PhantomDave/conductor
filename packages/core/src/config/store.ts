@@ -496,6 +496,64 @@ export class ConfigStore {
   }
 
   /**
+   * Applies membership changes to one profile in a single validated write:
+   * every `add` is checked (known command, not already referenced) before
+   * anything changes, so a bad id leaves the profile and the file untouched.
+   */
+  syncProfileCommands(profileName: string, add: string[], remove: string[]): ProfileConfig {
+    const profile = this.config.profiles[profileName];
+    if (!profile) {
+      throw new ConfigError(`Unknown profile "${profileName}"`);
+    }
+    for (const commandId of add) {
+      if (!this.config.commands.some((c) => c.id === commandId)) {
+        throw new ConfigError(`Unknown command "${commandId}"`);
+      }
+      if (profile.command_ids.includes(commandId)) {
+        throw new ConfigError(`Profile "${profileName}" already references command "${commandId}"`);
+      }
+    }
+    return this.setProfileCommands({
+      [profileName]: [...profile.command_ids.filter((id) => !remove.includes(id)), ...add],
+    })[profileName];
+  }
+
+  /**
+   * Moves a command reference from one profile to another in a single
+   * write, so a failing target (unknown, or already referencing it) can't
+   * leave the command dropped from the source.
+   */
+  moveCommand(sourceName: string, targetName: string, commandId: string): void {
+    const source = this.config.profiles[sourceName];
+    const target = this.config.profiles[targetName];
+    if (!source) throw new ConfigError(`Unknown profile "${sourceName}"`);
+    if (!target) throw new ConfigError(`Unknown profile "${targetName}"`);
+    if (!this.config.commands.some((c) => c.id === commandId)) {
+      throw new ConfigError(`Unknown command "${commandId}"`);
+    }
+    if (sourceName === targetName) return;
+    if (target.command_ids.includes(commandId)) {
+      throw new ConfigError(`Profile "${targetName}" already references command "${commandId}"`);
+    }
+    this.setProfileCommands({
+      [sourceName]: source.command_ids.filter((id) => id !== commandId),
+      [targetName]: [...target.command_ids, commandId],
+    });
+  }
+
+  /** Replaces `command_ids` of the given profiles, validated and persisted once. */
+  private setProfileCommands(changes: Record<string, string[]>): Record<string, ProfileConfig> {
+    const profiles = { ...this.config.profiles };
+    for (const [name, commandIds] of Object.entries(changes)) {
+      profiles[name] = { ...profiles[name], command_ids: commandIds };
+    }
+    this.config = validateConfig({ ...this.config, profiles });
+    this.mutableQueue.setCommands(this.config.commands);
+    this.persist();
+    return this.config.profiles;
+  }
+
+  /**
    * Removes a command reference from a profile.
    */
   removeCommandFromProfile(profileName: string, commandId: string): ProfileConfig {
