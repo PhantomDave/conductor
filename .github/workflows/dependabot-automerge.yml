@@ -1,0 +1,28 @@
+name: Dependabot auto-merge
+
+# Turns on GitHub auto-merge for Dependabot's patch and minor bumps, so
+# each one squash-merges by itself once main's required checks pass.
+# Majors stay manual: CI doesn't launch the desktop app, so a passing
+# build is not enough to trust a breaking release.
+#
+# Needs "Allow auto-merge" in the repo settings and required status checks
+# on main; without required checks GitHub would merge before CI finishes.
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - id: metadata
+        uses: dependabot/fetch-metadata@v3
+
+      - if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
