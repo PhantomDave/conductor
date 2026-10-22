@@ -1,23 +1,10 @@
 import { describe, test, expect } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConductorQueries, openDatabase } from "../src";
-
-/** Windows lets go of a just-closed SQLite file a moment later (EBUSY); retry like the workspace tests do. */
-async function removeDir(dir: string): Promise<void> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      rmSync(dir, { recursive: true, force: true });
-      return;
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (attempt >= 30 || (code !== "EBUSY" && code !== "EPERM")) throw err;
-      await Bun.sleep(100);
-    }
-  }
-}
+import { removeTempDir } from "./helpers/remove-temp-dir";
 
 describe("env var upsert", () => {
   test("editing a global var updates it in place and returns the new value", () => {
@@ -69,7 +56,7 @@ describe("env var upsert", () => {
         db.close(); // Windows can't remove an open DB file
       }
     } finally {
-      await removeDir(dir);
+      await removeTempDir(dir);
     }
   });
 });

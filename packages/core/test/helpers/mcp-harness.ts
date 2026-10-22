@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
@@ -12,6 +12,7 @@ import {
   WorkspaceManager,
   type ApiDependencies,
 } from "../../src";
+import { removeTempDir } from "./remove-temp-dir";
 
 export interface McpHarness {
   root: string;
@@ -90,17 +91,7 @@ export async function startMcpHarness(): Promise<McpHarness> {
       for (const client of clients) await client.close().catch(() => {});
       await manager.close().catch(() => {});
       await app.close();
-      // Windows lets go of a just-closed workspace's files a moment later (EBUSY), so retry briefly.
-      for (let attempt = 0; ; attempt++) {
-        try {
-          rmSync(root, { recursive: true, force: true });
-          break;
-        } catch (err) {
-          const code = (err as NodeJS.ErrnoException).code;
-          if (attempt >= 30 || (code !== "EBUSY" && code !== "EPERM")) throw err;
-          await Bun.sleep(100);
-        }
-      }
+      await removeTempDir(root);
     },
   };
 }

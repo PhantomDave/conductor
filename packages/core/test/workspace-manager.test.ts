@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
@@ -16,6 +16,7 @@ import {
   type ApiDependencies,
   type CommandConfig,
 } from "../src";
+import { removeTempDir } from "./helpers/remove-temp-dir";
 
 // Portable long-runner (see queue.test.ts): `bun -e`, shell: false, short
 // stop timeout so Windows' SIGKILL fallback still fits bun:test's 5s budget.
@@ -78,17 +79,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await manager.close().catch(() => {});
   await app.close();
-  // Windows lets go of a just-stopped child's cwd a moment after stop resolves (EBUSY), so retry briefly.
-  for (let attempt = 0; ; attempt++) {
-    try {
-      rmSync(root, { recursive: true, force: true });
-      break;
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (attempt >= 30 || (code !== "EBUSY" && code !== "EPERM")) throw err;
-      await Bun.sleep(100);
-    }
-  }
+  await removeTempDir(root);
 });
 
 describe("WorkspaceManager + API", () => {
