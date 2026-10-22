@@ -21,6 +21,30 @@ describe("interpolateEnv", () => {
     const result = interpolateEnv({ HOST: "localhost", URL: "http://${HOST}:3000" });
     expect(result.URL).toBe("http://localhost:3000");
   });
+
+  test("follows chained references to their final value", () => {
+    const result = interpolateEnv({
+      CALLBACK: "${API_URL}/cb",
+      API_URL: "http://${HOST}:3000",
+      HOST: "localhost",
+    });
+    expect(result.CALLBACK).toBe("http://localhost:3000/cb");
+  });
+
+  test("a self-reference extends the inherited value instead of looping", () => {
+    process.env.__MASKER_TEST_PATH__ = "/usr/bin";
+    try {
+      const result = interpolateEnv({ __MASKER_TEST_PATH__: "${__MASKER_TEST_PATH__}:/opt/bin" });
+      expect(result.__MASKER_TEST_PATH__).toBe("/usr/bin:/opt/bin");
+    } finally {
+      delete process.env.__MASKER_TEST_PATH__;
+    }
+  });
+
+  test("a reference cycle ends instead of recursing forever", () => {
+    const result = interpolateEnv({ A: "a${B}", B: "b${A}" });
+    expect(result.A).toBe("ab");
+  });
 });
 
 describe("interpolateString", () => {
