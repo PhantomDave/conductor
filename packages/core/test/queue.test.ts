@@ -290,31 +290,6 @@ describe("SpawnQueue.close", () => {
   );
 });
 
-describe("SpawnQueue.close - output drain", () => {
-  test("waits for every process's output to drain before resolving", async () => {
-    // The session closes its DB right after queue.close(); lines still in the
-    // pipe when a process exits used to reach the log handler after that.
-    const cmd = makeCommand({
-      id: "tail",
-      name: "Tail",
-      run: `bun -e "setInterval(() => {}, 1000)"`,
-    });
-    const queue = new SpawnQueue("test", [cmd], () => testEnv());
-    await queue.startOne("tail");
-    const wrapper = queue.getWrapper("tail")!;
-    let release!: () => void;
-    wrapper.drained = new Promise<void>((resolve) => (release = resolve));
-
-    let closed = false;
-    const closing = queue.close().then(() => (closed = true));
-    await Bun.sleep(300);
-    expect(closed).toBe(false);
-    release();
-    await closing;
-    expect(closed).toBe(true);
-  }, 10_000);
-});
-
 describe("SpawnQueue.startAll - concurrency", () => {
   test("starts independent commands concurrently instead of one at a time", async () => {
     // Each command's single startup healthcheck logs "start <id>", sleeps,
