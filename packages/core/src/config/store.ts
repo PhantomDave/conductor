@@ -316,17 +316,17 @@ export class ConfigStore {
     }
 
     const nextProfiles: Record<string, ProfileConfig> = { ...this.config.profiles };
+    // Omitted keeps the current description; "" clears it.
+    const nextProfile = {
+      ...profile,
+      description: description === undefined ? profile.description : description || undefined,
+    };
 
     if (newName && newName !== name) {
-      // Rename key
       delete nextProfiles[name];
-      nextProfiles[newName] = {
-        ...profile,
-        description: description ?? profile.description,
-      };
+      nextProfiles[newName] = nextProfile;
     } else {
-      // Description-only update
-      nextProfiles[name] = { ...profile, description };
+      nextProfiles[name] = nextProfile;
     }
 
     const nextConfig: ConductorConfig = {

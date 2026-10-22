@@ -40,6 +40,13 @@ describe("profiles", () => {
     expect((await api.fetchProfiles()).qa).toBeUndefined();
   });
 
+  test("updateProfile can clear a description", async () => {
+    await api.createProfile("docs", "has one");
+    await api.updateProfile("docs", { description: "" });
+    expect((await api.fetchProfiles()).docs?.description).toBeUndefined();
+    await api.deleteProfile("docs");
+  });
+
   test("errors surface the server's message, not a generic fallback", async () => {
     const err = await api.createProfile("dev").catch((e: Error) => e);
     expect(err).toBeInstanceOf(Error);

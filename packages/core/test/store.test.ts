@@ -270,3 +270,32 @@ describe("ConfigStore profile membership writes are all-or-nothing", () => {
     expect(store.getConfig().profiles.dev.command_ids).toEqual(["web"]);
   });
 });
+
+describe("ConfigStore.updateProfile description", () => {
+  function withDescription() {
+    return new ConfigStore(
+      configPath,
+      validateConfig({ version: "1", profiles: { dev: { description: "local" } } }),
+    );
+  }
+
+  test('"" clears it', () => {
+    const store = withDescription();
+    store.updateProfile("dev", { description: "" });
+    expect(store.getConfig().profiles.dev.description).toBeUndefined();
+  });
+
+  test("a rename without a description keeps it, even to the same name", () => {
+    const store = withDescription();
+    store.updateProfile("dev", { newName: "dev" });
+    expect(store.getConfig().profiles.dev.description).toBe("local");
+    store.updateProfile("dev", { newName: "local-dev" });
+    expect(store.getConfig().profiles["local-dev"].description).toBe("local");
+  });
+
+  test("a rename can clear it at the same time", () => {
+    const store = withDescription();
+    store.updateProfile("dev", { newName: "qa", description: "" });
+    expect(store.getConfig().profiles.qa.description).toBeUndefined();
+  });
+});
