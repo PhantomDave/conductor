@@ -407,16 +407,8 @@ fn main() {
                 }
             });
 
-            // Silent startup check-and-install, packaged builds only.
-            if !cfg!(debug_assertions) {
-                let handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    match install_update(handle).await {
-                        Err(err) if err != UP_TO_DATE => eprintln!("[updater] {err}"),
-                        _ => {}
-                    }
-                });
-            }
+            // No startup install: it restarts the app, stopping every managed
+            // process. The UI checks on load and offers it (About card).
 
             Ok(())
         })
