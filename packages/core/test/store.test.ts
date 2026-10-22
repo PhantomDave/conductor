@@ -208,7 +208,15 @@ describe("ConfigStore process env", () => {
       configPath,
       validateConfig({
         version: "1",
-        commands: [{ id: "show", name: "Show", run: 'printf "%s" "$TARGET"' }],
+        // shell: false + bun, so it reads the env the same way under cmd.exe.
+        commands: [
+          {
+            id: "show",
+            name: "Show",
+            run: 'bun -e "process.stdout.write(process.env.TARGET)"',
+            shell: false,
+          },
+        ],
         profiles: {
           dev: { env: { TARGET: "dev-db" }, command_ids: ["show"] },
           staging: { env: { TARGET: "staging-db" }, command_ids: ["show"] },

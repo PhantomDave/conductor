@@ -48,8 +48,12 @@ describe("env var upsert", () => {
       insert.run("new");
       old.close();
 
-      const q = new ConductorQueries(openDatabase(path));
-      expect(q.listEnvVars("global").map((r) => r.value)).toEqual(["new"]);
+      const db = openDatabase(path);
+      try {
+        expect(new ConductorQueries(db).listEnvVars("global").map((r) => r.value)).toEqual(["new"]);
+      } finally {
+        db.close(); // Windows can't remove an open DB file
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
