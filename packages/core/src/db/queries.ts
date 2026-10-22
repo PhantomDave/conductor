@@ -329,7 +329,7 @@ export class ConductorQueries {
       .prepare(
         `INSERT INTO env_vars (scope, profile, key, value, is_secret, updated_at)
          VALUES ($scope, $profile, $key, $value, $isSecret, $updatedAt)
-         ON CONFLICT (scope, profile, key)
+         ON CONFLICT (scope, COALESCE(profile, ''), key)
          DO UPDATE SET value = $value, is_secret = $isSecret, updated_at = $updatedAt`,
       )
       .run({

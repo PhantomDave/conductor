@@ -36,6 +36,17 @@ export function openDatabase(filePath: string): Database {
     db.exec("ALTER TABLE logs ADD COLUMN session_id INTEGER;");
   }
 
+  // DBs written before idx_env_vars_key hold one row per edit of a global
+  // var; keep the newest (the last value written) so the index can be built.
+  const hasEnvVars = db
+    .query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'env_vars'")
+    .get();
+  if (hasEnvVars) {
+    db.exec(
+      "DELETE FROM env_vars WHERE id NOT IN (SELECT MAX(id) FROM env_vars GROUP BY scope, profile, key);",
+    );
+  }
+
   const ftsExisted =
     (db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'logs_fts'").get() as {
       1: number;
