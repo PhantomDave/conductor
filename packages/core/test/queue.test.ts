@@ -838,6 +838,28 @@ describe("SpawnQueue - crash and unhealthy notifications", () => {
     }
   }, 10_000);
 
+  test("starting a command that is already running does not report a crash", async () => {
+    // The respawn force-kills the running process first (exit 137); that
+    // used to look like a crash and an auto-restart, then a recovery.
+    const cmd = makeCommand({
+      id: "again",
+      name: "Again",
+      run: `bun -e "setInterval(() => {}, 1000)"`,
+      restart: "on_failure",
+    });
+    const logs: string[] = [];
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    try {
+      await queue.startOne("again", (e) => logs.push(e.message));
+      await queue.startOne("again");
+      await wait(1500); // past the first auto-restart's backoff
+      expect(queue.listNotifications().map((n) => n.type)).toEqual([]);
+      expect(logs.some((line) => line.startsWith("[restart]"))).toBe(false);
+    } finally {
+      await queue.stopAll();
+    }
+  }, 10_000);
+
   test("a crash during startup fails fast instead of exhausting healthcheck retries", async () => {
     const cmd = makeCommand({
       id: "early",

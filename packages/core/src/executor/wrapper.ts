@@ -530,6 +530,9 @@ export class ProcessWrapper {
    */
   async forceKillAndWait(): Promise<void> {
     if (!this.process || this.process.subprocess == null) return;
+    // Before the kill, so exit handlers (crash notification, restart policy)
+    // see a teardown we asked for, not a crash.
+    this.intentionalStop = true;
     const alreadyTerminal =
       this.process.status === "failed" ||
       this.process.status === "stopped" ||
