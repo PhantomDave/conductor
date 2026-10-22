@@ -74,7 +74,7 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
  * `detached: true` (setsid) on POSIX, the leader is its own process-group leader,
  * so a negative-pid kill reaches every member.
  */
-function killTree(pid: number, signal: NodeJS.Signals): void {
+export function killTree(pid: number, signal: NodeJS.Signals): void {
   if (process.platform === "win32") {
     const args = ["/pid", String(pid), "/T"];
     if (signal === "SIGKILL") args.push("/F");
