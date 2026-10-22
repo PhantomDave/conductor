@@ -1,3 +1,4 @@
+import { constants } from "node:os";
 import { z } from "zod";
 
 /**
@@ -55,7 +56,15 @@ export const CommandSchema = z.object({
   watch: z.array(z.string()).default([]),
   config_files: z.array(ConfigFileSchema).default([]),
   readonly: z.boolean().default(false),
-  stop_signal: z.string().default("SIGTERM"),
+  // Checked here: process.kill throws on an unknown name, and the stop path
+  // can't tell that apart from "already gone", so a typo silently skipped
+  // the graceful stop and went straight to SIGKILL after stop_timeout_ms.
+  stop_signal: z
+    .string()
+    .refine((name) => Object.hasOwn(constants.signals, name), {
+      message: "Unknown signal; use a name like SIGTERM or SIGINT",
+    })
+    .default("SIGTERM"),
   stop_timeout_ms: z.number().int().positive().default(5_000),
   stop_command: z.string().min(1).optional(),
   restart: z.enum(["manual", "on_failure", "always"]).default("manual"),
