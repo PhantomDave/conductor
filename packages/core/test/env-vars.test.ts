@@ -5,6 +5,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConductorQueries, openDatabase } from "../src";
 
+/** Windows lets go of a just-closed SQLite file a moment later (EBUSY); retry like the workspace tests do. */
+async function removeDir(dir: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (attempt >= 30 || (code !== "EBUSY" && code !== "EPERM")) throw err;
+      await Bun.sleep(100);
+    }
+  }
+}
+
 describe("env var upsert", () => {
   test("editing a global var updates it in place and returns the new value", () => {
     const q = new ConductorQueries(openDatabase(":memory:"));
@@ -30,7 +44,7 @@ describe("env var upsert", () => {
     expect(q.listEnvVars("profile", "prod").map((r) => r.value)).toEqual(["p"]);
   });
 
-  test("opening a DB with duplicated global vars keeps only the newest", () => {
+  test("opening a DB with duplicated global vars keeps only the newest", async () => {
     const dir = mkdtempSync(join(tmpdir(), "conductor-env-"));
     const path = join(dir, "old.sqlite");
     try {
@@ -55,7 +69,7 @@ describe("env var upsert", () => {
         db.close(); // Windows can't remove an open DB file
       }
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      await removeDir(dir);
     }
   });
 });
