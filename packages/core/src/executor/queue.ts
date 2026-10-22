@@ -842,9 +842,12 @@ export class SpawnQueue {
     if (!cmd) throw new Error(`Unknown command "${commandId}" in profile "${this.profile}"`);
 
     // If a start is already in flight for this command, let it finish
-    // first rather than racing it — our stop+restart runs after.
-    const inFlight = this.startPromises.get(commandId);
-    if (inFlight) await inFlight.catch(() => {});
+    // first rather than racing it — our stop+restart runs after. Loop: other
+    // restarts waiting on the same promise resume in the same tick, and the
+    // first of them to register below must be waited on too, or two
+    // restarts run side by side and orphan one process.
+    let inFlight: Promise<void> | undefined;
+    while ((inFlight = this.startPromises.get(commandId))) await inFlight.catch(() => {});
 
     const promise = this.restartOneInner(commandId, cmd, onLog);
     this.startPromises.set(commandId, promise);

@@ -595,6 +595,47 @@ describe("SpawnQueue - restartOne races a concurrent start", () => {
   });
 });
 
+describe("SpawnQueue - overlapping restarts", () => {
+  test("restarts queued behind the same start run one after another, never side by side", async () => {
+    // Two restarts that both awaited the same in-flight start used to resume
+    // together and each spawn a process: one wrapper got overwritten in
+    // `wrappers` and its process kept running untracked.
+    const dir = mkdtempSync(join(tmpdir(), "conductor-queue-restarts-"));
+    const logPath = join(dir, "spawns.log");
+    try {
+      const cmd = makeCommand({
+        id: "busy",
+        name: "Busy",
+        run: `bun -e "require('fs').appendFileSync(process.env.SPAWN_LOG, process.pid + '\\n'); setInterval(() => {}, 1000)"`,
+      });
+      const queue = new SpawnQueue("test", [cmd], () => testEnv({ SPAWN_LOG: logPath }));
+
+      await queue.startOne("busy");
+      await Promise.all([
+        queue.restartOne("busy"),
+        queue.restartOne("busy"),
+        queue.restartOne("busy"),
+      ]);
+      await new Promise((r) => setTimeout(r, 100)); // let a stray spawn's write land
+
+      const pids = readFileSync(logPath, "utf-8").trim().split("\n").filter(Boolean).map(Number);
+      const alive = pids.filter((pid) => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      expect(alive).toEqual([queue.getWrapper("busy")!.pid!]);
+
+      await queue.stopAll();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("SpawnQueue.startMany", () => {
   test("only starts the given command ids, not every command in the queue", async () => {
     // Mirrors how the store's single global queue holds every command from
