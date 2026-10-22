@@ -595,6 +595,47 @@ describe("SpawnQueue - restartOne races a concurrent start", () => {
   });
 });
 
+describe("SpawnQueue - overlapping restarts", () => {
+  test("restarts queued behind the same start run one after another, never side by side", async () => {
+    // Two restarts that both awaited the same in-flight start used to resume
+    // together and each spawn a process: one wrapper got overwritten in
+    // `wrappers` and its process kept running untracked.
+    const dir = mkdtempSync(join(tmpdir(), "conductor-queue-restarts-"));
+    const logPath = join(dir, "spawns.log");
+    try {
+      const cmd = makeCommand({
+        id: "busy",
+        name: "Busy",
+        run: `bun -e "require('fs').appendFileSync(process.env.SPAWN_LOG, process.pid + '\\n'); setInterval(() => {}, 1000)"`,
+      });
+      const queue = new SpawnQueue("test", [cmd], () => testEnv({ SPAWN_LOG: logPath }));
+
+      await queue.startOne("busy");
+      await Promise.all([
+        queue.restartOne("busy"),
+        queue.restartOne("busy"),
+        queue.restartOne("busy"),
+      ]);
+      await new Promise((r) => setTimeout(r, 100)); // let a stray spawn's write land
+
+      const pids = readFileSync(logPath, "utf-8").trim().split("\n").filter(Boolean).map(Number);
+      const alive = pids.filter((pid) => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      expect(alive).toEqual([queue.getWrapper("busy")!.pid!]);
+
+      await queue.stopAll();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("SpawnQueue.startMany", () => {
   test("only starts the given command ids, not every command in the queue", async () => {
     // Mirrors how the store's single global queue holds every command from
@@ -797,6 +838,28 @@ describe("SpawnQueue - crash and unhealthy notifications", () => {
     }
   }, 10_000);
 
+  test("starting a command that is already running does not report a crash", async () => {
+    // The respawn force-kills the running process first (exit 137); that
+    // used to look like a crash and an auto-restart, then a recovery.
+    const cmd = makeCommand({
+      id: "again",
+      name: "Again",
+      run: `bun -e "setInterval(() => {}, 1000)"`,
+      restart: "on_failure",
+    });
+    const logs: string[] = [];
+    const queue = new SpawnQueue("test", [cmd], () => testEnv());
+    try {
+      await queue.startOne("again", (e) => logs.push(e.message));
+      await queue.startOne("again");
+      await wait(1500); // past the first auto-restart's backoff
+      expect(queue.listNotifications().map((n) => n.type)).toEqual([]);
+      expect(logs.some((line) => line.startsWith("[restart]"))).toBe(false);
+    } finally {
+      await queue.stopAll();
+    }
+  }, 10_000);
+
   test("a crash during startup fails fast instead of exhausting healthcheck retries", async () => {
     const cmd = makeCommand({
       id: "early",
@@ -974,6 +1037,40 @@ describe("SpawnQueue - a new run after stopping everything", () => {
       await queue.stopAll();
     }
   });
+});
+
+describe("SpawnQueue - a dependency stopped by hand", () => {
+  test("is started again, even if it exited 0 on the stop signal", async () => {
+    // A service that handles SIGTERM exits 0 and ends up "stopped" with exit
+    // code 0, which used to count as a satisfied dependency.
+    const db = makeCommand({
+      id: "db",
+      name: "DB",
+      run: `bun -e "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1000)"`,
+    });
+    const api = makeCommand({
+      id: "api",
+      name: "API",
+      run: `bun -e "setInterval(() => {}, 1000)"`,
+      deps: ["db"],
+    });
+    const queue = new SpawnQueue("test", [db, api], () => testEnv());
+    try {
+      await queue.startOne("api");
+      await new Promise((r) => setTimeout(r, 300)); // let db install its handler
+      await queue.stopOne("db");
+      const stopped = queue.getWrapper("db")?.getSnapshot();
+      if (process.platform !== "win32") {
+        expect(stopped?.status).toBe("stopped");
+        expect(stopped?.exitCode).toBe(0);
+      }
+
+      await queue.startOne("api");
+      expect(queue.getWrapper("db")?.status).toBe("running");
+    } finally {
+      await queue.stopAll();
+    }
+  }, 10_000);
 });
 
 describe("SpawnQueue - starting a command mid-run", () => {

@@ -15,6 +15,7 @@ import { SectionHeading } from "./components/SectionHeading";
 import { useUiStore } from "./store/ui";
 import { useProcesses } from "./hooks/useProcesses";
 import { useNotifications } from "./hooks/useNotifications";
+import { useUpdateNotice } from "./hooks/useUpdateNotice";
 
 const TOAST_COLOR: Record<string, string> = { recovered: "green", unhealthy: "orange" };
 
@@ -43,6 +44,7 @@ export default function App() {
   const { view, selectedProcessKey, selectProcess, setView } = useUiStore();
   const { data: processes } = useProcesses();
   useNotificationToasts();
+  useUpdateNotice();
 
   // Re-derived from the live process list on every poll so pid/status/logs stay correct
   const selectedProcess = selectedProcessKey

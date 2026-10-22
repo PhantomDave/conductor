@@ -1,39 +1,39 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import Fastify from "fastify";
-import { checkMcpRequest, callRoute } from "../src";
+import { checkLocalRequest, callRoute } from "../src";
 import { startMcpHarness, textOf, type McpHarness } from "./helpers/mcp-harness";
 
-describe("checkMcpRequest", () => {
+describe("checkLocalRequest", () => {
   const ok = { remoteAddress: "127.0.0.1", host: "localhost:4000", origin: undefined };
 
   test("accepts loopback IPv4, IPv6 and v4-mapped remote addresses", () => {
     for (const remoteAddress of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) {
-      expect(checkMcpRequest({ ...ok, remoteAddress })).toBeNull();
+      expect(checkLocalRequest({ ...ok, remoteAddress })).toBeNull();
     }
   });
 
   test("rejects a non-loopback or missing remote address", () => {
-    expect(checkMcpRequest({ ...ok, remoteAddress: "10.0.0.5" })).not.toBeNull();
-    expect(checkMcpRequest({ ...ok, remoteAddress: undefined })).not.toBeNull();
+    expect(checkLocalRequest({ ...ok, remoteAddress: "10.0.0.5" })).not.toBeNull();
+    expect(checkLocalRequest({ ...ok, remoteAddress: undefined })).not.toBeNull();
   });
 
   test("checks the Host header hostname", () => {
-    expect(checkMcpRequest({ ...ok, host: "evil.com" })).not.toBeNull();
-    expect(checkMcpRequest({ ...ok, host: "evil.com:4000" })).not.toBeNull();
-    expect(checkMcpRequest({ ...ok, host: "localhost@evil.com" })).not.toBeNull();
-    expect(checkMcpRequest({ ...ok, host: undefined })).not.toBeNull();
+    expect(checkLocalRequest({ ...ok, host: "evil.com" })).not.toBeNull();
+    expect(checkLocalRequest({ ...ok, host: "evil.com:4000" })).not.toBeNull();
+    expect(checkLocalRequest({ ...ok, host: "localhost@evil.com" })).not.toBeNull();
+    expect(checkLocalRequest({ ...ok, host: undefined })).not.toBeNull();
     for (const host of ["localhost:4000", "localhost", "127.0.0.1:4000", "[::1]:4000", "[::1]"]) {
-      expect(checkMcpRequest({ ...ok, host })).toBeNull();
+      expect(checkLocalRequest({ ...ok, host })).toBeNull();
     }
   });
 
   test("checks the Origin header only when present", () => {
-    expect(checkMcpRequest({ ...ok, origin: "http://evil.com" })).not.toBeNull();
-    expect(checkMcpRequest({ ...ok, origin: "null" })).not.toBeNull();
-    expect(checkMcpRequest({ ...ok, origin: "file://localhost" })).not.toBeNull();
-    expect(checkMcpRequest({ ...ok, origin: "http://localhost:3000" })).toBeNull();
-    expect(checkMcpRequest({ ...ok, origin: "http://[::1]:3000" })).toBeNull();
-    expect(checkMcpRequest(ok)).toBeNull();
+    expect(checkLocalRequest({ ...ok, origin: "http://evil.com" })).not.toBeNull();
+    expect(checkLocalRequest({ ...ok, origin: "null" })).not.toBeNull();
+    expect(checkLocalRequest({ ...ok, origin: "file://localhost" })).not.toBeNull();
+    expect(checkLocalRequest({ ...ok, origin: "http://localhost:3000" })).toBeNull();
+    expect(checkLocalRequest({ ...ok, origin: "http://[::1]:3000" })).toBeNull();
+    expect(checkLocalRequest(ok)).toBeNull();
   });
 });
 

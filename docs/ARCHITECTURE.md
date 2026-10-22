@@ -40,11 +40,12 @@ conductor/
 │   │   ├── manager.ts                WorkspaceManager: open/close/switch, installs a session into the API deps
 │   │   └── recent.ts                 workspaces.json recent list (newest first, max 20)
 │   ├── mcp/                          MCP endpoint at /mcp (see "MCP" below)
-│   │   ├── server.ts                 checkMcpRequest loopback guard + registerMcp (stateless Streamable HTTP)
+│   │   ├── server.ts                 registerMcp (stateless Streamable HTTP)
 │   │   ├── tools.ts                  TOOLS registry: 47 tools, defined per area in tools/*.ts
 │   │   ├── route.ts                  defineTool, R/D/M annotations, callRoute (dispatch via app.inject)
 │   │   └── endpoint-file.ts          ~/.conductor/endpoint.json: written on listen, removed on shutdown
 │   ├── api.ts                        Fastify 5 HTTP server (~876 lines)
+│   ├── local-guard.ts                checkLocalRequest: loopback peer/Host/Origin guard for every route
 │   └── index.ts                      15-line barrel export
 ├── packages/cli/src/                 CLI commands (Commander v15)
 │   ├── config-context.ts             CLI → config store bridge
@@ -130,7 +131,7 @@ The broadcaster at `packages/core/src/logs/broadcaster.ts` uses a pub/sub patter
 
 `packages/core/src/mcp/` exposes the API to AI agents as MCP tools. Each tool is a `defineTool` entry that maps its arguments onto an existing route, and `callRoute` runs that route through `app.inject()` on the same Fastify instance. Validation, the workspace guard and the audit log therefore stay in one place, and a non-2xx response becomes an `isError` tool result. Two kinds of tool have their own logic. `process_wait` polls the process list, and `env_list`, `env_set` and `env_import` wrap `callRoute` to redact secret values (the HTTP routes return them as stored). Its contract is in [API.md](./API.md#mcp-endpoint).
 
-Security: the server binds `0.0.0.0`, so `checkMcpRequest` runs before the transport sees any request. It rejects non-loopback peers and any `Host` or `Origin` that is not a loopback name, with 403.
+Security: the server binds `127.0.0.1` only, and `checkLocalRequest` (`packages/core/src/local-guard.ts`) runs as an `onRequest` hook on every route, `/api/*` and `/mcp` alike. It rejects non-loopback peers and any `Host` or `Origin` that is not a loopback name, with 403, which stops DNS rebinding and cross-site POSTs that skip the CORS preflight.
 
 The transport is stateless. Each POST builds a new `McpServer` and `StreamableHTTPServerTransport` (no session ID, JSON responses) and closes them when the response ends. Nothing is shared between requests, so there is no session table to leak or to expire.
 
@@ -171,7 +172,7 @@ profiles:
 
 ## Desktop App Architecture (packages/desktop-tauri)
 
-`packages/desktop` (Electron) is retired — no source left, just stale build output; `packages/desktop-tauri` (Tauri 2) is the desktop shell. The core engine still compiles to the same platform-specific sidecar binary (`bun build --compile → packages/core/dist-bin/conductor-server`); `scripts/stage-sidecar.mjs` copies it into `src-tauri/binaries/` with the target-triple suffix Tauri's `externalBin` mechanism expects. The Rust host (`src-tauri/src/main.rs`) spawns that sidecar and sets `CONDUCTOR_UI_DIST` on it, pointing at the Vite-built `packages/ui/dist/` — same same-origin trick as before, just launched by Rust instead of Electron's main process. Auto-update goes through Tauri's updater plugin against GitHub Releases (`tauri.conf.json`'s `plugins.updater`, signed with a minisign key) instead of electron-builder.
+`packages/desktop` (Electron) is retired — no source left, just stale build output; `packages/desktop-tauri` (Tauri 2) is the desktop shell. The core engine still compiles to the same platform-specific sidecar binary (`bun build --compile → packages/core/dist-bin/conductor-server`); `scripts/stage-sidecar.mjs` copies it into `src-tauri/binaries/` with the target-triple suffix Tauri's `externalBin` mechanism expects. The Rust host (`src-tauri/src/main.rs`) spawns that sidecar and sets `CONDUCTOR_UI_DIST` on it, pointing at the Vite-built `packages/ui/dist/` — same same-origin trick as before, just launched by Rust instead of Electron's main process. Updates go through Tauri's updater plugin against GitHub Releases (`tauri.conf.json`'s `plugins.updater`, signed with a minisign key) instead of electron-builder. Nothing installs on its own: the UI checks on load, shows a notice when a release is newer, and the user installs it (which restarts the app) from Environment → About.
 
 ## Monitoring
 

@@ -201,3 +201,109 @@ describe("ConfigStore command categories", () => {
     expect(readFileSync(configPath, "utf-8")).not.toContain("category:");
   });
 });
+
+describe("ConfigStore process env", () => {
+  test("a command shared by two profiles gets the env of the profile that launched it", async () => {
+    const store = new ConfigStore(
+      configPath,
+      validateConfig({
+        version: "1",
+        // shell: false + bun, so it reads the env the same way under cmd.exe.
+        commands: [
+          {
+            id: "show",
+            name: "Show",
+            run: 'bun -e "process.stdout.write(process.env.TARGET)"',
+            shell: false,
+          },
+        ],
+        profiles: {
+          dev: { env: { TARGET: "dev-db" }, command_ids: ["show"] },
+          staging: { env: { TARGET: "staging-db" }, command_ids: ["show"] },
+        },
+      }),
+    );
+    const queue = store.getQueue();
+    const lines: string[] = [];
+    try {
+      await queue.startMany(["show"], (e) => lines.push(e.message), "staging");
+      await queue.waitForExit();
+      expect(lines).toContain("staging-db");
+      expect(lines).not.toContain("dev-db");
+    } finally {
+      await queue.close();
+    }
+  });
+});
+
+describe("ConfigStore profile membership writes are all-or-nothing", () => {
+  function twoProfiles() {
+    return new ConfigStore(
+      configPath,
+      validateConfig({
+        version: "1",
+        commands: [
+          { id: "api", name: "API", run: "true" },
+          { id: "web", name: "Web", run: "true" },
+        ],
+        profiles: {
+          dev: { command_ids: ["api"] },
+          staging: { command_ids: ["api"] },
+        },
+      }),
+    );
+  }
+
+  test("a move the target rejects leaves the command in the source", () => {
+    const store = twoProfiles();
+    expect(() => store.moveCommand("dev", "staging", "api")).toThrow(ConfigError);
+    expect(() => store.moveCommand("dev", "nope", "api")).toThrow(ConfigError);
+    expect(store.getConfig().profiles.dev.command_ids).toEqual(["api"]);
+  });
+
+  test("a valid move updates both profiles", () => {
+    const store = twoProfiles();
+    store.addCommandToProfile("dev", "web");
+    store.moveCommand("dev", "staging", "web");
+    expect(store.getConfig().profiles.dev.command_ids).toEqual(["api"]);
+    expect(store.getConfig().profiles.staging.command_ids).toEqual(["api", "web"]);
+    expect(readFileSync(configPath, "utf-8")).toContain("web");
+  });
+
+  test("a sync with one bad id changes nothing", () => {
+    const store = twoProfiles();
+    expect(() => store.syncProfileCommands("dev", ["web", "ghost"], ["api"])).toThrow(ConfigError);
+    expect(store.getConfig().profiles.dev.command_ids).toEqual(["api"]);
+    store.syncProfileCommands("dev", ["web"], ["api"]);
+    expect(store.getConfig().profiles.dev.command_ids).toEqual(["web"]);
+  });
+});
+
+describe("ConfigStore.updateProfile description", () => {
+  function withDescription() {
+    return new ConfigStore(
+      configPath,
+      validateConfig({ version: "1", profiles: { dev: { description: "local" } } }),
+    );
+  }
+
+  test('"" clears it', () => {
+    const store = withDescription();
+    store.updateProfile("dev", { description: "" });
+    expect(store.getConfig().profiles.dev.description).toBeUndefined();
+  });
+
+  test("a rename without a description keeps it, even to the same name", () => {
+    const store = withDescription();
+    store.updateProfile("dev", { newName: "dev" });
+    expect(store.getConfig().profiles.dev.description).toBe("local");
+    store.updateProfile("dev", { newName: "local-dev" });
+    expect(store.getConfig().profiles["local-dev"].description).toBe("local");
+  });
+
+  test("a rename can clear it at the same time", () => {
+    const store = withDescription();
+    store.updateProfile("dev", { newName: "qa", description: "" });
+    expect(store.getConfig().profiles.qa.description).toBeUndefined();
+  });
+});

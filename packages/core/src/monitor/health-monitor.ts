@@ -15,6 +15,8 @@ export type HealthFlipHandler = (isHealthy: boolean, detail: string) => void;
 export class HealthMonitor {
   private intervalId?: ReturnType<typeof setInterval>;
   private lastHealthy: boolean | undefined = undefined;
+  /** A probe can outlast the interval; ticks during one are skipped, not stacked. */
+  private probing = false;
 
   constructor(
     /** Command healthcheck config to repeatedly probe */
@@ -35,6 +37,8 @@ export class HealthMonitor {
     if (intervalMs < 1000 || !this.healthcheck || this.healthcheck.type === "log_line") return;
 
     this.intervalId = setInterval(async () => {
+      if (this.probing) return;
+      this.probing = true;
       try {
         const result = await probeOnce(this.healthcheck, this.getEnv());
 
@@ -46,6 +50,8 @@ export class HealthMonitor {
         }
       } catch {
         // probeOnce should always return. If it throws, keep previous state.
+      } finally {
+        this.probing = false;
       }
     }, intervalMs);
   }

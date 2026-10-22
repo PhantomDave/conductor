@@ -161,6 +161,20 @@ describe("probeOnce - type: command", () => {
     expect(result.ok).toBe(false);
   });
 
+  test.skipIf(process.platform === "win32")(
+    "gives up on a probe that hangs instead of waiting forever",
+    async () => {
+      const started = Date.now();
+      const result = await probeOnce(
+        healthcheck({ type: "command", command: "sleep 30", timeout_ms: 300 }),
+        {},
+      );
+      expect(result.ok).toBe(false);
+      expect(result.detail).toContain("timed out");
+      expect(Date.now() - started).toBeLessThan(3000);
+    },
+  );
+
   test("interpolates ${VAR} in the configured command from env", async () => {
     const result = await probeOnce(healthcheck({ type: "command", command: "exit ${CODE}" }), {
       CODE: "0",

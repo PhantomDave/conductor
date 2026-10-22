@@ -119,7 +119,12 @@ export function openSession(dir: string, opts: SessionOptions): WorkspaceSession
   // Every log line from any managed process is persisted and broadcast
   // so both the CLI (via `conductor logs`) and the UI's live SSE stream
   // can see it, regardless of who started the process.
+  // Set once the DB is closed. A process's last lines can still be in its pipe
+  // after stop() returns (waiting for them stalled every close on Windows),
+  // and they must not reach insertLog on a closed DB.
+  let dbClosed = false;
   const onLog: LogHandler = (entry: LogEntry) => {
+    if (dbClosed) return;
     const row = queries.insertLog({
       process_id: String(entry.pid),
       command_id: entry.commandId,
@@ -162,6 +167,7 @@ export function openSession(dir: string, opts: SessionOptions): WorkspaceSession
       } finally {
         collector.stop();
         clearInterval(logRetentionInterval);
+        dbClosed = true;
         db.close();
       }
     },

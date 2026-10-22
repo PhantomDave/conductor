@@ -110,6 +110,23 @@ describe("openSession", () => {
     },
   );
 
+  test("a log line arriving after close() is dropped, not written to the closed DB", async () => {
+    // A process's last lines can still be in its pipe after stop() returns.
+    const session = openSession(dir, { broadcaster: new LogBroadcaster(), dbPath: ":memory:" });
+    await session.close();
+    expect(() =>
+      session.onLog({
+        commandId: "late",
+        commandName: "Late",
+        profile: "default",
+        pid: 1,
+        stream: "stdout",
+        message: "trailing line",
+        timestamp: new Date().toISOString(),
+      }),
+    ).not.toThrow();
+  });
+
   test("close() still releases the DB when stopping processes fails", async () => {
     const session = openSession(dir, { broadcaster: new LogBroadcaster(), dbPath: ":memory:" });
     session.store.getQueue().stopAll = async () => {

@@ -92,8 +92,9 @@ export function ProfileGridView() {
     if (!editName.trim()) return;
     const changes: { newName?: string; description?: string } = {};
     if (editName !== editTargetName) changes.newName = editName;
-    if (editDescription !== profiles?.[editTargetName]?.description)
-      changes.description = editDescription || undefined;
+    // "" (not undefined, which JSON drops) is how a cleared description is sent.
+    if (editDescription !== (profiles?.[editTargetName]?.description ?? ""))
+      changes.description = editDescription;
     // If nothing changed, just close the modal
     if (Object.keys(changes).length === 0) {
       setEditModalOpen(false);

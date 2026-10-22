@@ -91,13 +91,17 @@ export class SpawnQueue {
   constructor(
     private readonly profile: string,
     private commands: CommandConfig[],
-    private readonly resolveEnv: (cmd: CommandConfig) => Record<string, string>,
+    /** `profile` is the one that launched `cmd` (see launchProfile), if any. */
+    private readonly resolveEnv: (cmd: CommandConfig, profile?: string) => Record<string, string>,
     /**
      * Which env keys were declared in Conductor for `cmd`, and which are
      * secret - drives `config_files` auto mode. Without it only `set:` keys
      * are written.
      */
-    private readonly configFileScope?: (cmd: CommandConfig) => {
+    private readonly configFileScope?: (
+      cmd: CommandConfig,
+      profile?: string,
+    ) => {
       declaredKeys: Set<string>;
       secretKeys?: string[];
     },
@@ -118,7 +122,8 @@ export class SpawnQueue {
 
   /**
    * Checks if a dependency is ready: either currently running,
-   * or already ran to completion (exit code 0).
+   * or already ran to completion on its own (exit code 0). A dependency
+   * stopped on request is not ready even if it exited 0 on the signal.
    */
   private isDependencyReady(depId: string): boolean {
     const wrapper = this.wrappers.get(depId);
@@ -126,9 +131,7 @@ export class SpawnQueue {
     const snapshot = wrapper.getSnapshot();
     if (!snapshot) return false;
     if (snapshot.status === "running") return true;
-    return (
-      (snapshot.status === "completed" || snapshot.status === "stopped") && snapshot.exitCode === 0
-    );
+    return snapshot.status === "completed" && snapshot.exitCode === 0;
   }
 
   /**
@@ -154,7 +157,7 @@ export class SpawnQueue {
         if (status === "running") return;
 
         const snapshot = wrapper.getSnapshot();
-        if (snapshot?.exitCode === 0) return;
+        if (status === "completed" && snapshot?.exitCode === 0) return;
 
         if (status === "stopped" || status === "completed" || status === "failed") {
           const reason = `Blocked: dependency "${depId}" failed (exit code ${snapshot?.exitCode ?? "?"})`;
@@ -392,7 +395,9 @@ export class SpawnQueue {
   ): Array<[string, "stdout" | "stderr"]> {
     const lines: Array<[string, "stdout" | "stderr"]> = [];
     if (cmd.config_files.length === 0) return lines;
-    const scope = this.configFileScope?.(cmd) ?? { declaredKeys: new Set<string>() };
+    const scope = this.configFileScope?.(cmd, this.launchProfile.get(cmd.id)) ?? {
+      declaredKeys: new Set<string>(),
+    };
     const cwd = wrapper.resolvedCwd();
     for (const plan of applyConfigFiles(cmd, { env, cwd, ...scope })) {
       const file = relative(cwd, plan.path) || plan.path;
@@ -809,7 +814,7 @@ export class SpawnQueue {
       await new Promise<void>((r) => setTimeout(r, 50));
     }
 
-    await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
+    await this.startSingleProcess(cmd, this.resolveEnv(cmd, this.launchProfile.get(cmd.id)), onLog);
   }
 
   /**
@@ -836,9 +841,12 @@ export class SpawnQueue {
     if (!cmd) throw new Error(`Unknown command "${commandId}" in profile "${this.profile}"`);
 
     // If a start is already in flight for this command, let it finish
-    // first rather than racing it — our stop+restart runs after.
-    const inFlight = this.startPromises.get(commandId);
-    if (inFlight) await inFlight.catch(() => {});
+    // first rather than racing it — our stop+restart runs after. Loop: other
+    // restarts waiting on the same promise resume in the same tick, and the
+    // first of them to register below must be waited on too, or two
+    // restarts run side by side and orphan one process.
+    let inFlight: Promise<void> | undefined;
+    while ((inFlight = this.startPromises.get(commandId))) await inFlight.catch(() => {});
 
     const promise = this.restartOneInner(commandId, cmd, onLog);
     this.startPromises.set(commandId, promise);
@@ -869,7 +877,7 @@ export class SpawnQueue {
       this.pendingRecovery.add(commandId);
     }
 
-    await this.startSingleProcess(cmd, this.resolveEnv(cmd), onLog);
+    await this.startSingleProcess(cmd, this.resolveEnv(cmd, this.launchProfile.get(cmd.id)), onLog);
   }
 
   /**

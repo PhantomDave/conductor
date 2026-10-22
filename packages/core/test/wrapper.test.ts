@@ -223,6 +223,21 @@ describe("ProcessWrapper.start", () => {
   });
 });
 
+describe("ProcessWrapper.drained", () => {
+  test("resolves even when a log handler throws", async () => {
+    const wrapper = new ProcessWrapper(
+      makeCommand({ id: "loud", name: "Loud", run: `bun -e "console.log('hi')"` }),
+      "test",
+      testEnv(),
+    );
+    wrapper.onLog(() => {
+      throw new Error("database is closed");
+    });
+    await runToExit(wrapper);
+    expect(await wrapper.drained.then(() => "resolved")).toBe("resolved");
+  });
+});
+
 describe("ProcessWrapper.stop", () => {
   test("stops a long-running process within its timeout budget", async () => {
     const cmd = makeCommand({

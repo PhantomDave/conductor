@@ -74,7 +74,7 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
  * `detached: true` (setsid) on POSIX, the leader is its own process-group leader,
  * so a negative-pid kill reaches every member.
  */
-function killTree(pid: number, signal: NodeJS.Signals): void {
+export function killTree(pid: number, signal: NodeJS.Signals): void {
   if (process.platform === "win32") {
     const args = ["/pid", String(pid), "/T"];
     if (signal === "SIGKILL") args.push("/F");
@@ -451,7 +451,10 @@ export class ProcessWrapper {
         "stderr",
       );
     });
+    // The pumps' own catch handlers log through the same handlers, which can
+    // throw too (e.g. a closed DB): swallow that so `drained` never rejects.
     this.drained = Promise.all([subprocess.exited.catch(() => {}), stdoutPump, stderrPump]).then(
+      () => {},
       () => {},
     );
 
@@ -530,6 +533,9 @@ export class ProcessWrapper {
    */
   async forceKillAndWait(): Promise<void> {
     if (!this.process || this.process.subprocess == null) return;
+    // Before the kill, so exit handlers (crash notification, restart policy)
+    // see a teardown we asked for, not a crash.
+    this.intentionalStop = true;
     const alreadyTerminal =
       this.process.status === "failed" ||
       this.process.status === "stopped" ||

@@ -16,6 +16,7 @@ import { listAvailableShells } from "./executor/shell";
 import { parseDockerCompose } from "./docker-compose/parser";
 import { WorkspaceBusyError, type WorkspaceManager } from "./workspace/manager";
 import { registerMcp } from "./mcp/server";
+import { checkLocalRequest } from "./local-guard";
 import {
   CommandInputSchema,
   CommandPatchSchema,
@@ -102,6 +103,20 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   // the UI's dev port may shift (3000, 3001, ...) if it's already in use.
   await app.register(cors, {
     origin: /^https?:\/\/localhost(:\d+)?$/,
+  });
+
+  // Callback style for the same Bun reason as the workspace guard below.
+  app.addHook("onRequest", (request, reply, done) => {
+    const reason = checkLocalRequest({
+      remoteAddress: request.socket.remoteAddress,
+      host: request.headers.host,
+      origin: request.headers.origin,
+    });
+    if (reason) {
+      reply.status(403).send({ error: "forbidden" });
+      return;
+    }
+    done();
   });
 
   const workspaces = deps.workspaces;
@@ -535,21 +550,15 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
       }
       try {
         const profileName = request.params.profile;
-
-        // Add commands
-        if (parsed.data.add?.length) {
-          for (const cmdId of parsed.data.add) {
-            deps.store.addCommandToProfile(profileName, cmdId);
-            deps.queries.insertAuditEntry("sync-command-to-profile", `${profileName}/${cmdId}`);
-          }
+        const add = parsed.data.add ?? [];
+        const remove = parsed.data.remove ?? [];
+        // One write: a bad id rejects the whole batch instead of half of it.
+        deps.store.syncProfileCommands(profileName, add, remove);
+        for (const cmdId of add) {
+          deps.queries.insertAuditEntry("sync-command-to-profile", `${profileName}/${cmdId}`);
         }
-
-        // Remove commands
-        if (parsed.data.remove?.length) {
-          for (const cmdId of parsed.data.remove) {
-            deps.store.removeCommandFromProfile(profileName, cmdId);
-            deps.queries.insertAuditEntry("sync-remove-command", `${profileName}/${cmdId}`);
-          }
+        for (const cmdId of remove) {
+          deps.queries.insertAuditEntry("sync-remove-command", `${profileName}/${cmdId}`);
         }
 
         return { success: true };
@@ -608,13 +617,11 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
           .send({ error: body.error.issues[0]?.message ?? "Invalid request" });
       }
       try {
-        // Remove from source profile and add to target profile
-        deps.store.removeCommandFromProfile(request.params.profile, request.params.id);
-        deps.store.addCommandToProfile(body.data.targetProfile, request.params.id);
         const command = deps.store.getCommand(request.params.id);
         if (!command) {
           return reply.status(404).send({ error: `Command "${request.params.id}" not found` });
         }
+        deps.store.moveCommand(request.params.profile, body.data.targetProfile, command.id);
         deps.queries.insertAuditEntry(
           "move-command",
           `${request.params.profile}/${request.params.id} -> ${body.data.targetProfile}`,
@@ -1058,7 +1065,8 @@ export async function buildApi(deps: ApiDependencies): Promise<FastifyInstance> 
   });
 
   // MCP endpoint for AI agents. Not under /api/, so the workspace guard does
-  // not apply to the endpoint itself (tools dispatch back through /api/*, where it does).
+  // not apply to the endpoint itself (tools dispatch back through /api/*, where
+  // it does); the loopback guard above covers it like every other route.
   // Registered before the static/SPA block so its not-found handler can't swallow it.
   await registerMcp(app);
 

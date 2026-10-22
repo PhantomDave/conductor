@@ -45,22 +45,34 @@ export function mergeEnv(
  * reference env vars, e.g. a command's `cwd` or a healthcheck's
  * `url`/`command` (see `resolvePath`).
  */
+const VAR_RE = /\$\{([A-Z0-9_]+)\}/gi;
+
 export function interpolateString(value: string, env: Record<string, string>): string {
-  return value.replace(/\$\{([A-Z0-9_]+)\}/gi, (_match, name: string) => {
+  return value.replace(VAR_RE, (_match, name: string) => {
     return env[name] ?? process.env[name] ?? "";
   });
 }
 
 /**
  * Resolves `${VAR}` style references within env values using values from
- * the same env map (and falling back to process.env).
+ * the same env map (and falling back to process.env). References are
+ * followed to their final value (`A=${B}`, `B=${C}`), and a reference back
+ * into a value being resolved - `PATH=${PATH}:/x` - reads process.env, so it
+ * extends the inherited value instead of looping.
  */
 export function interpolateEnv(env: Record<string, string>): Record<string, string> {
   const resolved: Record<string, string> = {};
+  const resolving = new Set<string>();
 
-  for (const [key, value] of Object.entries(env)) {
-    resolved[key] = interpolateString(value, env);
-  }
+  const resolveKey = (key: string): string => {
+    if (Object.hasOwn(resolved, key)) return resolved[key];
+    if (!Object.hasOwn(env, key) || resolving.has(key)) return process.env[key] ?? "";
+    resolving.add(key);
+    resolved[key] = env[key].replace(VAR_RE, (_match, name: string) => resolveKey(name));
+    resolving.delete(key);
+    return resolved[key];
+  };
 
+  for (const key of Object.keys(env)) resolveKey(key);
   return resolved;
 }

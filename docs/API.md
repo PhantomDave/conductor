@@ -1,6 +1,6 @@
 # HTTP API Reference
 
-The Conductor HTTP API runs on port **4000** (configurable via `CONDUCTOR_PORT` env var when started with `bun run server`). It provides endpoints for configuration management, process control, env var maintenance, and log streaming. All mutating operations write to SQLite and record an audit log entry. CORS is scoped to localhost any port by default.
+The Conductor HTTP API listens on `127.0.0.1` (loopback only), port **4000** (configurable via `CONDUCTOR_PORT` env var when started with `bun run server`). It provides endpoints for configuration management, process control, env var maintenance, and log streaming. All mutating operations write to SQLite and record an audit log entry. CORS is scoped to localhost any port by default.
 
 ## Base URL / Port
 

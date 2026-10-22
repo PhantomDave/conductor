@@ -101,3 +101,8 @@ CREATE TABLE IF NOT EXISTS env_vars (
   UNIQUE (scope, profile, key)
 );
 
+-- The table's UNIQUE never fires for global vars: SQLite treats NULLs as
+-- distinct, so `profile IS NULL` rows duplicated on every edit. COALESCE makes
+-- NULL compare equal; upsertEnvVar conflicts on this index.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_env_vars_key ON env_vars(scope, COALESCE(profile, ''), key);
+

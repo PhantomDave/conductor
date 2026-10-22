@@ -3,6 +3,10 @@ import { resolve as resolvePath, isAbsolute } from "node:path";
 import type { HealthcheckConfig } from "../config/schema";
 import { interpolateString } from "../env/masker";
 import { resolveShell } from "./shell";
+import { killTree } from "./wrapper";
+
+/** Ceiling for one `command` probe; the healthcheck's own timeout_ms caps it further. */
+const COMMAND_PROBE_TIMEOUT_MS = 10_000;
 
 export class HealthcheckError extends Error {}
 
@@ -52,14 +56,17 @@ async function checkHttp(url: string): Promise<boolean> {
 }
 
 /**
- * Runs a shell command and considers exit code 0 as healthy.
+ * Runs a shell command and considers exit code 0 as healthy. A probe still
+ * running after `timeoutMs` is killed (its whole group: the shell's child is
+ * what hangs) and reported as "timeout".
  */
 async function checkCommand(
   command: string,
   cwd: string | undefined,
   configuredShell: string | undefined,
   env: Record<string, string>,
-): Promise<boolean> {
+  timeoutMs: number,
+): Promise<boolean | "timeout"> {
   try {
     const { bin, flag, verbatim } = resolveShell(configuredShell);
     const proc = Bun.spawn({
@@ -73,9 +80,20 @@ async function checkCommand(
       env,
       stdout: "ignore",
       stderr: "ignore",
+      // Own process group, so a timeout can kill the shell and its children.
+      detached: process.platform !== "win32",
     });
-    const exitCode = await proc.exited;
-    return exitCode === 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<"timeout">((resolve) => {
+      timer = setTimeout(() => resolve("timeout"), timeoutMs);
+    });
+    const outcome = await Promise.race([proc.exited, timedOut]);
+    clearTimeout(timer);
+    if (outcome === "timeout") {
+      killTree(proc.pid, "SIGKILL");
+      return "timeout";
+    }
+    return outcome === 0;
   } catch {
     return false;
   }
@@ -120,8 +138,16 @@ export async function probeOnce(
         const resolvedCmd = interpolateString(healthcheck.command, env);
         const cwd =
           env.BASE_PATH && isAbsolute(env.BASE_PATH) ? resolvePath(env.BASE_PATH) : undefined;
-        const ok = await checkCommand(resolvedCmd, cwd, env.CONDUCTOR_SHELL, env);
-        return { ok, latencyMs: Date.now() - start, detail: `command "${resolvedCmd}"` };
+        const timeoutMs = Math.min(COMMAND_PROBE_TIMEOUT_MS, healthcheck.timeout_ms);
+        const outcome = await checkCommand(resolvedCmd, cwd, env.CONDUCTOR_SHELL, env, timeoutMs);
+        return {
+          ok: outcome === true,
+          latencyMs: Date.now() - start,
+          detail:
+            outcome === "timeout"
+              ? `command "${resolvedCmd}" timed out after ${timeoutMs}ms`
+              : `command "${resolvedCmd}"`,
+        };
       }
       case "none":
       default:
