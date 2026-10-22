@@ -14,7 +14,7 @@ function stripBrackets(hostname: string): string {
 }
 
 /**
- * Pure guard for `/mcp`. The server binds 0.0.0.0 and the tool surface can run
+ * Pure guard for `/mcp`. The server binds 127.0.0.1, but the tool surface can run
  * arbitrary shell commands, so only same-machine callers with a loopback
  * `Host` (anti DNS-rebinding) and, if sent, a loopback `Origin` (anti
  * cross-site browser requests) are allowed. Returns a reason, or null if OK.

@@ -69,7 +69,9 @@ async function main() {
 
   const app = await buildApi(deps);
 
-  await app.listen({ port: PORT, host: "0.0.0.0" });
+  // Loopback only: the API can create and run arbitrary shell commands and
+  // has no authentication, so it must never be reachable from the network.
+  await app.listen({ port: PORT, host: "127.0.0.1" });
   // PORT 0 asks the OS for a free port; advertise the one actually bound.
   const address = app.server.address();
   const boundPort = typeof address === "object" && address ? address.port : PORT;
