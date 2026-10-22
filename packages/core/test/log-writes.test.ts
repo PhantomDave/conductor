@@ -30,3 +30,23 @@ test("insertLogs with an empty batch is a no-op", () => {
   expect(queries.insertLogs([])).toEqual([]);
   expect(queries.queryLogs({})).toEqual([]);
 });
+
+test("history for one process comes from its index, newest id first", () => {
+  const db = openDatabase(":memory:");
+  const queries = new ConductorQueries(db);
+  // Timestamps out of id order: the viewer's order is insertion order.
+  const [first, second] = queries.insertLogs([
+    { ...line("first"), timestamp: "2026-01-02T00:00:00.000Z" },
+    { ...line("second"), timestamp: "2026-01-01T00:00:00.000Z" },
+  ]);
+  expect(queries.queryLogs({ processId: "10" }).map((r) => r.id)).toEqual([second!.id, first!.id]);
+
+  const plan = db
+    .query(
+      "EXPLAIN QUERY PLAN SELECT * FROM logs WHERE process_id = $pid ORDER BY id DESC LIMIT 500",
+    )
+    .all({ $pid: "10" }) as Array<{ detail: string }>;
+  expect(plan.map((p) => p.detail)).toEqual([
+    "SEARCH logs USING INDEX idx_logs_process (process_id=?)",
+  ]);
+});

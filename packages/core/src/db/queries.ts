@@ -149,8 +149,10 @@ export class ConductorQueries {
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
     const limit = filters.limit ?? 200;
 
+    // By id, not timestamp: ids follow insertion order, and the order matches
+    // idx_logs_process / idx_logs_command so no sort over a whole run is needed.
     return this.db
-      .prepare(`SELECT * FROM logs ${where} ORDER BY timestamp DESC, id DESC LIMIT $limit`)
+      .prepare(`SELECT * FROM logs ${where} ORDER BY id DESC LIMIT $limit`)
       .all({ ...params, $limit: limit }) as LogRow[];
   }
 
