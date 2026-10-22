@@ -126,9 +126,25 @@ async fn start_sidecar(app: &AppHandle, state: &SidecarState) -> Result<u16, Str
     Ok(port)
 }
 
-/// Sends SIGTERM and gives the sidecar up to 5s to run its own graceful
-/// shutdown (which stops every managed dev process it started) before
-/// escalating to SIGKILL. CommandChild::kill() alone is a hard kill, not this.
+/// Direct children of `pid`, via `pgrep -P` (present on Linux and macOS).
+#[cfg(unix)]
+fn child_pids(pid: u32) -> Vec<i32> {
+    std::process::Command::new("pgrep")
+        .args(["-P", &pid.to_string()])
+        .output()
+        .map(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter_map(|line| line.trim().parse().ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Sends SIGTERM and gives the sidecar up to 10s to run its own graceful
+/// shutdown (which stops every managed dev process it started, escalating to
+/// SIGKILL after each one's stop_timeout_ms, 5s by default) before escalating
+/// to SIGKILL. CommandChild::kill() alone is a hard kill, not this.
 async fn stop_sidecar(state: &SidecarState) {
     let Some(child) = state.child.lock().unwrap().take() else {
         return;
@@ -151,11 +167,21 @@ async fn stop_sidecar(state: &SidecarState) {
             libc::kill(pid as i32, libc::SIGTERM);
         }
 
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
         while !state.exited.load(Ordering::SeqCst) && tokio::time::Instant::now() < deadline {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
         if !state.exited.load(Ordering::SeqCst) {
+            // Managed processes run in their own process groups (setsid), so
+            // killing the sidecar alone would orphan any it had not stopped
+            // yet. List its children first: once it dies they are reparented
+            // and `pgrep -P` no longer finds them.
+            for child in child_pids(pid) {
+                unsafe {
+                    libc::kill(-child, libc::SIGKILL);
+                    libc::kill(child, libc::SIGKILL);
+                }
+            }
             unsafe {
                 libc::kill(pid as i32, libc::SIGKILL);
             }
